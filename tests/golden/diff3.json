@@ -1,0 +1,4122 @@
+[
+{
+"files": {
+"mine": "z\n\nv2 = f(3);\nv0 = f(2);\n\n",
+"older": "v0 = f(2);\n\n\n\nv2 = f(3);\nv0 = f(2);\n\n",
+"yours": "\na\nnew\n\n\nv2 = f(3);\nv0 = f(2);\n\n"
+},
+"runs": [
+{
+"args": [
+"-m"
+],
+"stdout": "<<<<<<< M\nz\n||||||| O\nv0 = f(2);\n\n\n=======\n\na\nnew\n\n>>>>>>> Y\n\nv2 = f(3);\nv0 = f(2);\n\n",
+"rc": 1
+},
+{
+"args": [
+"-m",
+"-E"
+],
+"stdout": "<<<<<<< M\nz\n=======\n\na\nnew\n\n>>>>>>> Y\n\nv2 = f(3);\nv0 = f(2);\n\n",
+"rc": 1
+},
+{
+"args": [
+"-m",
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-E"
+],
+"stdout": "1a\n=======\n\na\nnew\n\n>>>>>>> Y\n.\n0a\n<<<<<<< M\n.\n",
+"rc": 1
+},
+{
+"args": [
+"-A"
+],
+"stdout": "1a\n||||||| O\nv0 = f(2);\n\n\n=======\n\na\nnew\n\n>>>>>>> Y\n.\n0a\n<<<<<<< M\n.\n",
+"rc": 1
+},
+{
+"args": [
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-T"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-A",
+"-i"
+],
+"stdout": "1a\n||||||| O\nv0 = f(2);\n\n\n=======\n\na\nnew\n\n>>>>>>> Y\n.\n0a\n<<<<<<< M\n.\nw\nq\n",
+"rc": 1
+}
+]
+},
+{
+"files": {
+"mine": "jumps conflict conflict change line conflict\n  x\n  x\nmerge fox line\nlazy lazy quick over\n\njumps brown the line text merge\n\nbrown file merge\ntext dog conflict\nmerge fox\n",
+"older": "jumps conflict conflict change line conflict\nmerge fox line\nlazy lazy quick over\n\ndog merge text\njumps brown the line text merge\n\nbrown file merge\ntext dog conflict\nmerge fox\n",
+"yours": "jumps conflict conflict change line conflict\nmerge fox line\nlazy lazy quick over\n\ndog merge text\njumps brown the line text merge\n\nbrown file merge\ntext dog conflict\nmerge fox\n"
+},
+"runs": [
+{
+"args": [
+"-m"
+],
+"stdout": "jumps conflict conflict change line conflict\n  x\n  x\nmerge fox line\nlazy lazy quick over\n\njumps brown the line text merge\n\nbrown file merge\ntext dog conflict\nmerge fox\n",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-E"
+],
+"stdout": "jumps conflict conflict change line conflict\n  x\n  x\nmerge fox line\nlazy lazy quick over\n\njumps brown the line text merge\n\nbrown file merge\ntext dog conflict\nmerge fox\n",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-E"
+],
+"stdout": "",
+"rc": 0
+},
+{
+"args": [
+"-A"
+],
+"stdout": "",
+"rc": 0
+},
+{
+"args": [
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-T"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-A",
+"-i"
+],
+"stdout": "w\nq\n",
+"rc": 0
+}
+]
+},
+{
+"files": {
+"mine": "conflict merge line quick\nchange merge the merge file\nfox\nbrown file merge\nbrown conflict conflict fox the\n\n\nchange merge change\nlazy merge quick the brown brown\nthe brown\nconflict file text text lazy file\nthe conflict conflict conflict\nfile conflict fox\nlazy dog merge\nquick text\nmerge\nfox text text dog\ntext text change lazy text\ntext\nthe jumps over lazy\nquick file fox\nline fox lazy line text\nmerge file merge over lazy over\n\ndog\nthe text\nmerge\ndog text change file the\n",
+"older": "conflict merge line quick\nchange merge the merge file\nfox\nbrown file merge\nbrown conflict conflict fox the\n\n\nchange merge change\nlazy merge quick the brown brown\nthe brown\nconflict file text text lazy file\nthe conflict conflict conflict\nfile conflict fox\nlazy dog merge\nquick text\nmerge\nfox text text dog\ntext text change lazy text\ntext\nthe jumps over lazy\nquick file fox\nline fox lazy line text\nmerge file merge over lazy over\n\ndog\nthe text\nmerge\ndog text change file the\n",
+"yours": "conflict merge line quick\nchange merge the merge file\nfox\nbrown file merge\nbrown conflict conflict fox the\n\nlazy merge quick the brown brown\nchange merge change\nfile conflict fox\nthe brown\nconflict file text text lazy file\nthe conflict conflict conflict\n\nlazy dog merge\nquick text\nfox text text dog\ntext text change lazy text\ntext\nthe jumps over lazy\nquick file fox\nline fox lazy line text\nmerge file merge over lazy over\n\ndog\nthe text\nmerge\ndog text change file the\n"
+},
+"runs": [
+{
+"args": [
+"-m"
+],
+"stdout": "conflict merge line quick\nchange merge the merge file\nfox\nbrown file merge\nbrown conflict conflict fox the\n\nlazy merge quick the brown brown\nchange merge change\nfile conflict fox\nthe brown\nconflict file text text lazy file\nthe conflict conflict conflict\n\nlazy dog merge\nquick text\nfox text text dog\ntext text change lazy text\ntext\nthe jumps over lazy\nquick file fox\nline fox lazy line text\nmerge file merge over lazy over\n\ndog\nthe text\nmerge\ndog text change file the\n",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-E"
+],
+"stdout": "conflict merge line quick\nchange merge the merge file\nfox\nbrown file merge\nbrown conflict conflict fox the\n\nlazy merge quick the brown brown\nchange merge change\nfile conflict fox\nthe brown\nconflict file text text lazy file\nthe conflict conflict conflict\n\nlazy dog merge\nquick text\nfox text text dog\ntext text change lazy text\ntext\nthe jumps over lazy\nquick file fox\nline fox lazy line text\nmerge file merge over lazy over\n\ndog\nthe text\nmerge\ndog text change file the\n",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-E"
+],
+"stdout": "16d\n13c\n\n.\n9c\nfile conflict fox\n.\n7c\nlazy merge quick the brown brown\n.\n",
+"rc": 0
+},
+{
+"args": [
+"-A"
+],
+"stdout": "16d\n13c\n\n.\n9c\nfile conflict fox\n.\n7c\nlazy merge quick the brown brown\n.\n",
+"rc": 0
+},
+{
+"args": [
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-T"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-A",
+"-i"
+],
+"stdout": "16d\n13c\n\n.\n9c\nfile conflict fox\n.\n7c\nlazy merge quick the brown brown\n.\nw\nq\n",
+"rc": 0
+}
+]
+},
+{
+"files": {
+"mine": "L36\nbrown jumps conflict over dog    \n\nlazy\nb\n\nquick text quick line change\ntext text text dog\n",
+"older": "brown jumps conflict over dog\n\n\nlazy\n\njumps conflict lazy merge\nquick text quick line change\ntext text text dog\n",
+"yours": "brown jumps conflict over dog \n\nb\n\nlazy\n\njumps conflict lazy merge\nquick text quick line change\ntext text text dog\n"
+},
+"runs": [
+{
+"args": [
+"-m"
+],
+"stdout": "<<<<<<< M\nL36\nbrown jumps conflict over dog    \n||||||| O\nbrown jumps conflict over dog\n\n=======\nbrown jumps conflict over dog \n\nb\n>>>>>>> Y\n\nlazy\nb\n\nquick text quick line change\ntext text text dog\n",
+"rc": 1
+},
+{
+"args": [
+"-m",
+"-E"
+],
+"stdout": "<<<<<<< M\nL36\nbrown jumps conflict over dog    \n=======\nbrown jumps conflict over dog \n\nb\n>>>>>>> Y\n\nlazy\nb\n\nquick text quick line change\ntext text text dog\n",
+"rc": 1
+},
+{
+"args": [
+"-m",
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-E"
+],
+"stdout": "2a\n=======\nbrown jumps conflict over dog \n\nb\n>>>>>>> Y\n.\n0a\n<<<<<<< M\n.\n",
+"rc": 1
+},
+{
+"args": [
+"-A"
+],
+"stdout": "2a\n||||||| O\nbrown jumps conflict over dog\n\n=======\nbrown jumps conflict over dog \n\nb\n>>>>>>> Y\n.\n0a\n<<<<<<< M\n.\n",
+"rc": 1
+},
+{
+"args": [
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-T"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-A",
+"-i"
+],
+"stdout": "2a\n||||||| O\nbrown jumps conflict over dog\n\n=======\nbrown jumps conflict over dog \n\nb\n>>>>>>> Y\n.\n0a\n<<<<<<< M\n.\nw\nq\n",
+"rc": 1
+}
+]
+},
+{
+"files": {
+"mine": "quick text fox file the\nlazy line file line fox quick \nline jumps over fox\nfile\nfile merge\nfox\nover\nchange change file file the\ndog the change merge\nlazy file merge line\nlazy lazy\n\nfox text jumps text\nfox brown dog file\nfox brown dog fox file dog\nbrown dog\t\nfile\nquick change file lazy dog file\nconflict dog line change\nfile dog merge\n  x\n\nbrown over over dog fox change\ntext line file\nline\nfox dog\ntext jumps text\nthe conflict change brown fox\nchange file dog\n",
+"older": "quick text fox file the\nfox text jumps text\nfox brown dog file\nlazy line file line fox quick\nline jumps over fox\nfile\nfile merge\nfox\nover\nchange change file file the\ndog the change merge\nlazy file merge line\nmerge\nlazy lazy\n\nfox brown dog fox file dog\nbrown dog\nfile\nquick change file lazy dog file\nconflict dog line change\nfile dog merge\n\nbrown over over dog fox change\ntext line file\nline\nfox dog\ntext jumps text\nthe conflict change brown fox\nchange file dog\n",
+"yours": "quick text fox file the\nfox brown dog file\nlazy line file line fox quick\nline jumps over fox\nfile\nfile merge\nfox\nover\nchange change file file the\nthe conflict change brown fox\nchange file dog\nlazy file merge line\nmerge\nlazy lazy\n\nfox brown dog fox file dog\nbrown dog  \nfile\nquick change file lazy dog file\nconflict dog line change\n\nL30\nbrown over over dog fox change\ntext line file\nline\nfox dog\ntext jumps text\n"
+},
+"runs": [
+{
+"args": [
+"-m"
+],
+"stdout": "quick text fox file the\n<<<<<<< M\nlazy line file line fox quick \n||||||| O\nfox text jumps text\nfox brown dog file\nlazy line file line fox quick\n=======\nfox brown dog file\nlazy line file line fox quick\n>>>>>>> Y\nline jumps over fox\nfile\nfile merge\nfox\nover\nchange change file file the\nthe conflict change brown fox\nchange file dog\nlazy file merge line\nlazy lazy\n\nfox text jumps text\nfox brown dog file\nfox brown dog fox file dog\n<<<<<<< M\nbrown dog\t\n||||||| O\nbrown dog\n=======\nbrown dog  \n>>>>>>> Y\nfile\nquick change file lazy dog file\nconflict dog line change\n<<<<<<< M\nfile dog merge\n  x\n||||||| O\nfile dog merge\n=======\n>>>>>>> Y\n\nL30\nbrown over over dog fox change\ntext line file\nline\nfox dog\ntext jumps text\n",
+"rc": 1
+},
+{
+"args": [
+"-m",
+"-E"
+],
+"stdout": "quick text fox file the\n<<<<<<< M\nlazy line file line fox quick \n=======\nfox brown dog file\nlazy line file line fox quick\n>>>>>>> Y\nline jumps over fox\nfile\nfile merge\nfox\nover\nchange change file file the\nthe conflict change brown fox\nchange file dog\nlazy file merge line\nlazy lazy\n\nfox text jumps text\nfox brown dog file\nfox brown dog fox file dog\n<<<<<<< M\nbrown dog\t\n=======\nbrown dog  \n>>>>>>> Y\nfile\nquick change file lazy dog file\nconflict dog line change\n<<<<<<< M\nfile dog merge\n  x\n=======\n>>>>>>> Y\n\nL30\nbrown over over dog fox change\ntext line file\nline\nfox dog\ntext jumps text\n",
+"rc": 1
+},
+{
+"args": [
+"-m",
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-E"
+],
+"stdout": "28,29d\n22a\nL30\n.\n21a\n=======\n>>>>>>> Y\n.\n19a\n<<<<<<< M\n.\n16a\n=======\nbrown dog  \n>>>>>>> Y\n.\n15a\n<<<<<<< M\n.\n9c\nthe conflict change brown fox\nchange file dog\n.\n2a\n=======\nfox brown dog file\nlazy line file line fox quick\n>>>>>>> Y\n.\n1a\n<<<<<<< M\n.\n",
+"rc": 1
+},
+{
+"args": [
+"-A"
+],
+"stdout": "28,29d\n22a\nL30\n.\n21a\n||||||| O\nfile dog merge\n=======\n>>>>>>> Y\n.\n19a\n<<<<<<< M\n.\n16a\n||||||| O\nbrown dog\n=======\nbrown dog  \n>>>>>>> Y\n.\n15a\n<<<<<<< M\n.\n9c\nthe conflict change brown fox\nchange file dog\n.\n2a\n||||||| O\nfox text jumps text\nfox brown dog file\nlazy line file line fox quick\n=======\nfox brown dog file\nlazy line file line fox quick\n>>>>>>> Y\n.\n1a\n<<<<<<< M\n.\n",
+"rc": 1
+},
+{
+"args": [
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-T"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-A",
+"-i"
+],
+"stdout": "28,29d\n22a\nL30\n.\n21a\n||||||| O\nfile dog merge\n=======\n>>>>>>> Y\n.\n19a\n<<<<<<< M\n.\n16a\n||||||| O\nbrown dog\n=======\nbrown dog  \n>>>>>>> Y\n.\n15a\n<<<<<<< M\n.\n9c\nthe conflict change brown fox\nchange file dog\n.\n2a\n||||||| O\nfox text jumps text\nfox brown dog file\nlazy line file line fox quick\n=======\nfox brown dog file\nlazy line file line fox quick\n>>>>>>> Y\n.\n1a\n<<<<<<< M\n.\nw\nq\n",
+"rc": 1
+}
+]
+},
+{
+"files": {
+"mine": "merge brown change change fox\n\nquick\nlazy  \nthe merge jumps file the\n\nfox brown quick\nfile over line over\n\nconflict\n\n\nchange line conflict\n\nquick dog over\njumps text brown\nline\n\nover dog fox",
+"older": "merge brown change change fox\n\nquick\nover line\nlazy\nthe merge jumps file the\n\nfox brown quick\nfile over line over\n\nconflict\n\nthe jumps conflict conflict dog dog\n\nchange line conflict\n\nquick dog over\njumps text brown\nline\n\nover dog fox\n",
+"yours": "merge brown change change fox\n\nquick\nover line\nnew\nlazy\nthe merge jumps file the\n\nfox brown quick\nfile over line over\nconflict\n \n}\nthe jumps conflict conflict dog dog\n\nchange line conflict\n\nquick dog over\njumps text brown\nline\n\nover dog fox\n"
+},
+"runs": [
+{
+"args": [
+"-m"
+],
+"stdout": "merge brown change change fox\n\nquick\n<<<<<<< M\nlazy  \n||||||| O\nover line\nlazy\n=======\nover line\nnew\nlazy\n>>>>>>> Y\nthe merge jumps file the\n\nfox brown quick\nfile over line over\nconflict\n<<<<<<< M\n\n||||||| O\n\nthe jumps conflict conflict dog dog\n=======\n \n}\nthe jumps conflict conflict dog dog\n>>>>>>> Y\n\nchange line conflict\n\nquick dog over\njumps text brown\nline\n\nover dog fox",
+"rc": 1
+},
+{
+"args": [
+"-m",
+"-E"
+],
+"stdout": "merge brown change change fox\n\nquick\n<<<<<<< M\nlazy  \n=======\nover line\nnew\nlazy\n>>>>>>> Y\nthe merge jumps file the\n\nfox brown quick\nfile over line over\nconflict\n<<<<<<< M\n\n=======\n \n}\nthe jumps conflict conflict dog dog\n>>>>>>> Y\n\nchange line conflict\n\nquick dog over\njumps text brown\nline\n\nover dog fox",
+"rc": 1
+},
+{
+"args": [
+"-m",
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-E"
+],
+"stdout": "11a\n=======\n \n}\nthe jumps conflict conflict dog dog\n>>>>>>> Y\n.\n10a\n<<<<<<< M\n.\n9d\n4a\n=======\nover line\nnew\nlazy\n>>>>>>> Y\n.\n3a\n<<<<<<< M\n.\n",
+"rc": 1
+},
+{
+"args": [
+"-A"
+],
+"stdout": "11a\n||||||| O\n\nthe jumps conflict conflict dog dog\n=======\n \n}\nthe jumps conflict conflict dog dog\n>>>>>>> Y\n.\n10a\n<<<<<<< M\n.\n9d\n4a\n||||||| O\nover line\nlazy\n=======\nover line\nnew\nlazy\n>>>>>>> Y\n.\n3a\n<<<<<<< M\n.\n",
+"rc": 1
+},
+{
+"args": [
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-T"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-A",
+"-i"
+],
+"stdout": "11a\n||||||| O\n\nthe jumps conflict conflict dog dog\n=======\n \n}\nthe jumps conflict conflict dog dog\n>>>>>>> Y\n.\n10a\n<<<<<<< M\n.\n9d\n4a\n||||||| O\nover line\nlazy\n=======\nover line\nnew\nlazy\n>>>>>>> Y\n.\n3a\n<<<<<<< M\n.\nw\nq\n",
+"rc": 1
+}
+]
+},
+{
+"files": {
+"mine": "foo  bar\na\nB\n\n  \nb\nL33\nL14\n \n}\n\tx\nL7\n  x\n  x\na\nint f()\nL27\na\nb b\nL16\nL21\nL14\n\na\nfoo  bar\nx  \nx\r\n{\n \nreturn 0;",
+"older": "foo  bar\nB\n\n \nb\nL33\nL14\n \nL7\n  x\na\nint f()\nL27\na\nb b\nc\nL16\nL21\nL14\n\n}\n\tx\na\nfoo  bar\nx  \nx\r\n{\n \nreturn 0;\n",
+"yours": "foo  bar\nB\n\n \nb\nL33\nL14\n \nL7\n  x\na\nint f()\nL27\na\nb b\nc\nL16\nL14\n\n}\n\tx\na\nfoo  bar\nx  \nx\r\n{\n \nreturn 0;\n"
+},
+"runs": [
+{
+"args": [
+"-m"
+],
+"stdout": "foo  bar\na\nB\n\n  \nb\nL33\nL14\n \n}\n\tx\nL7\n  x\n  x\na\nint f()\nL27\na\nb b\nL16\nL14\n\na\nfoo  bar\nx  \nx\r\n{\n \nreturn 0;",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-E"
+],
+"stdout": "foo  bar\na\nB\n\n  \nb\nL33\nL14\n \n}\n\tx\nL7\n  x\n  x\na\nint f()\nL27\na\nb b\nL16\nL14\n\na\nfoo  bar\nx  \nx\r\n{\n \nreturn 0;",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-E"
+],
+"stdout": "21d\n",
+"rc": 0
+},
+{
+"args": [
+"-A"
+],
+"stdout": "21d\n",
+"rc": 0
+},
+{
+"args": [
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-T"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-A",
+"-i"
+],
+"stdout": "21d\nw\nq\n",
+"rc": 0
+}
+]
+},
+{
+"files": {
+"mine": "dog\ntext\nbrown text merge file\nover\nquick lazy change jumps merge jumps\nbrown\nmerge conflict fox\n  x\n\nline change conflict\nlazy merge line conflict\nconflict lazy jumps\nfile brown change change merge\n\nchange merge\nbrown text change text conflict fox\ntext lazy line text the\ndog over over over\nthe lazy file lazy fox text\njumps jumps merge brown line\nline conflict\n\ntext the\nmerge fox text merge line quick\n  x\nL32\nfile conflict conflict lazy\nbrown conflict merge",
+"older": "dog\ntext\nbrown text merge file\nover\nquick lazy change jumps merge jumps\nbrown\nmerge conflict fox\ndog jumps dog jumps\nline change conflict\nlazy merge line conflict\nconflict lazy jumps\nfile brown change change merge\n\nchange merge\nbrown text change text conflict fox\ntext lazy line text the\ndog over over over\nthe lazy file lazy fox text\njumps jumps merge brown line\nline conflict\n\ntext the\nmerge fox text merge line quick\nfile conflict conflict lazy\nbrown conflict merge\n",
+"yours": "dog\ntext\nover\nquick lazy change jumps merge jumps\nbrown\nmerge conflict fox\ndog jumps dog jumps\nline change conflict\nlazy merge line conflict\nconflict lazy jumps\nfile brown change change merge\n\nchange merge\nbrown text change text conflict fox\ntext lazy line text the\ndog over over over\nthe lazy file lazy fox text\njumps jumps merge brown line\nline conflict\n\ntext the\nmerge fox text merge line quick\nfile conflict conflict lazy\nbrown conflict merge\n"
+},
+"runs": [
+{
+"args": [
+"-m"
+],
+"stdout": "dog\ntext\nover\nquick lazy change jumps merge jumps\nbrown\nmerge conflict fox\n  x\n\nline change conflict\nlazy merge line conflict\nconflict lazy jumps\nfile brown change change merge\n\nchange merge\nbrown text change text conflict fox\ntext lazy line text the\ndog over over over\nthe lazy file lazy fox text\njumps jumps merge brown line\nline conflict\n\ntext the\nmerge fox text merge line quick\n  x\nL32\nfile conflict conflict lazy\nbrown conflict merge",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-E"
+],
+"stdout": "dog\ntext\nover\nquick lazy change jumps merge jumps\nbrown\nmerge conflict fox\n  x\n\nline change conflict\nlazy merge line conflict\nconflict lazy jumps\nfile brown change change merge\n\nchange merge\nbrown text change text conflict fox\ntext lazy line text the\ndog over over over\nthe lazy file lazy fox text\njumps jumps merge brown line\nline conflict\n\ntext the\nmerge fox text merge line quick\n  x\nL32\nfile conflict conflict lazy\nbrown conflict merge",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-E"
+],
+"stdout": "3d\n",
+"rc": 0
+},
+{
+"args": [
+"-A"
+],
+"stdout": "3d\n",
+"rc": 0
+},
+{
+"args": [
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-T"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-A",
+"-i"
+],
+"stdout": "3d\nw\nq\n",
+"rc": 0
+}
+]
+},
+{
+"files": {
+"mine": "L33  \n\nL11\n",
+"older": "v1 = f(3);\n\n",
+"yours": ""
+},
+"runs": [
+{
+"args": [
+"-m"
+],
+"stdout": "<<<<<<< M\nL33  \n\nL11\n||||||| O\nv1 = f(3);\n\n=======\n>>>>>>> Y\n",
+"rc": 1
+},
+{
+"args": [
+"-m",
+"-E"
+],
+"stdout": "<<<<<<< M\nL33  \n\nL11\n=======\n>>>>>>> Y\n",
+"rc": 1
+},
+{
+"args": [
+"-m",
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-E"
+],
+"stdout": "3a\n=======\n>>>>>>> Y\n.\n0a\n<<<<<<< M\n.\n",
+"rc": 1
+},
+{
+"args": [
+"-A"
+],
+"stdout": "3a\n||||||| O\nv1 = f(3);\n\n=======\n>>>>>>> Y\n.\n0a\n<<<<<<< M\n.\n",
+"rc": 1
+},
+{
+"args": [
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-T"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-A",
+"-i"
+],
+"stdout": "3a\n||||||| O\nv1 = f(3);\n\n=======\n>>>>>>> Y\n.\n0a\n<<<<<<< M\n.\nw\nq\n",
+"rc": 1
+}
+]
+},
+{
+"files": {
+"mine": "\n\n    v0 = f(3);\n    if (x9) {\n    }\n}\nv5 = f(3);\nv7 = f(2);\nv0 = f(1);\n",
+"older": "\n\nif (x6) {\n    v0 = f(3);\n    if (x9) {\n    }\n}\nv5 = f(3);\nv7 = f(0);\nv7 = f(2);\nv0 = f(1);\n",
+"yours": "    }\n}\nif (x6) {\n    v0 = f(3);\n    if (x9) {  \nv5 = f(3);\nv7 = f(2);\n"
+},
+"runs": [
+{
+"args": [
+"-m"
+],
+"stdout": "<<<<<<< M\n\n\n||||||| O\n\n\nif (x6) {\n=======\n    }\n}\nif (x6) {\n>>>>>>> Y\n    v0 = f(3);\n    if (x9) {  \nv5 = f(3);\n<<<<<<< O\nv7 = f(0);\n=======\n>>>>>>> Y\nv7 = f(2);\n",
+"rc": 1
+},
+{
+"args": [
+"-m",
+"-E"
+],
+"stdout": "<<<<<<< M\n\n\n=======\n    }\n}\nif (x6) {\n>>>>>>> Y\n    v0 = f(3);\n    if (x9) {  \nv5 = f(3);\nv7 = f(2);\n",
+"rc": 1
+},
+{
+"args": [
+"-m",
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-E"
+],
+"stdout": "9d\n4,6c\n    if (x9) {  \n.\n2a\n=======\n    }\n}\nif (x6) {\n>>>>>>> Y\n.\n0a\n<<<<<<< M\n.\n",
+"rc": 1
+},
+{
+"args": [
+"-A"
+],
+"stdout": "9d\n7a\n>>>>>>> Y\n.\n7a\n<<<<<<< O\nv7 = f(0);\n=======\n.\n4,6c\n    if (x9) {  \n.\n2a\n||||||| O\n\n\nif (x6) {\n=======\n    }\n}\nif (x6) {\n>>>>>>> Y\n.\n0a\n<<<<<<< M\n.\n",
+"rc": 1
+},
+{
+"args": [
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-T"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-A",
+"-i"
+],
+"stdout": "9d\n7a\n>>>>>>> Y\n.\n7a\n<<<<<<< O\nv7 = f(0);\n=======\n.\n4,6c\n    if (x9) {  \n.\n2a\n||||||| O\n\n\nif (x6) {\n=======\n    }\n}\nif (x6) {\n>>>>>>> Y\n.\n0a\n<<<<<<< M\n.\nw\nq\n",
+"rc": 1
+}
+]
+},
+{
+"files": {
+"mine": "dog quick quick text\nchange brown change quick file\nchange conflict dog file over\ntext fox conflict text\nbrown conflict lazy text brown dog\n\njumps\n\nchange over the conflict over over\nquick\ntext conflict\nlazy text file text\nthe fox over text jumps\ntext text the line\nconflict text merge\nlazy the file\njumps dog line conflict jumps conflict\nfox merge over the file\nchange quick the\nfile\nlazy brown line\nquick brown the over text\ntext brown brown dog dog change\nquick\n\nmerge\nconflict\nfile jumps quick dog conflict\nconflict jumps quick text text\nline file over brown conflict change",
+"older": "dog quick quick text\nchange brown change quick file\nchange conflict dog file over\ntext fox conflict text\nbrown conflict lazy text brown dog\njumps\n\nchange over the conflict over over\nquick\ntext conflict\nlazy text file text\nthe fox over text jumps\ntext text the line\nconflict text merge\nlazy the file\njumps dog line conflict jumps conflict\nfox merge over the file\nchange quick the\nfile\nlazy brown line\nmerge jumps file dog\nquick brown the over text\ntext brown brown dog dog change\nquick\n\nmerge\nconflict\nfile jumps quick dog conflict\nconflict jumps quick text text\nline file over brown conflict change\n",
+"yours": "change brown change quick file\nchange conflict dog file over\ntext fox conflict text\nbrown conflict lazy text brown dog\njumps\n\nchange over the conflict over over\nquick\ntext conflict\nlazy text file text\nthe fox over text jumps\ntext text the line\nconflict text merge\nlazy the file\njumps dog line conflict jumps conflict\nfox merge over the file\nchange quick the\nfile\nlazy brown line\nmerge jumps file dog\nquick brown the over text\ntext brown brown dog dog change\nquick\n\nmerge\nconflict\nfile jumps quick dog conflict\nconflict jumps quick text text\nline file over brown conflict change\n"
+},
+"runs": [
+{
+"args": [
+"-m"
+],
+"stdout": "change brown change quick file\nchange conflict dog file over\ntext fox conflict text\nbrown conflict lazy text brown dog\n\njumps\n\nchange over the conflict over over\nquick\ntext conflict\nlazy text file text\nthe fox over text jumps\ntext text the line\nconflict text merge\nlazy the file\njumps dog line conflict jumps conflict\nfox merge over the file\nchange quick the\nfile\nlazy brown line\nquick brown the over text\ntext brown brown dog dog change\nquick\n\nmerge\nconflict\nfile jumps quick dog conflict\nconflict jumps quick text text\nline file over brown conflict change",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-E"
+],
+"stdout": "change brown change quick file\nchange conflict dog file over\ntext fox conflict text\nbrown conflict lazy text brown dog\n\njumps\n\nchange over the conflict over over\nquick\ntext conflict\nlazy text file text\nthe fox over text jumps\ntext text the line\nconflict text merge\nlazy the file\njumps dog line conflict jumps conflict\nfox merge over the file\nchange quick the\nfile\nlazy brown line\nquick brown the over text\ntext brown brown dog dog change\nquick\n\nmerge\nconflict\nfile jumps quick dog conflict\nconflict jumps quick text text\nline file over brown conflict change",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-E"
+],
+"stdout": "1d\n",
+"rc": 0
+},
+{
+"args": [
+"-A"
+],
+"stdout": "1d\n",
+"rc": 0
+},
+{
+"args": [
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-T"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-A",
+"-i"
+],
+"stdout": "1d\nw\nq\n",
+"rc": 0
+}
+]
+},
+{
+"files": {
+"mine": "merge conflict fox change over merge\nover line line brown file fox\nquick brown brown text\nbrown conflict merge change\n\nover\njumps dog text jumps text over\nmerge\nthe quick fox merge\nfile change\nfox quick lazy jumps\njumps quick jumps lazy change\nmerge over quick the text\n\nbrown jumps quick jumps jumps\nquick change conflict\nquick\n\n\nfile conflict conflict dog\nline line\nchange the quick line\nquick change brown\nchange change over text line\nbrown\nfox over brown\n",
+"older": "merge conflict fox change over merge\nover line line brown file fox\nquick brown brown text\nbrown conflict merge change\n\nover\njumps dog text jumps text over\nmerge\nthe quick fox merge\nfile change\nfox quick lazy jumps\njumps quick jumps lazy change\nmerge over quick the text\n\nbrown jumps quick jumps jumps\nquick change conflict\nquick\n\n\nfile conflict conflict dog\nline line\nchange the quick line\nquick change brown\nchange change over text line\nbrown\nfox over brown\n",
+"yours": "merge conflict fox change over merge\nover line line brown file fox\nbrown conflict merge change\n\nover\njumps dog text jumps text over\nmerge\nthe quick fox merge\nfile change\nfox quick lazy jumps\njumps quick jumps lazy change\nmerge over quick the text\n\nbrown jumps quick jumps jumps\nquick change conflict\nquick\n\n\nfile conflict conflict dog\nline line\nchange the quick line\nquick change brown\nchange change over text line\nbrown\nfox over brown\n"
+},
+"runs": [
+{
+"args": [
+"-m"
+],
+"stdout": "merge conflict fox change over merge\nover line line brown file fox\nbrown conflict merge change\n\nover\njumps dog text jumps text over\nmerge\nthe quick fox merge\nfile change\nfox quick lazy jumps\njumps quick jumps lazy change\nmerge over quick the text\n\nbrown jumps quick jumps jumps\nquick change conflict\nquick\n\n\nfile conflict conflict dog\nline line\nchange the quick line\nquick change brown\nchange change over text line\nbrown\nfox over brown\n",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-E"
+],
+"stdout": "merge conflict fox change over merge\nover line line brown file fox\nbrown conflict merge change\n\nover\njumps dog text jumps text over\nmerge\nthe quick fox merge\nfile change\nfox quick lazy jumps\njumps quick jumps lazy change\nmerge over quick the text\n\nbrown jumps quick jumps jumps\nquick change conflict\nquick\n\n\nfile conflict conflict dog\nline line\nchange the quick line\nquick change brown\nchange change over text line\nbrown\nfox over brown\n",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-E"
+],
+"stdout": "3d\n",
+"rc": 0
+},
+{
+"args": [
+"-A"
+],
+"stdout": "3d\n",
+"rc": 0
+},
+{
+"args": [
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-T"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-A",
+"-i"
+],
+"stdout": "3d\nw\nq\n",
+"rc": 0
+}
+]
+},
+{
+"files": {
+"mine": "over brown the quick merge quick\nmerge the line line jumps conflict\njumps\nlazy the fox\nmerge conflict\ndog\nover brown\nbrown lazy\nbrown brown text the\njumps over text\nthe\n\njumps jumps conflict merge fox merge\ntext\nover file the\nbrown text jumps\nmerge merge over\nmerge dog file quick merge\ndog merge jumps\nline line merge quick\nchange conflict merge file conflict\ndog the\nlazy dog fox the fox\ntext\nbrown lazy conflict quick merge change\n\nline quick\nbrown merge jumps\n",
+"older": "over brown the quick merge quick\nmerge the line line jumps conflict\njumps\nlazy the fox\nmerge conflict\ndog\nover brown\nbrown lazy\nbrown brown text the\njumps over text\nthe\n\njumps jumps conflict merge fox merge\ntext\nover file the\nbrown text jumps\nmerge merge over\nmerge dog file quick merge\ndog merge jumps\nline line merge quick\nchange conflict merge file conflict\ndog the\nlazy dog fox the fox\ntext\nbrown lazy conflict quick merge change\n\nline quick\nbrown merge jumps\n",
+"yours": "over brown the quick merge quick\nmerge the line line jumps conflict\njumps\nlazy the fox\nmerge conflict\ndog\nover brown\nbrown lazy\nbrown brown text the\njumps over text\nthe\n\njumps jumps conflict merge fox merge\ntext\nover file the\nbrown text jumps\nmerge merge over\nmerge dog file quick merge\ndog merge jumps\nline line merge quick\nchange conflict merge file conflict\ndog the\nlazy dog fox the fox\ntextz\nbrown lazy conflict quick merge change\n\nline quick\nbrown merge jumps\n"
+},
+"runs": [
+{
+"args": [
+"-m"
+],
+"stdout": "over brown the quick merge quick\nmerge the line line jumps conflict\njumps\nlazy the fox\nmerge conflict\ndog\nover brown\nbrown lazy\nbrown brown text the\njumps over text\nthe\n\njumps jumps conflict merge fox merge\ntext\nover file the\nbrown text jumps\nmerge merge over\nmerge dog file quick merge\ndog merge jumps\nline line merge quick\nchange conflict merge file conflict\ndog the\nlazy dog fox the fox\ntextz\nbrown lazy conflict quick merge change\n\nline quick\nbrown merge jumps\n",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-E"
+],
+"stdout": "over brown the quick merge quick\nmerge the line line jumps conflict\njumps\nlazy the fox\nmerge conflict\ndog\nover brown\nbrown lazy\nbrown brown text the\njumps over text\nthe\n\njumps jumps conflict merge fox merge\ntext\nover file the\nbrown text jumps\nmerge merge over\nmerge dog file quick merge\ndog merge jumps\nline line merge quick\nchange conflict merge file conflict\ndog the\nlazy dog fox the fox\ntextz\nbrown lazy conflict quick merge change\n\nline quick\nbrown merge jumps\n",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-E"
+],
+"stdout": "24c\ntextz\n.\n",
+"rc": 0
+},
+{
+"args": [
+"-A"
+],
+"stdout": "24c\ntextz\n.\n",
+"rc": 0
+},
+{
+"args": [
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-T"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-A",
+"-i"
+],
+"stdout": "24c\ntextz\n.\nw\nq\n",
+"rc": 0
+}
+]
+},
+{
+"files": {
+"mine": "v4 = f(0);\n\n\n\n\nv1 = f(0);\n\n\nif (x2) {\n    v6 = f(2);\n    v1 = f(3);\n    v8 = f(3);\n    v6 = f(3);\n    v5 = f(0);\n    if (x6) {\n\n        v3 = f(1);\n    }\n    if (x3) {\n        v4 = f(3);\n        v6 = f(2);\n    }\n\n",
+"older": "v4 = f(0);\n\n\n\n\nv1 = f(0);\n\n\nif (x2) {\n    v6 = f(2);\n    v1 = f(3);\n    v8 = f(3);\n    v6 = f(3);\n    v5 = f(0);\n    if (x6) {\n\n        v3 = f(1);\n    }\n    if (x3) {\n        v4 = f(3);\n        v6 = f(2);\n    }\n",
+"yours": "v4 = f(0);\n\n\n\na\n\n\n\nif (x2) {\n    v6 = f(2);\n    v1 = f(3);\n    v8 = f(3);\n    v6 = f(3);\n    v5 = f(0);\n    if (x6) {\n\n        v3 = f(1);\n    }\n    if (x3) {\n        v4 = f(3);\n        v6 = f(2);\n    }\n"
+},
+"runs": [
+{
+"args": [
+"-m"
+],
+"stdout": "v4 = f(0);\n\n\n\na\n\n\n\nif (x2) {\n    v6 = f(2);\n    v1 = f(3);\n    v8 = f(3);\n    v6 = f(3);\n    v5 = f(0);\n    if (x6) {\n\n        v3 = f(1);\n    }\n    if (x3) {\n        v4 = f(3);\n        v6 = f(2);\n    }\n\n",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-E"
+],
+"stdout": "v4 = f(0);\n\n\n\na\n\n\n\nif (x2) {\n    v6 = f(2);\n    v1 = f(3);\n    v8 = f(3);\n    v6 = f(3);\n    v5 = f(0);\n    if (x6) {\n\n        v3 = f(1);\n    }\n    if (x3) {\n        v4 = f(3);\n        v6 = f(2);\n    }\n\n",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-E"
+],
+"stdout": "6d\n4a\na\n.\n",
+"rc": 0
+},
+{
+"args": [
+"-A"
+],
+"stdout": "6d\n4a\na\n.\n",
+"rc": 0
+},
+{
+"args": [
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-T"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-A",
+"-i"
+],
+"stdout": "6d\n4a\na\n.\nw\nq\n",
+"rc": 0
+}
+]
+},
+{
+"files": {
+"mine": "B\n\tx\nx\r\nL8\nfoo  bar\nint f()\n#c\nL18\nL15\n\nB\nx\r\nc\nb b\nL27\nL8\nint f()\n\nx\r\nL12\nb\nL15\nx  \n  x\nL2\nL40\nL24\nfoo  bar\n",
+"older": "B\n\tx\nx\r\nL16\nL8\nfoo  bar\nint f()\n#c\nL18\nL15\n\nB\nx\r\nc\nb b\nL27\nL8\nL24\nfoo  bar\nint f()\n\nx\r\nL12\nb\nL15\nx  \n  x\nL2\nL40\n",
+"yours": "B\nx\r\nL16\nL8\nfoo  bar\nint f()\n#c\nL18\n\nL15\n\nB\nx\r\n\nc\nb b\nL27\nL8\nL24\n#c\nfoo  bar\nint f()\n\nx\r\nL12\nb\nL15\nx  \n  x\nL40"
+},
+"runs": [
+{
+"args": [
+"-m"
+],
+"stdout": "B\nx\r\nL8\nfoo  bar\nint f()\n#c\nL18\n\nL15\n\nB\nx\r\n\nc\nb b\nL27\nL8\n<<<<<<< M\n||||||| O\nL24\nfoo  bar\n=======\nL24\n#c\nfoo  bar\n>>>>>>> Y\nint f()\n\nx\r\nL12\nb\nL15\nx  \n  x\n<<<<<<< M\nL2\nL40\nL24\nfoo  bar\n||||||| O\nL2\nL40\n=======\nL40>>>>>>> Y\n",
+"rc": 1
+},
+{
+"args": [
+"-m",
+"-E"
+],
+"stdout": "B\nx\r\nL8\nfoo  bar\nint f()\n#c\nL18\n\nL15\n\nB\nx\r\n\nc\nb b\nL27\nL8\n<<<<<<< M\n=======\nL24\n#c\nfoo  bar\n>>>>>>> Y\nint f()\n\nx\r\nL12\nb\nL15\nx  \n  x\n<<<<<<< M\nL2\nL40\nL24\nfoo  bar\n=======\nL40>>>>>>> Y\n",
+"rc": 1
+},
+{
+"args": [
+"-m",
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-E"
+],
+"stdout": "28a\n=======\nL40\n>>>>>>> Y\n.\n24a\n<<<<<<< M\n.\n16a\n=======\nL24\n#c\nfoo  bar\n>>>>>>> Y\n.\n16a\n<<<<<<< M\n.\n12a\n\n.\n8a\n\n.\n2d\n",
+"rc": 1
+},
+{
+"args": [
+"-A"
+],
+"stdout": "28a\n||||||| O\nL2\nL40\n=======\nL40\n>>>>>>> Y\n.\n24a\n<<<<<<< M\n.\n16a\n||||||| O\nL24\nfoo  bar\n=======\nL24\n#c\nfoo  bar\n>>>>>>> Y\n.\n16a\n<<<<<<< M\n.\n12a\n\n.\n8a\n\n.\n2d\n",
+"rc": 1
+},
+{
+"args": [
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-T"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-A",
+"-i"
+],
+"stdout": "28a\n||||||| O\nL2\nL40\n=======\nL40\n>>>>>>> Y\n.\n24a\n<<<<<<< M\n.\n16a\n||||||| O\nL24\nfoo  bar\n=======\nL24\n#c\nfoo  bar\n>>>>>>> Y\n.\n16a\n<<<<<<< M\n.\n12a\n\n.\n8a\n\n.\n2d\nw\nq\n",
+"rc": 1
+}
+]
+},
+{
+"files": {
+"mine": "}\n#c\nL16\nb\n  x\nL12\n{\n}\nL11\nb b",
+"older": "}\n#c\nL16\nb\n  x\nL12\n{\n}\nL12\nL11\nb b\n",
+"yours": "}\n#c\nL16\nb\nb\n  x\n{\nL11\n}\nb\n}\nL12\n"
+},
+"runs": [
+{
+"args": [
+"-m"
+],
+"stdout": "}\n#c\nL16\nb\nb\n  x\n{\nL11\n}\nb\n}\n<<<<<<< M\nL11\nb b||||||| O\nL12\nL11\nb b\n=======\nL12\n>>>>>>> Y\n",
+"rc": 1
+},
+{
+"args": [
+"-m",
+"-E"
+],
+"stdout": "}\n#c\nL16\nb\nb\n  x\n{\nL11\n}\nb\n}\n<<<<<<< M\nL11\nb b=======\nL12\n>>>>>>> Y\n",
+"rc": 1
+},
+{
+"args": [
+"-m",
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-E"
+],
+"stdout": "10a\n=======\nL12\n>>>>>>> Y\n.\n8a\n<<<<<<< M\n.\n7a\nL11\n}\nb\n.\n6d\n4a\nb\n.\n",
+"rc": 1
+},
+{
+"args": [
+"-A"
+],
+"stdout": "10a\n||||||| O\nL12\nL11\nb b\n=======\nL12\n>>>>>>> Y\n.\n8a\n<<<<<<< M\n.\n7a\nL11\n}\nb\n.\n6d\n4a\nb\n.\n",
+"rc": 1
+},
+{
+"args": [
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-T"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-A",
+"-i"
+],
+"stdout": "10a\n||||||| O\nL12\nL11\nb b\n=======\nL12\n>>>>>>> Y\n.\n8a\n<<<<<<< M\n.\n7a\nL11\n}\nb\n.\n6d\n4a\nb\n.\nw\nq\n",
+"rc": 1
+}
+]
+},
+{
+"files": {
+"mine": "L1z\t\nb\t",
+"older": "",
+"yours": ""
+},
+"runs": [
+{
+"args": [
+"-m"
+],
+"stdout": "L1z\t\nb\t",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-E"
+],
+"stdout": "L1z\t\nb\t",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-E"
+],
+"stdout": "",
+"rc": 0
+},
+{
+"args": [
+"-A"
+],
+"stdout": "",
+"rc": 0
+},
+{
+"args": [
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-T"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-A",
+"-i"
+],
+"stdout": "w\nq\n",
+"rc": 0
+}
+]
+},
+{
+"files": {
+"mine": "v2 = f(1);\nv0 = f(0);\nv3 = f(1);\nv1 = f(0);\nv2 = f(3);\nv2 = f(0);\nv5 = f(1);\nv3 = f(2);\n",
+"older": "v2 = f(1);\nv0 = f(0);\nv3 = f(1);\nv1 = f(0);\nv2 = f(3);\nv2 = f(0);\nv5 = f(1);\nv3 = f(2);\n",
+"yours": "v2 = f(1);\nv2 = f(0);\nv5 = f(1);\nv0 = f(0);\nv3 = f(1); \nv1 = f(0);\nL28\nv2 = f(3);\nv3 = f(2);"
+},
+"runs": [
+{
+"args": [
+"-m"
+],
+"stdout": "v2 = f(1);\nv2 = f(0);\nv5 = f(1);\nv0 = f(0);\nv3 = f(1); \nv1 = f(0);\nL28\nv2 = f(3);\nv3 = f(2);",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-E"
+],
+"stdout": "v2 = f(1);\nv2 = f(0);\nv5 = f(1);\nv0 = f(0);\nv3 = f(1); \nv1 = f(0);\nL28\nv2 = f(3);\nv3 = f(2);",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-E"
+],
+"stdout": "6,8c\nv3 = f(2);\n.\n4a\nL28\n.\n3c\nv3 = f(1); \n.\n1a\nv2 = f(0);\nv5 = f(1);\n.\n",
+"rc": 0
+},
+{
+"args": [
+"-A"
+],
+"stdout": "6,8c\nv3 = f(2);\n.\n4a\nL28\n.\n3c\nv3 = f(1); \n.\n1a\nv2 = f(0);\nv5 = f(1);\n.\n",
+"rc": 0
+},
+{
+"args": [
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-T"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-A",
+"-i"
+],
+"stdout": "6,8c\nv3 = f(2);\n.\n4a\nL28\n.\n3c\nv3 = f(1); \n.\n1a\nv2 = f(0);\nv5 = f(1);\n.\nw\nq\n",
+"rc": 0
+}
+]
+},
+{
+"files": {
+"mine": "}\n\nif (x0) {  \n    v7 = f(1);\n    v7 = f(2);\n#c\n    v2 = f(2);\n    v0 = f(3);\n}\n#c\n\nv3 = f(0);\nif (x0) {\t\n    v7 = f(2);\n    v7 = f(0);\n    v5 = f(1);\n\n}\n",
+"older": "\nif (x0) {\n    v7 = f(1);\n    v7 = f(2);\n    v2 = f(2);\n    v0 = f(3);\n}\n\nv3 = f(0);\nif (x0) {\n    v7 = f(2);\n    v7 = f(0);\n    v5 = f(1);\n}\n",
+"yours": "if (x0) {\n    v7 = f(2);\n\n    v7 = f(2);\nif (x0) {\n    v7 = f(1);\n    v2 = f(2);\na\n}\n\nv3 = f(0);\n    v7 = f(0);\n    v5 = f(1);\n}\n"
+},
+"runs": [
+{
+"args": [
+"-m"
+],
+"stdout": "<<<<<<< M\n}\n||||||| O\n=======\nif (x0) {\n    v7 = f(2);\n>>>>>>> Y\n\n<<<<<<< M\nif (x0) {  \n||||||| O\nif (x0) {\n=======\n    v7 = f(2);\nif (x0) {\n>>>>>>> Y\n    v7 = f(1);\n<<<<<<< M\n    v7 = f(2);\n#c\n||||||| O\n    v7 = f(2);\n=======\n>>>>>>> Y\n    v2 = f(2);\na\n}\n#c\n\nv3 = f(0);\n<<<<<<< M\nif (x0) {\t\n    v7 = f(2);\n||||||| O\nif (x0) {\n    v7 = f(2);\n=======\n>>>>>>> Y\n    v7 = f(0);\n    v5 = f(1);\n\n}\n",
+"rc": 1
+},
+{
+"args": [
+"-m",
+"-E"
+],
+"stdout": "<<<<<<< M\n}\n=======\nif (x0) {\n    v7 = f(2);\n>>>>>>> Y\n\n<<<<<<< M\nif (x0) {  \n=======\n    v7 = f(2);\nif (x0) {\n>>>>>>> Y\n    v7 = f(1);\n<<<<<<< M\n    v7 = f(2);\n#c\n=======\n>>>>>>> Y\n    v2 = f(2);\na\n}\n#c\n\nv3 = f(0);\n<<<<<<< M\nif (x0) {\t\n    v7 = f(2);\n=======\n>>>>>>> Y\n    v7 = f(0);\n    v5 = f(1);\n\n}\n",
+"rc": 1
+},
+{
+"args": [
+"-m",
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-E"
+],
+"stdout": "14a\n=======\n>>>>>>> Y\n.\n12a\n<<<<<<< M\n.\n8c\na\n.\n6a\n=======\n>>>>>>> Y\n.\n4a\n<<<<<<< M\n.\n3a\n=======\n    v7 = f(2);\nif (x0) {\n>>>>>>> Y\n.\n2a\n<<<<<<< M\n.\n1a\n=======\nif (x0) {\n    v7 = f(2);\n>>>>>>> Y\n.\n0a\n<<<<<<< M\n.\n",
+"rc": 1
+},
+{
+"args": [
+"-A"
+],
+"stdout": "14a\n||||||| O\nif (x0) {\n    v7 = f(2);\n=======\n>>>>>>> Y\n.\n12a\n<<<<<<< M\n.\n8c\na\n.\n6a\n||||||| O\n    v7 = f(2);\n=======\n>>>>>>> Y\n.\n4a\n<<<<<<< M\n.\n3a\n||||||| O\nif (x0) {\n=======\n    v7 = f(2);\nif (x0) {\n>>>>>>> Y\n.\n2a\n<<<<<<< M\n.\n1a\n||||||| O\n=======\nif (x0) {\n    v7 = f(2);\n>>>>>>> Y\n.\n0a\n<<<<<<< M\n.\n",
+"rc": 1
+},
+{
+"args": [
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-T"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-A",
+"-i"
+],
+"stdout": "14a\n||||||| O\nif (x0) {\n    v7 = f(2);\n=======\n>>>>>>> Y\n.\n12a\n<<<<<<< M\n.\n8c\na\n.\n6a\n||||||| O\n    v7 = f(2);\n=======\n>>>>>>> Y\n.\n4a\n<<<<<<< M\n.\n3a\n||||||| O\nif (x0) {\n=======\n    v7 = f(2);\nif (x0) {\n>>>>>>> Y\n.\n2a\n<<<<<<< M\n.\n1a\n||||||| O\n=======\nif (x0) {\n    v7 = f(2);\n>>>>>>> Y\n.\n0a\n<<<<<<< M\n.\nw\nq\n",
+"rc": 1
+}
+]
+},
+{
+"files": {
+"mine": "\nv4 = f(0);\nif (x3) {\n    v1 = f(0);\n    v9 = f(3);\n    v4 = f(0);\n    v4 = f(0);\n    v8 = f(3);z\n    v7 = f(1);\n    v2 = f(1);\n}\nv8 = f(3);\nv8 = f(1);\nv0 = f(3);\nv7 = f(3);\nv8 = f(3);\nv2 = f(3);\nif (x3) {\n    if (x3) {\n        v2 = f(2);\n        v6 = f(0);\n\n        v6 = f(2);\n",
+"older": "\nv4 = f(0);\nif (x3) {\n    v1 = f(0);\n    v9 = f(3);\n    v4 = f(0);\n    v4 = f(0);\n    v8 = f(3);\n    v7 = f(1);\n    v2 = f(1);\n}\nv8 = f(3);\nv8 = f(1);\nv0 = f(3);\nv7 = f(3);\nv8 = f(3);\nv2 = f(3);\nif (x3) {\n    if (x3) {\n        v2 = f(2);\n        v6 = f(0);\n\n        v6 = f(2);\n",
+"yours": "\nv4 = f(0);\n    v1 = f(0);\n    v9 = f(3);\n    v4 = f(0);\n    v4 = f(0);\n    v8 = f(3);\n    v7 = f(1);\n    v2 = f(1);\n}\nv8 = f(3);\nv8 = f(1);\nv0 = f(3);\nv7 = f(3);\nv8 = f(3);\nv2 = f(3);\nif (x3) {\n    if (x3) {\n}\n        v2 = f(2);\n        v6 = f(0);\n\n        v6 = f(2);\n"
+},
+"runs": [
+{
+"args": [
+"-m"
+],
+"stdout": "\nv4 = f(0);\n    v1 = f(0);\n    v9 = f(3);\n    v4 = f(0);\n    v4 = f(0);\n    v8 = f(3);z\n    v7 = f(1);\n    v2 = f(1);\n}\nv8 = f(3);\nv8 = f(1);\nv0 = f(3);\nv7 = f(3);\nv8 = f(3);\nv2 = f(3);\nif (x3) {\n    if (x3) {\n}\n        v2 = f(2);\n        v6 = f(0);\n\n        v6 = f(2);\n",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-E"
+],
+"stdout": "\nv4 = f(0);\n    v1 = f(0);\n    v9 = f(3);\n    v4 = f(0);\n    v4 = f(0);\n    v8 = f(3);z\n    v7 = f(1);\n    v2 = f(1);\n}\nv8 = f(3);\nv8 = f(1);\nv0 = f(3);\nv7 = f(3);\nv8 = f(3);\nv2 = f(3);\nif (x3) {\n    if (x3) {\n}\n        v2 = f(2);\n        v6 = f(0);\n\n        v6 = f(2);\n",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-E"
+],
+"stdout": "19a\n}\n.\n3d\n",
+"rc": 0
+},
+{
+"args": [
+"-A"
+],
+"stdout": "19a\n}\n.\n3d\n",
+"rc": 0
+},
+{
+"args": [
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-T"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-A",
+"-i"
+],
+"stdout": "19a\n}\n.\n3d\nw\nq\n",
+"rc": 0
+}
+]
+},
+{
+"files": {
+"mine": "x  \nfoo  bar\na\n}\nB\nL40\nb b\nx\r\nL16\n \nx\r\n#c\n}\nreturn 0;\nL22\n\tx\n",
+"older": "x  \nfoo  bar\na\nB\nL40\nb b\nx\r\nL16\n \nx\r\n#c\n}\nreturn 0;\nL22\n\tx\n",
+"yours": "a\na\nB\nL40\nb b\nx\r\nL16\n \nx\r\n#c\n}\nreturn 0;\na\nL22\n"
+},
+"runs": [
+{
+"args": [
+"-m"
+],
+"stdout": "a\na\n}\nB\nL40\nb b\nx\r\nL16\n \nx\r\n#c\n}\nreturn 0;\na\nL22\n",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-E"
+],
+"stdout": "a\na\n}\nB\nL40\nb b\nx\r\nL16\n \nx\r\n#c\n}\nreturn 0;\na\nL22\n",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-E"
+],
+"stdout": "16d\n14a\na\n.\n1,2c\na\n.\n",
+"rc": 0
+},
+{
+"args": [
+"-A"
+],
+"stdout": "16d\n14a\na\n.\n1,2c\na\n.\n",
+"rc": 0
+},
+{
+"args": [
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-T"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-A",
+"-i"
+],
+"stdout": "16d\n14a\na\n.\n1,2c\na\n.\nw\nq\n",
+"rc": 0
+}
+]
+},
+{
+"files": {
+"mine": "\njumps merge dog lazy text fox\njumps over\nmerge line\n\n",
+"older": "\njumps merge dog lazy text fox\njumps over\nmerge line\n\n",
+"yours": "jumps merge dog lazy text fox\njumps over\n\n\nmerge line\t\n\n"
+},
+"runs": [
+{
+"args": [
+"-m"
+],
+"stdout": "jumps merge dog lazy text fox\njumps over\n\n\nmerge line\t\n\n",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-E"
+],
+"stdout": "jumps merge dog lazy text fox\njumps over\n\n\nmerge line\t\n\n",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-E"
+],
+"stdout": "4c\n\n\nmerge line\t\n.\n1d\n",
+"rc": 0
+},
+{
+"args": [
+"-A"
+],
+"stdout": "4c\n\n\nmerge line\t\n.\n1d\n",
+"rc": 0
+},
+{
+"args": [
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-T"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-A",
+"-i"
+],
+"stdout": "4c\n\n\nmerge line\t\n.\n1d\nw\nq\n",
+"rc": 0
+}
+]
+},
+{
+"files": {
+"mine": "\nv7 = f(3);\nv5 = f(2);\nv3 = f(2);\n\n",
+"older": "\nv7 = f(3);\nv5 = f(2);\nv3 = f(2);\n\n",
+"yours": "\n  x\nv7 = f(3);\n  x\n\nv5 = f(2);\na\n"
+},
+"runs": [
+{
+"args": [
+"-m"
+],
+"stdout": "\n  x\nv7 = f(3);\n  x\n\nv5 = f(2);\na\n",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-E"
+],
+"stdout": "\n  x\nv7 = f(3);\n  x\n\nv5 = f(2);\na\n",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-E"
+],
+"stdout": "4,5c\na\n.\n2a\n  x\n\n.\n1a\n  x\n.\n",
+"rc": 0
+},
+{
+"args": [
+"-A"
+],
+"stdout": "4,5c\na\n.\n2a\n  x\n\n.\n1a\n  x\n.\n",
+"rc": 0
+},
+{
+"args": [
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-T"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-A",
+"-i"
+],
+"stdout": "4,5c\na\n.\n2a\n  x\n\n.\n1a\n  x\n.\nw\nq\n",
+"rc": 0
+}
+]
+},
+{
+"files": {
+"mine": "v0 = f(0);\nv9 = f(1);\nv4 = f(1);  \t \n\nif (x5) {\nb\n    v6 = f(1);\n",
+"older": "v0 = f(0);\nv9 = f(1);\nv4 = f(1);\n\nif (x5) {\n    v6 = f(1);\n",
+"yours": "v0 = f(0);\nv9 = f(1);\nv4 = f(1);\n\nif (x5) {\n    v6 = f(1);\n"
+},
+"runs": [
+{
+"args": [
+"-m"
+],
+"stdout": "v0 = f(0);\nv9 = f(1);\nv4 = f(1);  \t \n\nif (x5) {\nb\n    v6 = f(1);\n",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-E"
+],
+"stdout": "v0 = f(0);\nv9 = f(1);\nv4 = f(1);  \t \n\nif (x5) {\nb\n    v6 = f(1);\n",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-E"
+],
+"stdout": "",
+"rc": 0
+},
+{
+"args": [
+"-A"
+],
+"stdout": "",
+"rc": 0
+},
+{
+"args": [
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-T"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-A",
+"-i"
+],
+"stdout": "w\nq\n",
+"rc": 0
+}
+]
+},
+{
+"files": {
+"mine": "v2 = f(0);\nv5 = f(3);\n\n\nv6 = f(3);\n}\nv4 = f(2);\nv4 = f(3);\nv1 = f(1);\n\nv4 = f(1);\n\nv0 = f(2);\n\t\n",
+"older": "v2 = f(0);\nv5 = f(3);\n\nv4 = f(3);\nv6 = f(3);\nv4 = f(2);\nv4 = f(3);\nv1 = f(1);\n\nv4 = f(1);\n\nv0 = f(2);\n\nif (x7) {\n",
+"yours": "v2 = f(0);\n  x\nv5 = f(3);\nv4 = f(2);\nv4 = f(3);\nv1 = f(1);\n\n\n\nv0 = f(2);\n\nv4 = f(3);  \nv6 = f(3);\nif (x7) {\n"
+},
+"runs": [
+{
+"args": [
+"-m"
+],
+"stdout": "v2 = f(0);\n  x\nv5 = f(3);\n<<<<<<< M\n\n\nv6 = f(3);\n}\n||||||| O\n\nv4 = f(3);\nv6 = f(3);\n=======\n>>>>>>> Y\nv4 = f(2);\nv4 = f(3);\nv1 = f(1);\n\n\n\nv0 = f(2);\n<<<<<<< M\n\t\n||||||| O\n\nif (x7) {\n=======\n\nv4 = f(3);  \nv6 = f(3);\nif (x7) {\n>>>>>>> Y\n",
+"rc": 1
+},
+{
+"args": [
+"-m",
+"-E"
+],
+"stdout": "v2 = f(0);\n  x\nv5 = f(3);\n<<<<<<< M\n\n\nv6 = f(3);\n}\n=======\n>>>>>>> Y\nv4 = f(2);\nv4 = f(3);\nv1 = f(1);\n\n\n\nv0 = f(2);\n<<<<<<< M\n\t\n=======\n\nv4 = f(3);  \nv6 = f(3);\nif (x7) {\n>>>>>>> Y\n",
+"rc": 1
+},
+{
+"args": [
+"-m",
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-E"
+],
+"stdout": "14a\n=======\n\nv4 = f(3);  \nv6 = f(3);\nif (x7) {\n>>>>>>> Y\n.\n13a\n<<<<<<< M\n.\n11c\n\n.\n6a\n=======\n>>>>>>> Y\n.\n2a\n<<<<<<< M\n.\n1a\n  x\n.\n",
+"rc": 1
+},
+{
+"args": [
+"-A"
+],
+"stdout": "14a\n||||||| O\n\nif (x7) {\n=======\n\nv4 = f(3);  \nv6 = f(3);\nif (x7) {\n>>>>>>> Y\n.\n13a\n<<<<<<< M\n.\n11c\n\n.\n6a\n||||||| O\n\nv4 = f(3);\nv6 = f(3);\n=======\n>>>>>>> Y\n.\n2a\n<<<<<<< M\n.\n1a\n  x\n.\n",
+"rc": 1
+},
+{
+"args": [
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-T"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-A",
+"-i"
+],
+"stdout": "14a\n||||||| O\n\nif (x7) {\n=======\n\nv4 = f(3);  \nv6 = f(3);\nif (x7) {\n>>>>>>> Y\n.\n13a\n<<<<<<< M\n.\n11c\n\n.\n6a\n||||||| O\n\nv4 = f(3);\nv6 = f(3);\n=======\n>>>>>>> Y\n.\n2a\n<<<<<<< M\n.\n1a\n  x\n.\nw\nq\n",
+"rc": 1
+}
+]
+},
+{
+"files": {
+"mine": "b b\nL12\nL31\n  x\nreturn 0;\n}\nreturn 0;\nfoo  bar\n{\nb\n",
+"older": "b b\nL12\nL31\n  x\nreturn 0;\n}\nreturn 0;\nfoo  bar\n{\nb\n",
+"yours": "b b  \nL12\t\n  x\nreturn 0;\n}\nreturn 0;\nfoo  bar\n{\n"
+},
+"runs": [
+{
+"args": [
+"-m"
+],
+"stdout": "b b  \nL12\t\n  x\nreturn 0;\n}\nreturn 0;\nfoo  bar\n{\n",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-E"
+],
+"stdout": "b b  \nL12\t\n  x\nreturn 0;\n}\nreturn 0;\nfoo  bar\n{\n",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-E"
+],
+"stdout": "10d\n1,3c\nb b  \nL12\t\n.\n",
+"rc": 0
+},
+{
+"args": [
+"-A"
+],
+"stdout": "10d\n1,3c\nb b  \nL12\t\n.\n",
+"rc": 0
+},
+{
+"args": [
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-T"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-A",
+"-i"
+],
+"stdout": "10d\n1,3c\nb b  \nL12\t\n.\nw\nq\n",
+"rc": 0
+}
+]
+},
+{
+"files": {
+"mine": "merge conflict jumps\nlazy\n\nmerge brown dog\nbrown jumps merge dog\n\nline brown conflict fox the jumps\nline conflict over change\ntext over\nover dog jumps\nfile the lazy fox line\njumps lazy file line file conflict\ntext text\ndog merge quick fox merge jumps\nfox  \ntext fox dog\nmerge over change\nchange quick line dog over lazy\nthe fox merge\n\nfox jumps lazy the conflict text\nfile the line file file\ndog brown\ndog merge jumps merge jumps line\nover\n\n",
+"older": "merge conflict jumps\nlazy\n\nmerge brown dog\nbrown jumps merge dog\n\nline brown conflict fox the jumps\nline conflict over change\ntext over\nover dog jumps\nfile the lazy fox line\njumps lazy file line file conflict\nmerge change lazy brown change\ntext text\ndog merge quick fox merge jumps\nfox\ntext fox dog\nfox quick line line brown\nmerge over change\nchange quick line dog over lazy\nthe fox merge\n\nfox jumps lazy the conflict text\nfile the line file file\ndog brown\ndog merge jumps merge jumps line\nover\n\n",
+"yours": "merge conflict jumps\nlazy\n\nmerge brown dog\nbrown jumps merge dog\n\nline brown conflict fox the jumps\nline conflict over change\ntext over\nover dog jumps \nfile the lazy fox line\njumps lazy file line file conflict\nmerge change lazy brown change\ntext text\ndog merge quick fox merge jumps\nfox\ntext fox dog\n#c\nfox quick line line brown\nmerge over change\n#c\nchange quick line dog over lazy\nthe fox merge\n\nfox jumps lazy the conflict text\nfile the line file file\n#c\ndog brown\ndog merge jumps merge jumps line\nover\n\n"
+},
+"runs": [
+{
+"args": [
+"-m"
+],
+"stdout": "merge conflict jumps\nlazy\n\nmerge brown dog\nbrown jumps merge dog\n\nline brown conflict fox the jumps\nline conflict over change\ntext over\nover dog jumps \nfile the lazy fox line\njumps lazy file line file conflict\ntext text\ndog merge quick fox merge jumps\nfox  \ntext fox dog\n<<<<<<< M\n||||||| O\nfox quick line line brown\n=======\n#c\nfox quick line line brown\n>>>>>>> Y\nmerge over change\n#c\nchange quick line dog over lazy\nthe fox merge\n\nfox jumps lazy the conflict text\nfile the line file file\n#c\ndog brown\ndog merge jumps merge jumps line\nover\n\n",
+"rc": 1
+},
+{
+"args": [
+"-m",
+"-E"
+],
+"stdout": "merge conflict jumps\nlazy\n\nmerge brown dog\nbrown jumps merge dog\n\nline brown conflict fox the jumps\nline conflict over change\ntext over\nover dog jumps \nfile the lazy fox line\njumps lazy file line file conflict\ntext text\ndog merge quick fox merge jumps\nfox  \ntext fox dog\n<<<<<<< M\n=======\n#c\nfox quick line line brown\n>>>>>>> Y\nmerge over change\n#c\nchange quick line dog over lazy\nthe fox merge\n\nfox jumps lazy the conflict text\nfile the line file file\n#c\ndog brown\ndog merge jumps merge jumps line\nover\n\n",
+"rc": 1
+},
+{
+"args": [
+"-m",
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-E"
+],
+"stdout": "22a\n#c\n.\n17a\n#c\n.\n16a\n=======\n#c\nfox quick line line brown\n>>>>>>> Y\n.\n16a\n<<<<<<< M\n.\n10c\nover dog jumps \n.\n",
+"rc": 1
+},
+{
+"args": [
+"-A"
+],
+"stdout": "22a\n#c\n.\n17a\n#c\n.\n16a\n||||||| O\nfox quick line line brown\n=======\n#c\nfox quick line line brown\n>>>>>>> Y\n.\n16a\n<<<<<<< M\n.\n10c\nover dog jumps \n.\n",
+"rc": 1
+},
+{
+"args": [
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-T"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-A",
+"-i"
+],
+"stdout": "22a\n#c\n.\n17a\n#c\n.\n16a\n||||||| O\nfox quick line line brown\n=======\n#c\nfox quick line line brown\n>>>>>>> Y\n.\n16a\n<<<<<<< M\n.\n10c\nover dog jumps \n.\nw\nq\n",
+"rc": 1
+}
+]
+},
+{
+"files": {
+"mine": "\n\nv9 = f(2);\nv8 = f(1);\nv5 = f(2);\nv8 = f(2);\nv4 = f(3);\n",
+"older": "\n\nv9 = f(2);\nv8 = f(1);\nv5 = f(2);\nv8 = f(2);\nv4 = f(3);\n",
+"yours": "\nv9 = f(2);\nv8 = f(1);\nv5 = f(2);\nv8 = f(2);\n  x\nv4 = f(3);\nnew\n"
+},
+"runs": [
+{
+"args": [
+"-m"
+],
+"stdout": "\nv9 = f(2);\nv8 = f(1);\nv5 = f(2);\nv8 = f(2);\n  x\nv4 = f(3);\nnew\n",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-E"
+],
+"stdout": "\nv9 = f(2);\nv8 = f(1);\nv5 = f(2);\nv8 = f(2);\n  x\nv4 = f(3);\nnew\n",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-E"
+],
+"stdout": "7a\nnew\n.\n6a\n  x\n.\n2d\n",
+"rc": 0
+},
+{
+"args": [
+"-A"
+],
+"stdout": "7a\nnew\n.\n6a\n  x\n.\n2d\n",
+"rc": 0
+},
+{
+"args": [
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-T"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-A",
+"-i"
+],
+"stdout": "7a\nnew\n.\n6a\n  x\n.\n2d\nw\nq\n",
+"rc": 0
+}
+]
+},
+{
+"files": {
+"mine": "fox dog text change the file\njumps\nlazy\nconflict change conflict\nover quick merge\n\nfox\nlazy file line\nnew\nlazy\nchange fox file quick fox dog\nover dog change\nthe line quick the conflict\ndog text lazy conflict\ndog the merge over lazy brown\n",
+"older": "quick\nfox dog text change the file\njumps\nlazy\nconflict change conflict\nover quick merge\n\nfox\nlazy file line\nlazy\nchange fox file quick fox dog\nover dog change\njumps merge conflict\nthe line quick the conflict\ndog text lazy conflict\ndog the merge over lazy brown\n",
+"yours": "lazy\nconflict change conflict\nover quick merge\n\nfox\nlazy file line\nlazy\nchange fox file quick fox dog\nover dog change\njumps merge conflict\nthe line quick the conflict\ndog text lazy conflict\nL38\ndog the merge over lazy brown\n"
+},
+"runs": [
+{
+"args": [
+"-m"
+],
+"stdout": "<<<<<<< M\nfox dog text change the file\njumps\n||||||| O\nquick\nfox dog text change the file\njumps\n=======\n>>>>>>> Y\nlazy\nconflict change conflict\nover quick merge\n\nfox\nlazy file line\nnew\nlazy\nchange fox file quick fox dog\nover dog change\nthe line quick the conflict\ndog text lazy conflict\nL38\ndog the merge over lazy brown\n",
+"rc": 1
+},
+{
+"args": [
+"-m",
+"-E"
+],
+"stdout": "<<<<<<< M\nfox dog text change the file\njumps\n=======\n>>>>>>> Y\nlazy\nconflict change conflict\nover quick merge\n\nfox\nlazy file line\nnew\nlazy\nchange fox file quick fox dog\nover dog change\nthe line quick the conflict\ndog text lazy conflict\nL38\ndog the merge over lazy brown\n",
+"rc": 1
+},
+{
+"args": [
+"-m",
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-E"
+],
+"stdout": "14a\nL38\n.\n2a\n=======\n>>>>>>> Y\n.\n0a\n<<<<<<< M\n.\n",
+"rc": 1
+},
+{
+"args": [
+"-A"
+],
+"stdout": "14a\nL38\n.\n2a\n||||||| O\nquick\nfox dog text change the file\njumps\n=======\n>>>>>>> Y\n.\n0a\n<<<<<<< M\n.\n",
+"rc": 1
+},
+{
+"args": [
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-T"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-A",
+"-i"
+],
+"stdout": "14a\nL38\n.\n2a\n||||||| O\nquick\nfox dog text change the file\njumps\n=======\n>>>>>>> Y\n.\n0a\n<<<<<<< M\n.\nw\nq\n",
+"rc": 1
+}
+]
+},
+{
+"files": {
+"mine": "x  \nL24\nc\nL39\nreturn 0;\nb\n \n \n\tx\nfoo  bar\nFoo Bar\nfoo  bar\nL1\nb b\nfoo  bar\n#c\n \n  x\n  x\nint f()\n",
+"older": "x  \nL24\nc\nL39\nreturn 0;\nb\n \n \n\tx\nfoo  bar\nFoo Bar\nfoo  bar\nL1\nb b\nfoo  bar\n#c\n \n  x\n  x\nint f()\n",
+"yours": "x  \nL24\nc\nL39\nreturn 0;\n \n \n\tx\nfoo  bar\nFoo Bar\nL1\nb b\nfoo  bar\n#c\n \n  x\n  x\nint f()\n"
+},
+"runs": [
+{
+"args": [
+"-m"
+],
+"stdout": "x  \nL24\nc\nL39\nreturn 0;\n \n \n\tx\nfoo  bar\nFoo Bar\nL1\nb b\nfoo  bar\n#c\n \n  x\n  x\nint f()\n",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-E"
+],
+"stdout": "x  \nL24\nc\nL39\nreturn 0;\n \n \n\tx\nfoo  bar\nFoo Bar\nL1\nb b\nfoo  bar\n#c\n \n  x\n  x\nint f()\n",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-E"
+],
+"stdout": "12d\n6d\n",
+"rc": 0
+},
+{
+"args": [
+"-A"
+],
+"stdout": "12d\n6d\n",
+"rc": 0
+},
+{
+"args": [
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-T"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-A",
+"-i"
+],
+"stdout": "12d\n6d\nw\nq\n",
+"rc": 0
+}
+]
+},
+{
+"files": {
+"mine": "foo  bar\nB\nB\nL34\n\tx\nfoo  bar\nc\n}\nb b\nint f()\nL32\nL13\nL5\nb\nFoo Bar\nint f()\n{\n",
+"older": "foo  bar\nB\nB\nL34\n\tx\nfoo  bar\nc\n}\nb b\nint f()\nL32\nL13\nL5\nb\nFoo Bar\nint f()\n{\n",
+"yours": "foo  bar\nB\nB\n\n\nL34\n\tx\nb b\nint f()\nc\nL32\nL13\nL5\nb\nint f()\n{\n"
+},
+"runs": [
+{
+"args": [
+"-m"
+],
+"stdout": "foo  bar\nB\nB\n\n\nL34\n\tx\nb b\nint f()\nc\nL32\nL13\nL5\nb\nint f()\n{\n",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-E"
+],
+"stdout": "foo  bar\nB\nB\n\n\nL34\n\tx\nb b\nint f()\nc\nL32\nL13\nL5\nb\nint f()\n{\n",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-E"
+],
+"stdout": "15d\n10a\nc\n.\n6,8d\n3a\n\n\n.\n",
+"rc": 0
+},
+{
+"args": [
+"-A"
+],
+"stdout": "15d\n10a\nc\n.\n6,8d\n3a\n\n\n.\n",
+"rc": 0
+},
+{
+"args": [
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-T"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-A",
+"-i"
+],
+"stdout": "15d\n10a\nc\n.\n6,8d\n3a\n\n\n.\nw\nq\n",
+"rc": 0
+}
+]
+},
+{
+"files": {
+"mine": "c\n#c\nreturn 0;\nx\r\n{\nb\na\nnew\nL38\nx  \nL28\n  x\nnew\n\tx\nL1\nb\nc\n \nb\nint f()\n#c\n",
+"older": "c\n#c\nreturn 0;\nx\r\n{\na\nL38\nx  \nL28\n\tx\nL1\nb\nL25\nc\n \nb\nint f()\n#c\n",
+"yours": "c\n#c\nreturn 0;\nx\r\n{\na\nL38\nx  \nL28\n\tx\nL1\nb\nL25\nc\n \nb\nint f()\n#c\n"
+},
+"runs": [
+{
+"args": [
+"-m"
+],
+"stdout": "c\n#c\nreturn 0;\nx\r\n{\nb\na\nnew\nL38\nx  \nL28\n  x\nnew\n\tx\nL1\nb\nc\n \nb\nint f()\n#c\n",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-E"
+],
+"stdout": "c\n#c\nreturn 0;\nx\r\n{\nb\na\nnew\nL38\nx  \nL28\n  x\nnew\n\tx\nL1\nb\nc\n \nb\nint f()\n#c\n",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-E"
+],
+"stdout": "",
+"rc": 0
+},
+{
+"args": [
+"-A"
+],
+"stdout": "",
+"rc": 0
+},
+{
+"args": [
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-T"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-A",
+"-i"
+],
+"stdout": "w\nq\n",
+"rc": 0
+}
+]
+},
+{
+"files": {
+"mine": "v6 = f(0);\nv5 = f(2);\n\nv1 = f(3);\nv9 = f(2);\nv6 = f(2);\nv1 = f(3);\nv0 = f(2);\nv9 = f(2);  \n\nv5 = f(2);\nif (x5) {\n}\nv2 = f(3);\nif (x1) {\n    v4 = f(0);\n    v7 = f(2);\n    if (x5) {\n        v0 = f(2);",
+"older": "v6 = f(0);\nv5 = f(2);\n\nv1 = f(3);\nv9 = f(2);\nv6 = f(2);\nv1 = f(3);\nv0 = f(2);\nv9 = f(2);\n\nv5 = f(2);\nif (x5) {\n}\nv2 = f(3);\nif (x1) {\n    v4 = f(0);\n    v7 = f(2);\n    if (x5) {\n        v0 = f(2);\n",
+"yours": "v6 = f(0);\nv5 = f(2);\nv1 = f(3);\nv9 = f(2);\nv6 = f(2);\nv1 = f(3);\nv0 = f(2);\nv9 = f(2);\n\nv5 = f(2);\nif (x5) {\n}\nv2 = f(3);\nif (x1) {\n    v4 = f(0);\n    v7 = f(2);\n    if (x5) {\n        v0 = f(2);\n"
+},
+"runs": [
+{
+"args": [
+"-m"
+],
+"stdout": "v6 = f(0);\nv5 = f(2);\nv1 = f(3);\nv9 = f(2);\nv6 = f(2);\nv1 = f(3);\nv0 = f(2);\nv9 = f(2);  \n\nv5 = f(2);\nif (x5) {\n}\nv2 = f(3);\nif (x1) {\n    v4 = f(0);\n    v7 = f(2);\n    if (x5) {\n        v0 = f(2);",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-E"
+],
+"stdout": "v6 = f(0);\nv5 = f(2);\nv1 = f(3);\nv9 = f(2);\nv6 = f(2);\nv1 = f(3);\nv0 = f(2);\nv9 = f(2);  \n\nv5 = f(2);\nif (x5) {\n}\nv2 = f(3);\nif (x1) {\n    v4 = f(0);\n    v7 = f(2);\n    if (x5) {\n        v0 = f(2);",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-E"
+],
+"stdout": "3d\n",
+"rc": 0
+},
+{
+"args": [
+"-A"
+],
+"stdout": "3d\n",
+"rc": 0
+},
+{
+"args": [
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-T"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-A",
+"-i"
+],
+"stdout": "3d\nw\nq\n",
+"rc": 0
+}
+]
+},
+{
+"files": {
+"mine": "B\nb\n \na\t\n",
+"older": "B\nb\n \na\n",
+"yours": " \t\na\na\n"
+},
+"runs": [
+{
+"args": [
+"-m"
+],
+"stdout": "<<<<<<< M\nB\nb\n \na\t\n||||||| O\nB\nb\n \na\n=======\n \t\na\na\n>>>>>>> Y\n",
+"rc": 1
+},
+{
+"args": [
+"-m",
+"-E"
+],
+"stdout": "<<<<<<< M\nB\nb\n \na\t\n=======\n \t\na\na\n>>>>>>> Y\n",
+"rc": 1
+},
+{
+"args": [
+"-m",
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-E"
+],
+"stdout": "4a\n=======\n \t\na\na\n>>>>>>> Y\n.\n0a\n<<<<<<< M\n.\n",
+"rc": 1
+},
+{
+"args": [
+"-A"
+],
+"stdout": "4a\n||||||| O\nB\nb\n \na\n=======\n \t\na\na\n>>>>>>> Y\n.\n0a\n<<<<<<< M\n.\n",
+"rc": 1
+},
+{
+"args": [
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-T"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-A",
+"-i"
+],
+"stdout": "4a\n||||||| O\nB\nb\n \na\n=======\n \t\na\na\n>>>>>>> Y\n.\n0a\n<<<<<<< M\n.\nw\nq\n",
+"rc": 1
+}
+]
+},
+{
+"files": {
+"mine": " \n{\nL0\n{\nL31\n \nL40\nL39\t\n}\nx\r\nreturn 0;\n \na\n",
+"older": "{\n \n{\nL0\n{\nL31\n \nL40\nL39\n}\nx\r\nreturn 0;\n \na\n",
+"yours": " \n{\nL0\n{\n}\nx\r\nreturn 0;\n \n \nL39\na"
+},
+"runs": [
+{
+"args": [
+"-m"
+],
+"stdout": "<<<<<<< O\n{\n=======\n>>>>>>> Y\n \n{\nL0\n{\n<<<<<<< M\nL31\n \nL40\nL39\t\n||||||| O\nL31\n \nL40\nL39\n=======\n>>>>>>> Y\n}\nx\r\nreturn 0;\n \n \nL39\na",
+"rc": 1
+},
+{
+"args": [
+"-m",
+"-E"
+],
+"stdout": " \n{\nL0\n{\n<<<<<<< M\nL31\n \nL40\nL39\t\n=======\n>>>>>>> Y\n}\nx\r\nreturn 0;\n \n \nL39\na",
+"rc": 1
+},
+{
+"args": [
+"-m",
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-E"
+],
+"stdout": "13c\n \nL39\na\n.\n8a\n=======\n>>>>>>> Y\n.\n4a\n<<<<<<< M\n.\n",
+"rc": 1
+},
+{
+"args": [
+"-A"
+],
+"stdout": "13c\n \nL39\na\n.\n8a\n||||||| O\nL31\n \nL40\nL39\n=======\n>>>>>>> Y\n.\n4a\n<<<<<<< M\n.\n0a\n>>>>>>> Y\n.\n0a\n<<<<<<< O\n{\n=======\n.\n",
+"rc": 1
+},
+{
+"args": [
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-T"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-A",
+"-i"
+],
+"stdout": "13c\n \nL39\na\n.\n8a\n||||||| O\nL31\n \nL40\nL39\n=======\n>>>>>>> Y\n.\n4a\n<<<<<<< M\n.\n0a\n>>>>>>> Y\n.\n0a\n<<<<<<< O\n{\n=======\n.\nw\nq\n",
+"rc": 1
+}
+]
+},
+{
+"files": {
+"mine": "if (x4) {\n    v4 = f(2);\n    v6 = f(3);\n\n}\nv0 = f(0);\n\nv1 = f(2);\nv7 = f(1);\nv9 = f(2);\nif (x2) {\n    v0 = f(3);\n    v9 = f(1);\n    v5 = f(0);\n    v6 = f(2);\n",
+"older": "if (x4) {\n    v4 = f(2);\n    v6 = f(3);\n\n}\nv0 = f(0);\n\nv1 = f(2);\nv7 = f(1);\nv9 = f(2);\nif (x2) {\n    v0 = f(3);\n    v9 = f(1);\n    v5 = f(0);\n    v6 = f(2);\n    v3 = f(3);\n",
+"yours": "if (x4) {\n    v4 = f(2);\n\n}\n\nv1 = f(2);\nv7 = f(1);\nv9 = f(2);\nif (x2) {\n    v0 = f(3);\n    v9 = f(1);\n    v5 = f(0);\n    v6 = f(2);\n    v3 = f(3);\n"
+},
+"runs": [
+{
+"args": [
+"-m"
+],
+"stdout": "if (x4) {\n    v4 = f(2);\n\n}\n\nv1 = f(2);\nv7 = f(1);\nv9 = f(2);\nif (x2) {\n    v0 = f(3);\n    v9 = f(1);\n    v5 = f(0);\n    v6 = f(2);\n",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-E"
+],
+"stdout": "if (x4) {\n    v4 = f(2);\n\n}\n\nv1 = f(2);\nv7 = f(1);\nv9 = f(2);\nif (x2) {\n    v0 = f(3);\n    v9 = f(1);\n    v5 = f(0);\n    v6 = f(2);\n",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-E"
+],
+"stdout": "6d\n3d\n",
+"rc": 0
+},
+{
+"args": [
+"-A"
+],
+"stdout": "6d\n3d\n",
+"rc": 0
+},
+{
+"args": [
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-T"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-A",
+"-i"
+],
+"stdout": "6d\n3d\nw\nq\n",
+"rc": 0
+}
+]
+},
+{
+"files": {
+"mine": "\nif (x2) {\n    v9 = f(1);\n    v4 = f(0);\n    v0 = f(1);\n}\nv4 = f(2);\n\nv1 = f(0);\t\nif (x5) {\n    v6 = f(1);\n    v6 = f(2);\n    v2 = f(3);\n\n    v7 = f(1);\n    v6 = f(3);\n    if (x0) {\n        if (x9) {\n            v5 = f(2);\n            v5 = f(3);\n            v4 = f(1);\n            v4 = f(2);\n        }\n        if (x9) {\n        }\n        v3 = f(1);\n        v3 = f(1);\n",
+"older": "\nif (x2) {\n    v9 = f(1);\n    v4 = f(0);\n    v0 = f(1);\n}\nv4 = f(2);\n\nv1 = f(0);\nif (x5) {\n    v6 = f(1);\n    v6 = f(2);\n    v2 = f(3);\n\n    v7 = f(1);\n    v6 = f(3);\n    if (x0) {\n        if (x9) {\n            v5 = f(2);\n            v5 = f(3);\n            v4 = f(1);\n            v4 = f(2);\n        }\n        if (x9) {\n        }\n        v3 = f(1);\n        v3 = f(1);\n",
+"yours": "\nif (x2) {\n    v9 = f(1);\n    v4 = f(0);\n    v0 = f(1);\n}\nv4 = f(2);\n\nb\nv1 = f(0);\nif (x5) {\n    v6 = f(1);\n    v6 = f(2);\n    v2 = f(3);\n\n    v7 = f(1);\n    v6 = f(3);\n    if (x0) {\n        if (x9) {\n            v5 = f(2);\n            v5 = f(3);\n            v4 = f(2);\n        }\n        if (x9) {\n        }\n        v3 = f(1);\n        v3 = f(1);\n"
+},
+"runs": [
+{
+"args": [
+"-m"
+],
+"stdout": "\nif (x2) {\n    v9 = f(1);\n    v4 = f(0);\n    v0 = f(1);\n}\nv4 = f(2);\n\n<<<<<<< M\nv1 = f(0);\t\n||||||| O\nv1 = f(0);\n=======\nb\nv1 = f(0);\n>>>>>>> Y\nif (x5) {\n    v6 = f(1);\n    v6 = f(2);\n    v2 = f(3);\n\n    v7 = f(1);\n    v6 = f(3);\n    if (x0) {\n        if (x9) {\n            v5 = f(2);\n            v5 = f(3);\n            v4 = f(2);\n        }\n        if (x9) {\n        }\n        v3 = f(1);\n        v3 = f(1);\n",
+"rc": 1
+},
+{
+"args": [
+"-m",
+"-E"
+],
+"stdout": "\nif (x2) {\n    v9 = f(1);\n    v4 = f(0);\n    v0 = f(1);\n}\nv4 = f(2);\n\n<<<<<<< M\nv1 = f(0);\t\n=======\nb\nv1 = f(0);\n>>>>>>> Y\nif (x5) {\n    v6 = f(1);\n    v6 = f(2);\n    v2 = f(3);\n\n    v7 = f(1);\n    v6 = f(3);\n    if (x0) {\n        if (x9) {\n            v5 = f(2);\n            v5 = f(3);\n            v4 = f(2);\n        }\n        if (x9) {\n        }\n        v3 = f(1);\n        v3 = f(1);\n",
+"rc": 1
+},
+{
+"args": [
+"-m",
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-E"
+],
+"stdout": "21d\n9a\n=======\nb\nv1 = f(0);\n>>>>>>> Y\n.\n8a\n<<<<<<< M\n.\n",
+"rc": 1
+},
+{
+"args": [
+"-A"
+],
+"stdout": "21d\n9a\n||||||| O\nv1 = f(0);\n=======\nb\nv1 = f(0);\n>>>>>>> Y\n.\n8a\n<<<<<<< M\n.\n",
+"rc": 1
+},
+{
+"args": [
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-T"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-A",
+"-i"
+],
+"stdout": "21d\n9a\n||||||| O\nv1 = f(0);\n=======\nb\nv1 = f(0);\n>>>>>>> Y\n.\n8a\n<<<<<<< M\n.\nw\nq\n",
+"rc": 1
+}
+]
+},
+{
+"files": {
+"mine": "v2 = f(1);\nif (x9) {\n    v0 = f(2);\n    v0 = f(3);\n    v1 = f(1);\n}\n    v4 = f(3); \n    if (x9) {\n        v4 = f(1);\n    }\n} \n",
+"older": "v2 = f(1);\nif (x9) {\n    v0 = f(2);\n    v0 = f(3);\n    v1 = f(1);\n    v4 = f(3);\n    if (x9) {\n        v1 = f(2);\n        v4 = f(1);\n    }\n}\n",
+"yours": "v2 = f(1);\nif (x9) {\na  \n    v0 = f(2); \n    v0 = f(3);z\n    v1 = f(1);\n    v4 = f(3);\n    if (x9) {\n        v1 = f(2);\n        v4 = f(1);\n"
+},
+"runs": [
+{
+"args": [
+"-m"
+],
+"stdout": "v2 = f(1);\nif (x9) {\na  \n    v0 = f(2); \n    v0 = f(3);z\n    v1 = f(1);\n}\n    v4 = f(3); \n    if (x9) {\n        v4 = f(1);\n<<<<<<< M\n    }\n} \n||||||| O\n    }\n}\n=======\n>>>>>>> Y\n",
+"rc": 1
+},
+{
+"args": [
+"-m",
+"-E"
+],
+"stdout": "v2 = f(1);\nif (x9) {\na  \n    v0 = f(2); \n    v0 = f(3);z\n    v1 = f(1);\n}\n    v4 = f(3); \n    if (x9) {\n        v4 = f(1);\n<<<<<<< M\n    }\n} \n=======\n>>>>>>> Y\n",
+"rc": 1
+},
+{
+"args": [
+"-m",
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-E"
+],
+"stdout": "11a\n=======\n>>>>>>> Y\n.\n9a\n<<<<<<< M\n.\n3,4c\na  \n    v0 = f(2); \n    v0 = f(3);z\n.\n",
+"rc": 1
+},
+{
+"args": [
+"-A"
+],
+"stdout": "11a\n||||||| O\n    }\n}\n=======\n>>>>>>> Y\n.\n9a\n<<<<<<< M\n.\n3,4c\na  \n    v0 = f(2); \n    v0 = f(3);z\n.\n",
+"rc": 1
+},
+{
+"args": [
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-T"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-A",
+"-i"
+],
+"stdout": "11a\n||||||| O\n    }\n}\n=======\n>>>>>>> Y\n.\n9a\n<<<<<<< M\n.\n3,4c\na  \n    v0 = f(2); \n    v0 = f(3);z\n.\nw\nq\n",
+"rc": 1
+}
+]
+},
+{
+"files": {
+"mine": "Foo Bar\n  x\nL10",
+"older": "Foo Bar\nL10\n",
+"yours": "Foo Bar\nL10\n\n"
+},
+"runs": [
+{
+"args": [
+"-m"
+],
+"stdout": "Foo Bar\n<<<<<<< M\n  x\nL10||||||| O\nL10\n=======\nL10\n\n>>>>>>> Y\n",
+"rc": 1
+},
+{
+"args": [
+"-m",
+"-E"
+],
+"stdout": "Foo Bar\n<<<<<<< M\n  x\nL10=======\nL10\n\n>>>>>>> Y\n",
+"rc": 1
+},
+{
+"args": [
+"-m",
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-E"
+],
+"stdout": "3a\n=======\nL10\n\n>>>>>>> Y\n.\n1a\n<<<<<<< M\n.\n",
+"rc": 1
+},
+{
+"args": [
+"-A"
+],
+"stdout": "3a\n||||||| O\nL10\n=======\nL10\n\n>>>>>>> Y\n.\n1a\n<<<<<<< M\n.\n",
+"rc": 1
+},
+{
+"args": [
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-T"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-A",
+"-i"
+],
+"stdout": "3a\n||||||| O\nL10\n=======\nL10\n\n>>>>>>> Y\n.\n1a\n<<<<<<< M\n.\nw\nq\n",
+"rc": 1
+}
+]
+},
+{
+"files": {
+"mine": "conflict\nchange quick lazy fox text the\nover text lazy quick jumps\nmerge dog\nbrown brown brown over line\nquick merge the fox file\n\ntext dog brown brown line\nconflict fox\nover dog\nfox over file quick\nconflict file\n\nchange fox quick quick\njumps lazy jumps\nline lazy fox the\nchange fox\nline dog the\nmerge file quick dog change\nthe dog\ntext fox text over text brown\njumps file conflict dog brown\n",
+"older": "conflict\nchange quick lazy fox text the\nover text lazy quick jumps\nmerge dog\nbrown brown brown over line\nquick merge the fox file\n\ntext dog brown brown line\nconflict fox\nover dog\nfox over file quick\nconflict file\n\nchange fox quick quick\njumps lazy jumps\nline lazy fox the\nchange fox\nline dog the\nmerge file quick dog change\nthe dog\ntext fox text over text brown\njumps file conflict dog brown\n",
+"yours": "conflict\nchange quick lazy fox text the\nover text lazy quick jumps\njumps lazy jumps\nline lazy fox the\nmerge dog\nbrown brown brown over line\n\ntext dog brown brown line\nconflict fox\nover dog\nfox over file quick\n\n  x\nchange fox\nline dog the\nmerge file quick dog change\nthe dog\ntext fox text over text brown\njumps file conflict dog brown\n"
+},
+"runs": [
+{
+"args": [
+"-m"
+],
+"stdout": "conflict\nchange quick lazy fox text the\nover text lazy quick jumps\njumps lazy jumps\nline lazy fox the\nmerge dog\nbrown brown brown over line\n\ntext dog brown brown line\nconflict fox\nover dog\nfox over file quick\n\n  x\nchange fox\nline dog the\nmerge file quick dog change\nthe dog\ntext fox text over text brown\njumps file conflict dog brown\n",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-E"
+],
+"stdout": "conflict\nchange quick lazy fox text the\nover text lazy quick jumps\njumps lazy jumps\nline lazy fox the\nmerge dog\nbrown brown brown over line\n\ntext dog brown brown line\nconflict fox\nover dog\nfox over file quick\n\n  x\nchange fox\nline dog the\nmerge file quick dog change\nthe dog\ntext fox text over text brown\njumps file conflict dog brown\n",
+"rc": 0
+},
+{
+"args": [
+"-m",
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-m",
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-e"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-E"
+],
+"stdout": "14,16c\n  x\n.\n12d\n6d\n3a\njumps lazy jumps\nline lazy fox the\n.\n",
+"rc": 0
+},
+{
+"args": [
+"-A"
+],
+"stdout": "14,16c\n  x\n.\n12d\n6d\n3a\njumps lazy jumps\nline lazy fox the\n.\n",
+"rc": 0
+},
+{
+"args": [
+"-x"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-3"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-T"
+],
+"stdout": "",
+"rc": 2
+},
+{
+"args": [
+"-A",
+"-i"
+],
+"stdout": "14,16c\n  x\n.\n12d\n6d\n3a\njumps lazy jumps\nline lazy fox the\n.\nw\nq\n",
+"rc": 0
+}
+]
+}
+]

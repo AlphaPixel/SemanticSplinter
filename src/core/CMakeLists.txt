@@ -6,11 +6,15 @@ add_library(semantic-splinter STATIC
     diff.cpp
     emit.cpp
     envelope.cpp
+    format.cpp
     io.cpp
+    linediff.cpp
     merge.cpp
     model.cpp
+    render.cpp
     report.cpp
     sequence.cpp
+    text.cpp
     version.cpp
 )
 add_library(SemanticSplinter::core ALIAS semantic-splinter)
