@@ -1,0 +1,47 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, preset: windows-msvc }
+          - { os: ubuntu-latest, preset: linux-gcc }
+          - { os: ubuntu-latest, preset: linux-clang }
+          - { os: macos-latest, preset: macos }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Ninja
+        if: runner.os != 'Windows'
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then sudo apt-get update && sudo apt-get install -y ninja-build; else brew install ninja; fi
+
+      # Full clone: builtin-baseline (vcpkg.json) needs the port history.
+      - name: Set up vcpkg
+        shell: bash
+        run: |
+          git clone https://github.com/microsoft/vcpkg "$RUNNER_TEMP/vcpkg"
+          if [ "$RUNNER_OS" = Windows ]; then "$RUNNER_TEMP/vcpkg/bootstrap-vcpkg.bat" -disableMetrics
+          else "$RUNNER_TEMP/vcpkg/bootstrap-vcpkg.sh" -disableMetrics; fi
+          mkdir -p "$RUNNER_TEMP/vcpkg-cache"
+          echo "VCPKG_ROOT=$RUNNER_TEMP/vcpkg" >> "$GITHUB_ENV"
+          echo "VCPKG_DEFAULT_BINARY_CACHE=$RUNNER_TEMP/vcpkg-cache" >> "$GITHUB_ENV"
+
+      - uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/vcpkg-cache
+          key: vcpkg-${{ matrix.preset }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: vcpkg-${{ matrix.preset }}-
+
+      - run: cmake --preset ${{ matrix.preset }}
+      - run: cmake --build --preset ${{ matrix.preset }}
+      - run: ctest --preset ${{ matrix.preset }}
+      - run: cmake --build --preset ${{ matrix.preset }}-release
+      - run: ctest --preset ${{ matrix.preset }}-release

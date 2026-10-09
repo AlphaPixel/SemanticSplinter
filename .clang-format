@@ -1,0 +1,10 @@
+BasedOnStyle: LLVM
+IndentWidth: 4
+ColumnLimit: 110
+AccessModifierOffset: -4
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: Never
+PointerAlignment: Left
+NamespaceIndentation: None
+FixNamespaceComments: true
+IncludeBlocks: Preserve

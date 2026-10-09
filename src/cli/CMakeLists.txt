@@ -1,0 +1,5 @@
+add_executable(splinter main.cpp)
+if(WIN32)
+    target_sources(splinter PRIVATE splinter.manifest) # UTF-8 active code page (D-24)
+endif()
+target_link_libraries(splinter PRIVATE SemanticSplinter::core)

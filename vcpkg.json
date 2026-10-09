@@ -1,0 +1,14 @@
+{
+  "name": "semantic-splinter",
+  "version": "0.1.0",
+  "description": "Format-aware diff, three-way merge, and patch",
+  "license": "MIT",
+  "builtin-baseline": "b08975f4fdf01ad9a5c08db8f1953a57d11e8b26",
+  "dependencies": [],
+  "features": {
+    "tests": {
+      "description": "Catch2 test suite",
+      "dependencies": [ "catch2" ]
+    }
+  }
+}

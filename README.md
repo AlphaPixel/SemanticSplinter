@@ -9,8 +9,8 @@ It works standalone and as a Git textconv, external diff driver, and merge drive
   `patch`, and RCS `merge` / `git merge-file`.
 - **License:** MIT ([LICENSE](LICENSE)).
 
-**Status:** specification complete for v1, and all v1 decisions are settled (2026-10-08). No code yet.
-Implementation starts with Phase 0 of [docs/PLAN.md](docs/PLAN.md).
+**Status:** specification complete for v1, and all v1 decisions are settled (2026-10-08). Phase 0 of
+[docs/PLAN.md](docs/PLAN.md) (build skeleton) is done; `splinter` only prints `--version` so far.
 
 ## Why
 
@@ -96,16 +96,21 @@ than textconv.
 | [docs/ENVELOPES.md](docs/ENVELOPES.md) | Per-format catalog of framing, integrity, signature, and encoding fields |
 | [docs/formats/](docs/formats/README.md) | Format survey with priority tiers, and one implementation document per format |
 
-## Building (from Phase 0)
+## Building
 
-Requirements: CMake 3.25+, vcpkg (manifest mode, pinned baseline, D-52), and a C++20 compiler: MSVC 17.8+
-(Visual Studio 2022), GCC 11+, Clang 14+, or AppleClang 15+.
+Requirements: CMake 3.25+, a vcpkg checkout with `VCPKG_ROOT` set (manifest mode, pinned baseline, D-52), and
+a C++20 compiler: MSVC 17.8+ (Visual Studio 2022), GCC 11+, Clang 14+, or AppleClang 15+. Linux and macOS
+also need Ninja.
 
 ```bash
-cmake --preset windows-msvc           # or linux-gcc, linux-clang, macos
-cmake --build --preset windows-msvc
-ctest --preset windows-msvc
+cmake --preset windows-msvc                   # or linux-gcc, linux-clang, macos
+cmake --build --preset windows-msvc           # Debug; append -release for Release
+ctest --preset windows-msvc                   # likewise windows-msvc-release
 ```
+
+Visual Studio 2022 can open the folder directly and picks up the same presets. Builds go to
+`build/<preset>/`. `-DSEMSPLINTER_BUILD_TESTS=OFF` skips the tests and their Catch2 dependency.
+Third-party ports and their licenses are listed in [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md).
 
 Each format is a separate module (`semantic-splinter-<fmt>`) behind a vcpkg manifest feature, so builds
 include only the formats they need. Default dependencies are permissive only (MIT, BSD, Apache-2.0, Zlib,

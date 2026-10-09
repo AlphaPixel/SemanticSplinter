@@ -1,0 +1,68 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+    },
+    {
+      "name": "windows-msvc",
+      "displayName": "Windows, MSVC (VS 2022), x64, static",
+      "inherits": "base",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "x64-windows-static",
+        "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded$<$<CONFIG:Debug>:Debug>"
+      },
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+    },
+    {
+      "name": "linux-gcc",
+      "displayName": "Linux, GCC",
+      "inherits": "base",
+      "generator": "Ninja Multi-Config",
+      "cacheVariables": { "CMAKE_CXX_COMPILER": "g++" },
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" }
+    },
+    {
+      "name": "linux-clang",
+      "displayName": "Linux, Clang",
+      "inherits": "base",
+      "generator": "Ninja Multi-Config",
+      "cacheVariables": { "CMAKE_CXX_COMPILER": "clang++" },
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" }
+    },
+    {
+      "name": "macos",
+      "displayName": "macOS, AppleClang",
+      "inherits": "base",
+      "generator": "Ninja Multi-Config",
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Darwin" }
+    }
+  ],
+  "buildPresets": [
+    { "name": "windows-msvc", "configurePreset": "windows-msvc", "configuration": "Debug" },
+    { "name": "windows-msvc-release", "configurePreset": "windows-msvc", "configuration": "Release" },
+    { "name": "linux-gcc", "configurePreset": "linux-gcc", "configuration": "Debug" },
+    { "name": "linux-gcc-release", "configurePreset": "linux-gcc", "configuration": "Release" },
+    { "name": "linux-clang", "configurePreset": "linux-clang", "configuration": "Debug" },
+    { "name": "linux-clang-release", "configurePreset": "linux-clang", "configuration": "Release" },
+    { "name": "macos", "configurePreset": "macos", "configuration": "Debug" },
+    { "name": "macos-release", "configurePreset": "macos", "configuration": "Release" }
+  ],
+  "testPresets": [
+    { "name": "base", "hidden": true, "output": { "outputOnFailure": true } },
+    { "name": "windows-msvc", "inherits": "base", "configurePreset": "windows-msvc", "configuration": "Debug" },
+    { "name": "windows-msvc-release", "inherits": "base", "configurePreset": "windows-msvc", "configuration": "Release" },
+    { "name": "linux-gcc", "inherits": "base", "configurePreset": "linux-gcc", "configuration": "Debug" },
+    { "name": "linux-gcc-release", "inherits": "base", "configurePreset": "linux-gcc", "configuration": "Release" },
+    { "name": "linux-clang", "inherits": "base", "configurePreset": "linux-clang", "configuration": "Debug" },
+    { "name": "linux-clang-release", "inherits": "base", "configurePreset": "linux-clang", "configuration": "Release" },
+    { "name": "macos", "inherits": "base", "configurePreset": "macos", "configuration": "Debug" },
+    { "name": "macos-release", "inherits": "base", "configurePreset": "macos", "configuration": "Release" }
+  ]
+}
