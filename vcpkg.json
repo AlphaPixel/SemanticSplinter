@@ -4,11 +4,16 @@
   "description": "Format-aware diff, three-way merge, and patch",
   "license": "MIT",
   "builtin-baseline": "b08975f4fdf01ad9a5c08db8f1953a57d11e8b26",
-  "dependencies": [],
+  "dependencies": [
+    "nlohmann-json",
+    "xxhash"
+  ],
   "features": {
     "tests": {
       "description": "Catch2 test suite",
-      "dependencies": [ "catch2" ]
+      "dependencies": [
+        "catch2"
+      ]
     }
   }
 }

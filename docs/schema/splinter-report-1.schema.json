@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/AlphaPixel/SemanticSplinter/docs/schema/splinter-report-1.schema.json",
+  "title": "splinter-report/1",
+  "description": "Splinter diff and merge report (SPEC §7.1).",
+  "type": "object",
+  "required": ["schema", "tool", "mode", "format", "inputs", "options", "stats", "validation"],
+  "properties": {
+    "schema": { "const": "splinter-report/1" },
+    "tool": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": { "name": { "const": "splinter" }, "version": { "type": "string" } }
+    },
+    "mode": { "type": "string", "description": "diff, diff3, merge, merge-file, git-merge, patch, ..." },
+    "format": { "type": "string" },
+    "inputs": {
+      "type": "object",
+      "description": "Keyed by role: a/b for diffs, base/ours/theirs for merges.",
+      "additionalProperties": { "$ref": "#/$defs/input" }
+    },
+    "options": { "type": "object" },
+    "changes": { "type": "array", "items": { "$ref": "#/$defs/change" } },
+    "changes_ours": { "type": "array", "items": { "$ref": "#/$defs/change" } },
+    "changes_theirs": { "type": "array", "items": { "$ref": "#/$defs/change" } },
+    "auto_merged": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["change", "rule"],
+        "properties": { "change": { "$ref": "#/$defs/changeId" }, "rule": { "type": "string" } }
+      }
+    },
+    "conflicts": { "type": "array", "items": { "$ref": "#/$defs/conflict" } },
+    "stats": {
+      "type": "object",
+      "properties": {
+        "changes": { "type": "integer", "minimum": 0 },
+        "changed_units_ours": { "type": "integer", "minimum": 0 },
+        "changed_units_theirs": { "type": "integer", "minimum": 0 },
+        "conflicts": { "type": "integer", "minimum": 0, "description": "Unresolved conflicts." },
+        "format": { "type": "object" }
+      }
+    },
+    "envelope": {
+      "type": "object",
+      "properties": {
+        "integrity": { "type": "object" },
+        "signatures": { "type": "array" },
+        "churn": {
+          "type": "object",
+          "required": ["bytes_changed"],
+          "properties": {
+            "bytes_changed": { "type": "integer" },
+            "content": { "type": "integer" },
+            "framing": { "type": "integer" },
+            "integrity": { "type": "integer" },
+            "authenticity": { "type": "integer" },
+            "encoding": { "type": "integer" },
+            "derived": { "type": "integer" },
+            "volatile": { "type": "integer" },
+            "unexplained": { "type": "integer" }
+          }
+        }
+      }
+    },
+    "validation": {
+      "type": "object",
+      "required": ["ok", "warnings"],
+      "properties": {
+        "ok": { "type": "boolean" },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["code"],
+            "properties": { "code": { "type": "string" }, "at": { "type": "string" }, "message": { "type": "string" } }
+          }
+        }
+      }
+    },
+    "result": {
+      "type": "object",
+      "required": ["path", "hash", "status"],
+      "properties": {
+        "path": { "type": "string" },
+        "hash": { "$ref": "#/$defs/hash" },
+        "status": { "enum": ["clean", "conflicts"] }
+      }
+    }
+  },
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^xxh3:[0-9a-f]{32}$" },
+    "changeId": { "type": "string", "pattern": "^c-[0-9a-f]{12}$" },
+    "address": { "type": "string", "description": "JSON Pointer over identity keys, optionally #region (SPEC §3.1)." },
+    "input": {
+      "type": "object",
+      "required": ["path", "hash", "bytes"],
+      "properties": {
+        "path": { "type": "string" },
+        "hash": { "$ref": "#/$defs/hash" },
+        "bytes": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "value": {
+      "type": "object",
+      "properties": { "text": { "type": "string" }, "hash": { "$ref": "#/$defs/hash" } }
+    },
+    "change": {
+      "type": "object",
+      "required": ["id", "op", "at", "side"],
+      "properties": {
+        "id": { "$ref": "#/$defs/changeId" },
+        "op": { "enum": ["insert", "erase", "update", "move"] },
+        "at": { "$ref": "#/$defs/address" },
+        "from": { "$ref": "#/$defs/address" },
+        "side": { "enum": ["base", "ours", "theirs"] },
+        "kind": { "type": "string" },
+        "before": { "$ref": "#/$defs/value" },
+        "after": { "$ref": "#/$defs/value" },
+        "depends_on": { "type": "array", "items": { "$ref": "#/$defs/address" } },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "metrics": { "type": "object" }
+      }
+    },
+    "conflict": {
+      "type": "object",
+      "required": ["id", "at", "changes", "reason", "choices", "resolved_as", "resolved"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^x-[0-9a-f]{12}$" },
+        "at": { "$ref": "#/$defs/address" },
+        "changes": { "type": "array", "items": { "$ref": "#/$defs/changeId" } },
+        "reason": { "type": "string" },
+        "choices": { "type": "array", "items": { "type": "string" } },
+        "resolved_as": { "type": "string" },
+        "resolved": { "type": "boolean", "description": "Decided by --resolve or --ours/--theirs/--union." }
+      }
+    }
+  }
+}

@@ -10,7 +10,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: windows-latest, preset: windows-msvc }
+          - { os: windows-2022, preset: windows-msvc }  # VS 2022 generator (D-3)
           - { os: ubuntu-latest, preset: linux-gcc }
           - { os: ubuntu-latest, preset: linux-clang }
           - { os: macos-latest, preset: macos }
