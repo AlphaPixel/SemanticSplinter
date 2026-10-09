@@ -253,6 +253,42 @@ There are no framing, integrity, authenticity, derived, or volatile fields. Embe
 
 Input formats: unified, context, normal, ed (via a built-in ed subset: `a`, `c`, `d`, `s/.//`, `.`). Hunk location: try the stated line plus the accumulated offset, then search outward alternately forward and backward. With fuzz F (`-F`, default 2), up to F leading and trailing context lines may be ignored, trying fuzz 0, then 1, up to F. Messages match GNU (`Hunk #2 succeeded at 47 (offset 3 lines).`, `Hunk #1 FAILED at 10.`, `with fuzz 1`). Rejects go to `FILE.rej` in the hunk's original format (unified when the input was unified). `--merge[=merge|diff3]` writes conflict markers instead of rejects. `-p`, `-R`, `-N`, `-o`, `-r`, `-b`/`-V`/`-z`, `--dry-run`, `-E`, `-s`, `--binary` supported. Git extended headers (`diff --git`, rename, mode, `GIT binary patch`) are parsed for renames and modes in v2.
 
+### 10.2 GNU compatibility findings (black-box, Phase 2)
+
+These were found by comparing against GNU diffutils 3.12 and Git, not by reading their code (D-29). The golden
+corpus in `tests/golden/` pins them.
+
+- **Analysed region.** GNU sets aside the byte-identical head and tail of the two files and keeps only
+  `max(--horizon-lines, output context)` lines of each next to the changes. Context is 0 for normal, ed, RCS,
+  and side-by-side output. Discarding (lines with no match on the other side) and boundary compaction then
+  look at that region only, which decides between equal-cost scripts. The identical ends are found on raw
+  bytes even under `-i`/`-w`. GNU diff3 and `git merge-file` run their two-way diffs with a horizon of 0.
+- **Myers split.** Recursion is on the midpoint of an optimal path; diagonals are scanned from high to low
+  within the grid; matches inside the midpoint snake come from the prefix/suffix trimming of the halves.
+- **Compaction.** A change group slides up to merge with earlier groups, then down as far as possible, and is
+  moved back to the last position where it lines up with a change in the other file, if there is one.
+- **Context length.** Several `-C`/`-U`/`-NUM` options give the largest value; `-c`/`-u` count as 3.
+- **`-B`/`-I`.** An ignorable change never starts a hunk. It joins the current hunk when it is less than
+  `context` lines from the previous change (a regular change joins within `2 × context`). A line is blank
+  if it is empty after normalization.
+- **Missing final newline.** `-Z`, `-b`, and `-w` treat it as trailing white space. Ed output compares as if
+  the newline were there, prints its script, then fails (exit 2) naming each such file. Side by side marks
+  `\` or `/` when only the left or right line is incomplete, and ends a row without a newline when every
+  shown line is incomplete.
+- **Side by side.** With tabs, the right column starts at `(W + t + 1) / (2t) × t` and each column is
+  `min(start − 3, W − start)` wide; with `-t`, the right column starts at `W − (W − 3) / 2`. The gutter mark
+  sits at `(width + start − 1) / 2`. A tab reaching the column edge is dropped (with `-t`, expanded only up
+  to the edge). A CR returns to column 0, so GNU pads back to the column start; under `-t` the line prefix
+  is repeated after a CR in the other formats. Identical files are still printed.
+- **diff3.** Labels (`-L`) are accepted only with bracketing output (`-A`, `-E`, or `-m` alone), and `-m`
+  rejects `-i`. `-X` prints like `-x`. The report mode always exits 0; ed scripts exit 1 only when they
+  contain brackets. `-m` (that is, `-A`) brackets identical changes as `<<<<<<< older` / base /
+  `=======` / mine and counts them as conflicts. Lines are written as they are, so a conflict after a line
+  without a newline continues on that line (Git adds the newline instead).
+- **Known differences** (Q-TEXT-1, listed in `tests/cli/test_golden.cpp`): side-by-side counts UTF-8 code
+  points where GNU in the C locale counts bytes (Q-TEXT-8); and for a few inputs GNU diff3 3.12's `-A`/`-E`
+  ed scripts and `-m` output contradict its own `====` report. Splinter follows the report.
+
 ## 11. Test plan
 
 - **GNU oracle corpus.** A generator script (run on Linux CI with GNU diffutils and RCS installed) produces triples and pairs from: random edits on real-world files (source code, prose, CSV), adversarial cases (all lines equal, all different, repeated blocks, empty files, single line without newline, CRLF, lone CR, NUL-containing), and every option combination in a matrix. It stores GNU outputs as golden files. Splinter's tests compare byte-for-byte with the golden file. Categories where exact match is not required (Q-TEXT-1) instead assert: same number of changed lines, and `patch` round-trips.

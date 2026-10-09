@@ -132,6 +132,7 @@ FILES: FILE1 FILE2 | DIR1 DIR2 | DIR FILE | FILE DIR | --from-file=F FILE... | -
 | `--ignore=CLASS[,…]` | ignore change classes: `metadata`, `timestamps`, `encoding`, `derived`, … (per format) |
 | `--max-memory=SIZE`, `--max-pixels=N`, `--max-input=SIZE`, `--max-depth=N`, `--max-zip-entries=N`, `--max-zip-ratio=R`, `--max-zip-size=SIZE` | limits (SPEC §9) |
 | `--exit-codes=posix\|extended` | SPEC §8 |
+| `--diff-algorithm=myers\|minimal\|patience\|histogram` | text: sequence algorithm (default myers, as GNU) |
 | `--verbose`, `--quiet` | diagnostics on stderr |
 
 Names were checked against GNU diff's long options using the four-character rule in §1.2.
@@ -194,6 +195,8 @@ The operand order is **mine, old, yours**, the same as GNU `diff3`, RCS `merge`,
 | `--sign-command=CMD` | external signer run on the validated output before the final rename. `%f` is the file | |
 | `--mac-key=FILE` | key for formats protected by a keyed MAC. Never bundled, never guessed | |
 | `--guard=N`, `--tolerance=…`, `--gap=N`, `--format=…`, `--json[=FILE]`, `--md[=FILE]`, `--visual=FILE`, limits, `--exit-codes` | as in diff | |
+| `--conflict-style=merge\|diff3\|zdiff3`, `--marker-size=N`, `--eol=auto\|keep` | text: marker layout, marker length, line-ending handling (text.md §4, §6.2) | |
+| `--binary-merge[=force]` | byte-level merge of unrecognized files (binary.md §6) | |
 
 Writing binary merged output to a terminal is refused (exit 2) unless `-o` is given or stdout is redirected.
 

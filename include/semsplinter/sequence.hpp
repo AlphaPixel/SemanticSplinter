@@ -24,6 +24,7 @@ enum class DiffAlgorithm : std::uint8_t {
     myers,     // Myers O(ND), linear space
     minimal,   // -d/--minimal: always a minimal edit script
     histogram, // Git's default family; falls back to Myers where no element is rare enough
+    patience,  // anchors on elements unique to both sides; Myers between them
 };
 
 // Matched pairs, strictly increasing in both indices. Deterministic.
