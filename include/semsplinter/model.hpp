@@ -119,6 +119,7 @@ struct MergeResult {
     std::vector<AutoMerge> auto_merged;
     std::vector<Conflict> conflicts;
     std::vector<Warning> warnings;
+    std::vector<std::byte> visual; // the merge visual when MergeOptions::visual asked for one
 
     std::size_t unresolved_conflicts() const noexcept;
 };

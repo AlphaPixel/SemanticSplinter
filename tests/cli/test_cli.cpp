@@ -1,5 +1,6 @@
 #include "console.hpp"
 
+#include <semsplinter/formats/png.hpp>
 #include <semsplinter/io.hpp>
 #include <semsplinter/version.hpp>
 
@@ -54,7 +55,7 @@ TEST_CASE("cli: personality selection") {
     CaptureConsole f;
     CHECK(run_cli(f, {"formats", "--json"}) == 0);
     auto j = nlohmann::json::parse(f.out_text);
-    REQUIRE(j.size() == 2);
+    REQUIRE(j.size() >= 2);
     CHECK(j[0]["name"] == "text");
     CHECK(j[1]["name"] == "binary");
 }
@@ -159,4 +160,67 @@ TEST_CASE("cli merge personalities") {
     CaptureConsole rs;
     CHECK(run_cli(rs, {"-m", "--resolve=" + res, ours, base, other}) == 0);
     CHECK(rs.out_text == "1\nX\n3\n4\n");
+}
+
+TEST_CASE("cli png: report, merge, sidecar, visual, inspect") {
+    using semsplinter::raster::Raster;
+    Scratch s("png");
+    auto img = [](std::uint8_t r0) {
+        Raster r(40, 30, false);
+        for (std::uint64_t i = 0; i < r.cells(); ++i)
+            r.set(i, {static_cast<std::uint16_t>((i % 40) * 6 * 257), static_cast<std::uint16_t>(r0 * 257), 0,
+                      0xFFFF});
+        return r;
+    };
+    auto put = [&](const std::string& name, const Raster& r) {
+        auto b = semsplinter::png::write(r);
+        return s.file(name, {reinterpret_cast<const char*>(b.data()), b.size()});
+    };
+    Raster base = img(0), ours = base, theirs = base, clash = base;
+    ours.set(5, {0xFFFF, 0, 0, 0xFFFF});
+    theirs.set(30 * 40 - 1, {0, 0, 0xFFFF, 0xFFFF});
+    clash.set(5, {0, 0xFFFF, 0, 0xFFFF});
+    auto pb = put("base.png", base), po = put("ours.png", ours), pt = put("theirs.png", theirs),
+         pc = put("clash.png", clash);
+
+    CaptureConsole d;
+    CHECK(run_cli(d, {pb, po}) == 1);
+    CHECK(d.out_text.starts_with("~ /pixels#rect=5,0,1,1 pixels=1 max_delta=225,0,0,0 "));
+    CHECK(d.out_text.find("\n# bytes changed ") != std::string::npos);
+    CHECK(d.out_text.ends_with("; content: 1 px in 1 region\n"));
+    CaptureConsole ed;
+    CHECK(run_cli(ed, {"-e", pb, po}) == 2);
+    CHECK(ed.err_text == "splinter: option '-e' not supported for format 'png'\n");
+    CaptureConsole js;
+    CHECK(run_cli(js, {"--json", pb, po}) == 1);
+    auto j = nlohmann::json::parse(js.out_text);
+    CHECK(j["format"] == "png");
+    CHECK(j["envelope"]["integrity"]["a"] == "ok");
+    CHECK(j["envelope"]["churn"]["unexplained"] == 0);
+    CHECK(j["stats"]["format"]["pixels_changed"] == 1);
+
+    auto out = splinter::cli::from_path(s.dir / "out.png");
+    CaptureConsole m;
+    CHECK(run_cli(m, {"-m", "-o", out, po, pb, pt}) == 0);
+    CaptureConsole same;
+    auto both = ours;
+    both.set(30 * 40 - 1, {0, 0, 0xFFFF, 0xFFFF});
+    CHECK(run_cli(same, {out, put("both.png", both)}) == 0);
+
+    CaptureConsole x;
+    CHECK(run_cli(x, {"-m", "-o", out, po, pb, pc}) == 1);
+    CHECK(std::filesystem::exists(s.dir / "out.png.splinter-conflicts.png"));
+    CaptureConsole term;
+    CHECK(run_cli(term, {"-m", "--visual=" + splinter::cli::from_path(s.dir / "v.png"), "-o", out, po, pb,
+                         pt}) == 0);
+    CaptureConsole vis;
+    CHECK(run_cli(vis, {"inspect", "--json", "--layout", splinter::cli::from_path(s.dir / "v.png")}) == 0);
+    auto v = nlohmann::json::parse(vis.out_text);
+    CHECK(v["format"] == "png");
+    CHECK(v["width"] == 40);
+    CHECK(v["layout"][0] ==
+          nlohmann::json{
+              {"offset", 0}, {"length", 8}, {"class", "framing"}, {"unit", "/signature"}, {"layer", ""}});
+    CaptureConsole mf;
+    CHECK(run_cli(mf, {"merge-file", "-p", po, pb, pt}) == 255);
 }

@@ -1,6 +1,7 @@
 // diff3, merge (RCS), and merge-file (Git) personalities (CLI.md §3, §4; text.md §6).
 #include "cli.hpp"
 
+#include <semsplinter/envelope.hpp>
 #include <semsplinter/formats/binary.hpp>
 #include <semsplinter/formats/text.hpp>
 #include <semsplinter/report.hpp>
@@ -22,6 +23,7 @@ struct Config {
     std::optional<std::string> output;
     bool to_stdout = false; // merge / merge-file: -p
     std::optional<std::string> conflicts_file;
+    std::optional<std::string> visual; // --visual=FILE
     CommonOptions common;
     bool force_text = false, strip_cr = false, initial_tab = false, quiet = false, write_quit = false;
     bool merged_output = false; // diff3 -m
@@ -130,6 +132,7 @@ bool apply_merge_option(Config& c, const ParsedOpt& o, const Registry& reg, Cons
         return true;
     case o_gap:
         parse_number(v, "gap");
+        c.common.format_options["gap"] = v;
         return true;
     case o_sign_key:
     case o_sign_cert:
@@ -143,7 +146,8 @@ bool apply_merge_option(Config& c, const ParsedOpt& o, const Registry& reg, Cons
     case o_verbose:
         return true; // envelope options: text and binary carry no envelope fields (text.md §7.1)
     case o_visual:
-        throw Error(ErrorCategory::unsupported, "--visual: no visual diff for text or binary files");
+        c.visual = v;
+        return true;
     case o_object_id:
         throw Error(ErrorCategory::unsupported, "--object-id is not supported (D-15)");
     case o_help:
@@ -193,27 +197,32 @@ std::size_t do_merge(Config& c, const std::vector<std::string>& ops, Console& co
     std::array<ByteSource, 3> in{read_input(ops[0], budget, con), read_input(ops[1], budget, con),
                                  read_input(ops[2], budget, con)};
     bool binary = false;
+    const Format* structured = nullptr; // a format module other than text and binary
     if (!c.force_text) {
-        for (int k = 0; k < 3; ++k) {
-            auto& f = reg.detect(in[static_cast<std::size_t>(k)].bytes(), ops[static_cast<std::size_t>(k)],
-                                 c.common.format);
-            binary |= f.info().name == "binary";
-            if (f.info().name != "binary" && f.info().name != "text")
-                throw Error(ErrorCategory::unsupported,
-                            "format '" + std::string(f.info().name) + "' cannot merge yet");
-        }
+        std::array<const Format*, 3> fs{};
+        for (std::size_t k = 0; k < 3; ++k)
+            fs[k] = &reg.detect(in[k].bytes(), ops[k], c.common.format);
+        // Mixed formats merge as opaque bytes.
+        binary =
+            std::any_of(fs.begin(), fs.end(), [](const Format* f) { return f->info().name == "binary"; }) ||
+            fs[0] != fs[1] || fs[1] != fs[2];
+        if (!binary && fs[0]->info().name != "text")
+            structured = fs[0];
     }
+    if (c.visual && !structured)
+        throw Error(ErrorCategory::unsupported, "--visual: no visual diff for text or binary files");
     const auto labels = labels_for(c, ops);
     std::vector<std::byte> out;
     MergeResult r;
     std::size_t marked = 0;
-    std::string fmt = binary ? "binary" : "text";
-    if (c.personality == Personality::merge_file && binary)
+    std::string fmt = binary ? "binary" : structured ? std::string(structured->info().name) : "text";
+    std::optional<nlohmann::ordered_json> envelope;
+    if (c.personality == Personality::merge_file && (binary || structured))
         throw Error(ErrorCategory::unsupported, "Cannot merge binary files: " + ops[0]);
+    if ((binary || structured) && !target && con.out_is_terminal())
+        throw Error(ErrorCategory::invalid_input,
+                    "refusing to write a binary merge to a terminal; use -o FILE");
     if (binary) {
-        if (!target && con.out_is_terminal())
-            throw Error(ErrorCategory::invalid_input,
-                        "refusing to write a binary merge to a terminal; use -o FILE");
         std::optional<binary::ByteMergeOptions> bm;
         if (auto it = c.common.format_options.find("binary-merge"); it != c.common.format_options.end())
             bm = binary::ByteMergeOptions{c.guard, it->second == "force"};
@@ -223,6 +232,30 @@ std::size_t do_merge(Config& c, const std::vector<std::string>& ops, Console& co
             co.policy = Policy::ours; // D-21: binary output cannot carry markers
         r = binary::merge(*pb, *po, *pt, co, bm ? &*bm : nullptr, out);
         marked = r.unresolved_conflicts();
+    } else if (structured) {
+        Context ctx{reg, budget, 0, c.common.format_options};
+        auto db = structured->load(in[1], {ctx}), dob = structured->load(in[0], {ctx}),
+             dt = structured->load(in[2], {ctx});
+        // --conflict=mark on a format without markers: ours plus the merge visual as a sidecar (png.md §6.6).
+        const bool sidecar = c.conflict.policy == Policy::mark && target.has_value();
+        using V = MergeOptions::Visual;
+        r = structured->merge(*db, *dob, *dt,
+                              MergeOptions{ctx, c.conflict, labels,
+                                           c.visual  ? V::always
+                                           : sidecar ? V::on_conflict
+                                                     : V::none});
+        VectorSink sink;
+        structured->save(*r.document, sink, {ctx});
+        out = std::move(sink.data);
+        marked = r.unresolved_conflicts();
+        if (c.visual)
+            atomic_write(to_path(*c.visual), r.visual);
+        if (sidecar && marked && !r.visual.empty())
+            atomic_write(to_path(*target + ".splinter-conflicts.png"), r.visual);
+        auto *mo = structured->envelope(*dob), *mr = structured->envelope(*r.document);
+        if (mo && mr)
+            envelope =
+                nlohmann::ordered_json{{"churn", attribute_churn(in[0].bytes(), *mo, out, *mr).to_json()}};
     } else {
         text::LoadOptions lo;
         lo.strip_trailing_cr = c.strip_cr;
@@ -239,8 +272,8 @@ std::size_t do_merge(Config& c, const std::vector<std::string>& ops, Console& co
         r = std::move(m.result);
         marked = m.marked;
     }
-    for (auto& w : r.warnings)
-        if (!c.quiet && w.code != "mark-unsupported")
+    for (auto& w : r.warnings) // informational notes stay in the JSON report
+        if (!c.quiet && w.code != "mark-unsupported" && w.code != "encoding-reencoded")
             diag(con, "warning: " + w.message + (w.at.empty() ? "" : " (" + w.at + ")"));
     if (target)
         atomic_write(to_path(*target), out);
@@ -248,7 +281,9 @@ std::size_t do_merge(Config& c, const std::vector<std::string>& ops, Console& co
         con.out(std::string_view(reinterpret_cast<const char*>(out.data()), out.size()));
 
     if (c.common.json || c.conflicts_file) {
-        auto rep = to_json(merge_report(fmt, ops, in, r, c, out, target.value_or("-")));
+        auto report = merge_report(fmt, ops, in, r, c, out, target.value_or("-"));
+        report.envelope = envelope;
+        auto rep = to_json(report);
         write_json(con, c.common.json, rep.dump(2));
         if (c.conflicts_file)
             atomic_write(to_path(*c.conflicts_file), as_bytes(rep.dump(2) + "\n"));

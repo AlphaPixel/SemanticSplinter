@@ -7,6 +7,11 @@
 
 namespace semsplinter {
 
+std::vector<std::byte> Format::visual(const Document&, const Document&, const DiffOptions&) const {
+    throw Error(ErrorCategory::unsupported,
+                "--visual: format '" + std::string(info().name) + "' has no visual diff");
+}
+
 void Registry::add(std::unique_ptr<Format> f) {
     formats_.push_back(std::move(f));
 }

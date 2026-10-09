@@ -65,6 +65,8 @@ struct MergeOptions {
     Context& ctx;
     ConflictOptions conflict;
     std::array<std::string, 3> labels; // ours, base, theirs
+    // Fill MergeResult::visual: always for --visual, on_conflict for the --conflict=mark sidecar.
+    enum class Visual : std::uint8_t { none, on_conflict, always } visual = Visual::none;
 };
 struct SaveOptions {
     Context& ctx;
@@ -90,6 +92,10 @@ public:
     // Canonical, line-oriented, diff-friendly text for textconv and --dump.
     virtual void dump(const Document&, std::ostream&, const DumpOptions&) const = 0;
     virtual const EnvelopeMap* envelope(const Document&) const { return nullptr; }
+    // The visual diff for --visual (a heatmap PNG, ...). Formats without one throw Error{unsupported}.
+    virtual std::vector<std::byte> visual(const Document& a, const Document& b, const DiffOptions&) const;
+    // Structure overview for `inspect`: integrity ("ok" or {status, at}), warnings, units.
+    virtual nlohmann::ordered_json inspect(const Document&) const { return nlohmann::ordered_json::object(); }
     // Format-level statistics for the report's stats.format.
     virtual nlohmann::ordered_json stats(const Document&, const Document&, const ChangeSet&) const {
         return nlohmann::ordered_json::object();

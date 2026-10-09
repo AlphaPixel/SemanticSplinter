@@ -133,6 +133,7 @@ FILES: FILE1 FILE2 | DIR1 DIR2 | DIR FILE | FILE DIR | --from-file=F FILE... | -
 | `--max-memory=SIZE`, `--max-pixels=N`, `--max-input=SIZE`, `--max-depth=N`, `--max-zip-entries=N`, `--max-zip-ratio=R`, `--max-zip-size=SIZE` | limits (SPEC §9) |
 | `--exit-codes=posix\|extended` | SPEC §8 |
 | `--diff-algorithm=myers\|minimal\|patience\|histogram` | text: sequence algorithm (default myers, as GNU) |
+| `--png-mode=auto\|rgba`, `--alpha-zero-equal`, `--png-ignore-chunks=LIST`, `--png-color-dependency=conflict\|warn` (merge) | PNG options (png.md §4, §6.2), declared by the module (D-51) |
 | `--verbose`, `--quiet` | diagnostics on stderr |
 
 Names were checked against GNU diff's long options using the four-character rule in §1.2.

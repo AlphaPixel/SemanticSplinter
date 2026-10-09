@@ -352,7 +352,7 @@ void check_dependencies(const ChangeSet& ours, const ChangeSet& theirs, std::vec
                 continue;
             for (auto& dep : c.depends_on) {
                 for (auto& o : other) {
-                    if (!path_within(dep, o.at.path))
+                    if (!path_within(dep, o.at.path) && !path_within(o.at.path, dep))
                         continue;
                     if (o.op == Op::erase || (upgrade && upgrade(c, o))) {
                         auto x = make_conflict(c.at, {c.id, o.id}, "dependency");

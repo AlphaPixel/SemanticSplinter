@@ -196,7 +196,6 @@ struct GridResult {
 // `same(a, b, cell)` compares one cell of two sides (a tolerance lives here). It is called only with
 // equal shapes, except while checking whether a side touched the grid at all.
 // ponytail: dense per-cell labels, ~9 bytes per cell; tile the grid if 2^30-cell merges matter.
-// ponytail: pure crop/extension (Q-PNG-3) is not detected yet; it lands with PNG in Phase 3.
 GridResult grid_merge(const GridShape& base, const GridShape& ours, const GridShape& theirs,
                       const std::function<bool(Side, Side, std::uint64_t)>& same, const GridOptions& = {});
 
@@ -224,9 +223,9 @@ void apply_conflict_policy(std::vector<Conflict>&, const ConflictOptions&, std::
 
 // ---- Dependencies (SPEC §5.3) ----
 
-// Checks each auto-merged change's depends_on against the other side's changes. A dependency the other
-// side erased is a `dependency` conflict; one it otherwise changed is noted `dependency-touched`, unless
-// `upgrade(dependent, other)` makes it a conflict.
+// Checks each auto-merged change's depends_on against the other side's changes at, above, or below the
+// dependency's address. A dependency the other side erased is a `dependency` conflict; one it otherwise
+// changed is noted `dependency-touched`, unless `upgrade(dependent, other)` makes it a conflict.
 void check_dependencies(const ChangeSet& ours, const ChangeSet& theirs, std::vector<AutoMerge>&,
                         std::vector<Conflict>&,
                         const std::function<bool(const Change&, const Change&)>& upgrade = {});
