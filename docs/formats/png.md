@@ -129,8 +129,11 @@ Never normalized: stored sample values (no gamma or profile math), colors under 
 the bytes of APNG animation chunks.
 
 Options: `--png-mode`, `--alpha-zero-equal`, `--tolerance=N` (per channel, in 8-bit units, internally
-`N*257` on the 16-bit scale; not available in indexed mode), `--ignore-chunks=tIME,tEXt:Software` (diff
-only; merge still carries them).
+`N*257` on the 16-bit scale; not available in indexed mode), `--png-ignore-chunks=tIME,tEXt:Software` (diff
+only; merge still carries them). The `png-` prefix keeps GNU's `--ignore-c` abbreviation of `--ignore-case`
+unambiguous (D-42).
+
+A diff whose only changes are `kind: "encoding"` exits 0: the files are semantically identical.
 
 ## 5. Diff
 
@@ -170,13 +173,14 @@ color sRGB intent=perceptual
 color gAMA 45455
 chunk pHYs 2835x2835 per-metre
 chunk tEXt:Author "Alice"
-chunk iCCP name="Display P3" bytes=536 xxh3=5c0e…
+color iCCP name="Display P3" bytes=536 xxh3=5c0e…
 pixels xxh3=91aa… alpha=varies colors=1873
 tile 0,0,64,64 xxh3=17f2…
 tile 64,0,64,64 xxh3=08bd…
 ```
 
-Tile size starts at 64 and doubles until the image has ≤ 4096 tiles, so a 16k×16k image produces ≤ 4096
+Lines are sorted by address (`color`, then `chunk`, then `animation`), so chunk order does not show. Hashes
+print 16 hex digits. Tile size starts at 64 and doubles until the image has ≤ 4096 tiles, so a 16k×16k image produces ≤ 4096
 lines. Tile hashes are over canonical cells, so a textconv diff localizes edits without depending on the
 encoder. APNG adds one `animation frames=N xxh3=…` line.
 
@@ -231,6 +235,12 @@ for all cells in the group, including cells that only theirs changed (which ther
 This keeps coupled edits (anti-aliasing, shadows) coherent. Never average, never per-cell mix inside a group.
 
 ### 6.2 Metadata (KeyedMerge)
+
+Save timestamps are volatile (§7.1): `tIME`, and the `date:create`, `date:modify`, and `date:timestamp` text
+keywords that ImageMagick writes on every save (ISO 8601, compared as text). When both sides change one, the later
+time wins (auto-merge rule `newest`, SPEC §12.1) instead of a conflict, so two concurrent saves do not conflict on
+bookkeeping. Other text, including the registered `Creation Time` keyword, describes the image and merges as an
+ordinary key.
 
 `/color/*`, `/chunks/*`, `/animation/*` follow SPEC §5.1 KeyedMerge rules. Text values are OpaqueLeaf
 by default; `--png-text=lines` (v2) recurses into the text module's SequenceMerge for long multi-line
@@ -409,7 +419,7 @@ but equally valid streams, see Q-PNG-4).
 | Library | vcpkg port | Version seen | License | Notes |
 |---|---|---|---|---|
 | zlib | `zlib` | 1.3.2 | Zlib | **Verified.** Inflate/deflate for IDAT, zTXt, iCCP, iTXt. Already needed by core patches (SPEC §6). |
-| libpng | `libpng` | 1.6.59 | libpng-2.0 | **Verified.** Mainline 1.6.45+ supports `cICP`/`cLLI`/`mDCV` and exposes `acTL` etc. only as unknown chunks (verified in `png.h`). OSS-Fuzz covered. |
+| libpng | `libpng` | 1.6.58 | libpng-2.0 | **Verified.** Mainline 1.6.45+ supports `cICP`/`cLLI`/`mDCV` and exposes `acTL` etc. only as unknown chunks (verified in `png.h`). OSS-Fuzz covered. |
 | libspng | `libspng` | 0.7.4 | BSD-2-Clause AND libpng-2.0 | **Verified.** Simpler API. |
 | lodepng | `lodepng` | port dated 2021-12-04 | Zlib (assumed, upstream) | **Verified port exists but is stale.** Not recommended. |
 | stb_image | `stb` | 2026-08-02 | MIT / public domain (upstream) | Loses chunks, not hardened for untrusted input. Tests only. |
@@ -466,6 +476,25 @@ libpng, extra dependency).
 | v1.1 | Indexed mode + palette merge/remap, patch payloads + fuzzed apply, color-dependency upgrade, ΔE via lcms2 | S |
 | v2 | Streaming two-pass merge for huge non-interlaced images, `--detect-offset` (general translation), eXIf via shared IFD parser, XMP in iTXt via xml module | M |
 | Later | Wuffs as alternate decoder, object-aware heuristic merge (opt-in) | L |
+
+### 12.1 Implementation status (Phase 3)
+
+Done: chunk layer with CRC and framing checks; libpng pixel decode fed only the critical chunks; canonical grid;
+raster core (`semantic-splinter-raster`); still-PNG diff and merge with guard band, `adjacent-edits`, tolerance,
+and `--alpha-zero-equal`; APNG animation as one unit; pure crop and canvas extension in diff and merge
+(`cropped-away`); KeyedMerge of ancillary chunks with layout-preserving raw copy; passthrough; representability
+and promotion; per-row filter reuse and zlib parameter inference; `hIST` regeneration; `unsafe-chunk-dropped`;
+reload validation; color-dependency upgrade (v1.1); ΔE00 in sRGB; dump; heatmap and merge visuals and the
+`--conflict=mark` sidecar; EnvelopeMap, churn line, and `inspect --layout`.
+
+Not yet: indexed mode (`--png-mode=index` exits 3), patch payloads (Phase 5), the Git driver (Phase 4), ΔE through
+lcms2 (`png-icc`), the `iCCP` description tag, `requantized`, `--visual=side-by-side`, `--signatures` handling of
+`caBX`/`dSIG` (kept as opaque chunks), `sbit-mismatch`, and the PngSuite corpus and fuzz targets (Phase 7+ tracks).
+A `cropped-away` conflict resolved to the painting side writes that side's whole image.
+
+Measured (Release, one 4096×4096 RGBA8 ImageMagick pair): diff 1.7 s, decode-dominated; a merge spends most of
+its time re-deflating with the inferred settings (about 25 s at level 7-9, as long as the original encoder).
+Streaming and parallel deflate are the upgrade path if large merges matter.
 
 ## 13. Open questions
 

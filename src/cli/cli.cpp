@@ -1,11 +1,14 @@
 #include "cli.hpp"
 
+#include <semsplinter/envelope.hpp>
+#include <semsplinter/report.hpp>
 #include <semsplinter/version.hpp>
 
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
 #include <cctype>
+#include <cstdio>
 #include <ctime>
 
 #ifdef _WIN32
@@ -253,7 +256,8 @@ constexpr std::string_view kHelp =
        splinter -3 [OPTION]... MINE OLDER YOURS   three-way report (GNU diff3)
        splinter merge [OPTION]... FILE1 FILE2 FILE3   merge into FILE1 (RCS merge)
        splinter merge-file [OPTION]... CURRENT BASE OTHER   (git merge-file)
-       splinter dump FILE | splinter formats [--json] | splinter version
+       splinter dump FILE | splinter inspect [--json] [--layout] FILE
+       splinter formats [--json] | splinter version
 
 The personality also follows the program name: splinter-diff, splinter-diff3,
 splinter-merge, splinter-patch. Each accepts the options of the tool it emulates.
@@ -306,6 +310,87 @@ int formats(const std::vector<std::string>& args, Console& c, const Registry& re
         line += i.description;
         c.out(line + "\n");
     }
+    return 0;
+}
+
+// splinter inspect [--json] [--layout] [--format=NAME] FILE (CLI.md §6).
+int inspect(const std::vector<std::string>& args, Console& c, const Registry& reg) {
+    bool json = false, layout = false;
+    std::string format;
+    std::vector<std::string> files;
+    for (auto& a : args) {
+        if (a == "--json")
+            json = true;
+        else if (a == "--layout")
+            layout = true;
+        else if (a.starts_with("--format="))
+            format = a.substr(9);
+        else if (a.size() > 1 && a[0] == '-')
+            throw UsageError("unrecognized option '" + a + "'");
+        else
+            files.push_back(a);
+    }
+    if (files.size() != 1)
+        throw UsageError(files.empty() ? "missing operand after 'inspect'"
+                                       : "extra operand '" + files[1] + "'");
+    Limits limits;
+    OptionValues options;
+    auto src = read_input(files[0], limits, c);
+    const Format& f = reg.detect(src.bytes(), files[0], format);
+    Context ctx{reg, limits, 0, options};
+    auto doc = f.load(src, {ctx});
+    nlohmann::ordered_json j;
+    j["path"] = files[0];
+    j["format"] = f.info().name;
+    j["bytes"] = src.size();
+    j["hash"] = hash_ref(hash128(src.bytes()));
+    const auto info = f.inspect(*doc);
+    for (auto& [k, v] : info.items())
+        j[k] = v;
+    const EnvelopeMap whole = EnvelopeMap::whole_content(src.size());
+    const EnvelopeMap* map = f.envelope(*doc) ? f.envelope(*doc) : &whole;
+    if (layout) {
+        auto& l = j["layout"] = nlohmann::ordered_json::array();
+        for (auto& r : map->ranges)
+            l.push_back({{"offset", r.offset},
+                         {"length", r.length},
+                         {"class", to_string(r.cls)},
+                         {"unit", r.unit},
+                         {"layer", r.layer}});
+    }
+    if (json) {
+        c.out(j.dump(2) + "\n");
+        return 0;
+    }
+    std::string o;
+    for (auto& [k, v] : j.items()) {
+        if (k == "layout" || k == "chunks")
+            continue;
+        if (k == "integrity" && v.is_object()) {
+            std::string at;
+            for (auto& x : v["at"])
+                at += (at.empty() ? "" : ",") + x.get<std::string>();
+            o += "integrity " + v.value("status", "") + " " + at + "\n";
+        } else if (k == "warnings") {
+            for (auto& w : v)
+                o += "warning " + w.value("code", "") + " " + w.value("at", "") + ": " +
+                     w.value("message", "") + "\n";
+        } else if (k == "units") {
+            for (auto& u : v)
+                o += "unit " + u.value("at", "") + " " + u.value("value", "") + "\n";
+        } else if (!v.is_structured()) {
+            o += k + " " + (v.is_string() ? v.get<std::string>() : v.dump()) + "\n";
+        }
+    }
+    if (layout) {
+        for (auto& r : map->ranges) {
+            char buf[64];
+            std::snprintf(buf, sizeof buf, "%10llu %8llu %-11s ", static_cast<unsigned long long>(r.offset),
+                          static_cast<unsigned long long>(r.length), std::string(to_string(r.cls)).c_str());
+            o += buf + r.unit + (r.layer.empty() ? "" : " " + r.layer) + "\n";
+        }
+    }
+    c.out(o);
     return 0;
 }
 
@@ -369,7 +454,7 @@ int run(std::vector<std::string> args, Console& c) {
             if (first == "formats")
                 return formats(tail, c, reg);
             if (first == "inspect")
-                return not_yet(c, "inspect", "with the envelope work of Phase 3");
+                return inspect(tail, c, reg);
             if (first == "git-diff" || first == "git-merge" || first == "git-setup")
                 return not_yet(c, first, "Phase 4");
             if (first == "help") {

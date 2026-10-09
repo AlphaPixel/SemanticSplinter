@@ -9,5 +9,7 @@ permissive (MIT, BSD, Apache-2.0, Zlib, public domain); copyleft libraries are o
 | Port | Version | License | vcpkg feature | Used for | Why this one |
 |---|---|---|---|---|---|
 | catch2 | 3.16.0 | BSL-1.0 | `tests` | Unit and property tests | D-9: CTest discovery, readable property-style tests |
+| libpng | 1.6.58 | libpng-2.0 | `png` | PNG pixel decode (unfilter, Adam7, bit unpacking) | png.md §9: hardened and fuzzed; own chunk layer around it |
 | nlohmann-json | 3.12.0#2 | MIT | core | JSON reports (`ordered_json`), `--resolve` files | Plan Phase 1: ordered output for deterministic reports |
 | xxhash | 0.8.4 | BSD-2-Clause | core | XXH3-128 content hashes and change/conflict ids | D-8: speed; no adversarial collision requirement |
+| zlib | 1.3.2#2 | Zlib | `png` | IDAT, zTXt, iCCP, iTXt inflate and deflate; parameter inference | png.md §7.3: byte identity is pinned to this port (Q-PNG-4) |

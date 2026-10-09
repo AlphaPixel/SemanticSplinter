@@ -271,4 +271,12 @@ TEST_CASE("dependency checking") {
     am.clear(), cs.clear();
     check_dependencies({use}, {mod_parent}, am, cs, [](const Change&, const Change&) { return true; });
     REQUIRE(cs.size() == 1);
+
+    // A dependency on a parent is touched by a change below it (pixels depend on /color, gAMA changed).
+    auto paint = make_change(Side::ours, Op::update, {"/pixels"});
+    paint.depends_on = {"/color"};
+    auto gama = make_change(Side::theirs, Op::insert, {"/color/gAMA"});
+    am.clear(), cs.clear();
+    check_dependencies({paint}, {gama}, am, cs);
+    REQUIRE(am == std::vector<AutoMerge>{{paint.id, "dependency-touched"}});
 }

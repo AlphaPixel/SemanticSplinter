@@ -12,6 +12,7 @@ add_executable(semsplinter-tests
     core/test_sequence.cpp
     core/test_version.cpp
     formats/test_binary.cpp
+    formats/test_png.cpp
     formats/test_text.cpp
 )
 target_link_libraries(semsplinter-tests PRIVATE splinter-cli Catch2::Catch2WithMain)
