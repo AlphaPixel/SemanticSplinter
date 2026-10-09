@@ -187,7 +187,6 @@ private:
         int status = 0;
 
         if (binary || fa->info().name != "text" || fb->info().name != "text") {
-            Context ctx{reg_, budget, 0, cfg_.common.format_options};
             if (binary) {
                 auto da = binary::load(sa), db = binary::load(sb);
                 auto d = binary::diff(*da, *db, cfg_.gap);
