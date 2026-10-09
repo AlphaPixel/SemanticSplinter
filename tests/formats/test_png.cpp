@@ -259,6 +259,17 @@ TEST_CASE("png: metadata merges with pixels; untouched chunks keep their bytes")
     CHECK(r.conflicts[0].at.path == "/chunks/tEXt:Author");
     CHECK(r.conflicts[0].reason == "add-add");
 
+    // Save timestamps merge newest-wins instead of conflicting.
+    auto stamp = [&](const std::vector<std::byte>& p, const char* t) {
+        return with_chunk(p, "tEXt", std::string("date:modify\0", 12) + t);
+    };
+    auto sb = stamp(pb, "2026-10-01T00:00:00+00:00"), so = stamp(po, "2026-10-02T00:00:00+00:00"),
+         st = stamp(pb, "2026-10-03T00:00:00+00:00");
+    r = fx.merge(sb, so, st);
+    CHECK(r.conflicts.empty());
+    auto merged = fx.dump(fx.bytes(r));
+    CHECK(merged.find("2026-10-03") != std::string::npos);
+
     // tIME renders as a date; --png-ignore-chunks hides it from the diff.
     auto z = with_chunk(pb, "tIME", std::string("\x07\xEA\x0A\x09\x0C\x00\x00", 7));
     auto cs2 = fx.diff(pb, z);

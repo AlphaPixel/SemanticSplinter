@@ -236,8 +236,11 @@ This keeps coupled edits (anti-aliasing, shadows) coherent. Never average, never
 
 ### 6.2 Metadata (KeyedMerge)
 
-`tIME` is volatile (§7.1): when both sides change it, the later time wins (auto-merge rule `newest`, SPEC
-§12.1) instead of a conflict. Other timestamps written as text (ImageMagick's `tEXt:date:modify`) are ordinary keys.
+Save timestamps are volatile (§7.1): `tIME`, and the `date:create`, `date:modify`, and `date:timestamp` text
+keywords that ImageMagick writes on every save (ISO 8601, compared as text). When both sides change one, the later
+time wins (auto-merge rule `newest`, SPEC §12.1) instead of a conflict, so two concurrent saves do not conflict on
+bookkeeping. Other text, including the registered `Creation Time` keyword, describes the image and merges as an
+ordinary key.
 
 `/color/*`, `/chunks/*`, `/animation/*` follow SPEC §5.1 KeyedMerge rules. Text values are OpaqueLeaf
 by default; `--png-text=lines` (v2) recurses into the text module's SequenceMerge for long multi-line

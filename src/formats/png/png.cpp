@@ -328,6 +328,11 @@ Opts options(const OptionValues& o) {
     return r;
 }
 
+// Save timestamps (png.md §6.2): tIME, and the ISO 8601 date:create/modify/timestamp text that ImageMagick writes.
+bool volatile_key(std::string_view key) {
+    return key == "/chunks/tIME" || key.starts_with("/chunks/tEXt:date:") || key.starts_with("/chunks/iTXt:date:");
+}
+
 bool ignored(const std::string& key, const Opts& o) {
     for (auto& i : o.ignore)
         for (const char* root : {"/chunks/", "/color/"})
@@ -1105,8 +1110,8 @@ MergeResult PngFormat::merge(const Document& base_d, const Document& ours_d, con
         auto& row = rows[k];
         auto* xo = change_at(co, row.key);
         auto* xt = change_at(ct, row.key);
-        if (row.outcome.rule == MergeRule::conflict && row.key == "/chunks/tIME" && row.ours && row.theirs) {
-            // tIME is volatile: newest wins (SPEC §12.1). Its rendering "YYYY-MM-DD hh:mm:ss" sorts by time.
+        if (row.outcome.rule == MergeRule::conflict && volatile_key(row.key) && row.ours && row.theirs) {
+            // Volatile timestamps: newest wins (SPEC §12.1). Both renderings sort by time as text.
             bool theirs_newer = entry(t, row.key)->text > entry(o, row.key)->text;
             row.outcome.take = theirs_newer ? Side::theirs : Side::ours;
             for (auto* x : {xo, xt})
