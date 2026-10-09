@@ -2,9 +2,15 @@ find_package(Catch2 3 CONFIG REQUIRED)
 include(Catch)
 
 add_executable(semsplinter-tests
+    core/test_basics.cpp
+    core/test_envelope.cpp
+    core/test_merge.cpp
+    core/test_report.cpp
+    core/test_sequence.cpp
     core/test_version.cpp
 )
 target_link_libraries(semsplinter-tests PRIVATE SemanticSplinter::core Catch2::Catch2WithMain)
+target_compile_definitions(semsplinter-tests PRIVATE SEMSPLINTER_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
 catch_discover_tests(semsplinter-tests)
 
 add_test(NAME cli.version COMMAND splinter --version)

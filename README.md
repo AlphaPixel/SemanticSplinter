@@ -9,8 +9,10 @@ It works standalone and as a Git textconv, external diff driver, and merge drive
   `patch`, and RCS `merge` / `git merge-file`.
 - **License:** MIT ([LICENSE](LICENSE)).
 
-**Status:** specification complete for v1, and all v1 decisions are settled (2026-10-08). Phase 0 of
-[docs/PLAN.md](docs/PLAN.md) (build skeleton) is done; `splinter` only prints `--version` so far.
+**Status:** specification complete for v1, and all v1 decisions are settled (2026-10-08). Phases 0–1 of
+[docs/PLAN.md](docs/PLAN.md) are done: the build skeleton and the format-neutral core (data model, hashing, I/O,
+merge primitives, conflict policy, envelope map, fix-up Emitter, JSON report). `splinter` only prints
+`--version` so far; the CLI and the text and binary formats come in Phase 2.
 
 ## Why
 
