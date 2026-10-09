@@ -10,6 +10,7 @@
 #include <semsplinter/model.hpp>
 #include <semsplinter/render.hpp>
 #include <semsplinter/text.hpp>
+#include <semsplinter/textopts.hpp>
 
 #include <array>
 #include <memory>
@@ -30,23 +31,17 @@ struct TextDoc final : Document {
     Eol dominant_eol() const noexcept; // most frequent terminator; lf when there is none
 };
 
-struct LoadOptions {
-    SplitMode split = SplitMode::lf; // `any` for --eol=auto
-    bool strip_trailing_cr = false;  // --strip-trailing-cr: drop CR before LF from the content
-    bool bom_is_content = false;     // GNU emulation: a UTF-8 BOM is part of the first line
-};
+// The option types live in core (textopts.hpp) so they travel through the Format contract.
+using LoadOptions = TextLoadOptions;
+using DiffOptions = TextDiffOptions;
+using MergeOptions = TextMergeOptions;
+using Engine = MergeEngine;
+using semsplinter::Diff3Mode;
+using semsplinter::MarkerStyle;
 
 std::unique_ptr<TextDoc> load(ByteSource, const LoadOptions& = {});
 
 // ---- Diff ----
-
-struct DiffOptions {
-    LineNormalize normalize;
-    LineDiffOptions algorithm;
-    bool ignore_blank_lines = false;     // -B
-    bool ignore_missing_newline = false; // ed output cannot express it; GNU compares as if present
-    std::vector<std::regex> ignore_re;   // -I (repeatable)
-};
 
 struct TextDiff {
     std::vector<Edit> edits;
@@ -60,29 +55,6 @@ ChangeSet changes(const TextDoc& a, const TextDoc& b, const TextDiff&); // for t
 nlohmann::ordered_json metrics(const TextDoc& a, const TextDoc& b, const TextDiff&);
 
 // ---- Merge (text.md §6) ----
-
-enum class MarkerStyle : std::uint8_t { merge, diff3, zdiff3 };
-
-// GNU diff3 output selection: -A, -E, -e, -x (GNU 3.12 prints -X like -x), -3.
-enum class Diff3Mode : std::uint8_t { show_all, show_overlap, ed, overlap_only, easy_only };
-
-enum class Engine : std::uint8_t {
-    gnu,    // GNU diff3: no refinement; -A brackets identical changes; Diff3Mode applies
-    git,    // git merge-file: zealous-alnum refinement (merge style only)
-    native, // splinter merge: like git, histogram by default
-};
-
-struct MergeOptions {
-    Engine engine = Engine::native;
-    LineDiffOptions algorithm{DiffAlgorithm::histogram, true, Compaction::gnu};
-    MarkerStyle style = MarkerStyle::merge;
-    Diff3Mode gnu_mode = Diff3Mode::show_all;
-    std::size_t marker_size = 7;
-    std::array<std::string, 3> labels; // ours, base, theirs (marker text)
-    ConflictOptions conflict{Policy::mark};
-    bool eol_auto = false;     // --eol=auto: compare without terminators, lift whole-file EOL conversions
-    bool crlf_markers = false; // markers end with CRLF when ours' dominant terminator is CRLF (Git)
-};
 
 struct TextMerge {
     std::vector<std::byte> bytes;

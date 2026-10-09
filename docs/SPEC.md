@@ -579,14 +579,24 @@ Extended codes are never used in Git modes.
 
 semsplinter::Registry reg = semsplinter::Registry::with_builtin_formats();
 
-semsplinter::DiffRequest d{ .a = "old.png", .b = "new.png" };
-semsplinter::DiffResult dr = semsplinter::diff(reg, d);        // ChangeSet + Report
-semsplinter::render_unified(dr, std::cout, {.context = 3});
+semsplinter::Limits limits;
+auto input = [&](const char* p) { return semsplinter::Input{semsplinter::ByteSource::from_file(p, limits), p}; };
 
-semsplinter::MergeRequest m{ .base = "b.png", .ours = "o.png", .theirs = "t.png",
-                             .output = "m.png", .options = {.conflict = Policy::ours} };
-semsplinter::MergeResult mr = semsplinter::merge(reg, m);      // writes atomically
+semsplinter::DiffRequest d{.a = input("old.png"), .b = input("new.png"), .report = true,
+                           .render = semsplinter::RenderRequest{.style = semsplinter::OutputStyle::unified}};
+semsplinter::DiffResult dr = semsplinter::diff(reg, d);        // differs, rendered text, Report, visual
+
+semsplinter::MergeRequest m{.base = input("b.png"), .ours = input("o.png"), .theirs = input("t.png"),
+                            .conflict = {semsplinter::Policy::ours}, .output = "m.png"};
+semsplinter::MergeOutcome mo = semsplinter::merge(reg, m);     // writes atomically; Report, conflict count
 ```
+
+`diff` and `merge` detect the format (inputs of different formats compare and merge as bytes), load through
+the Format contract, and render through the format's `Comparison` (`Format::compare`): text renders GNU output,
+binary the GNU "differ" line, and every other format its change list and churn line, or unified, context, and
+side-by-side output over its dump lines. Options for text-bearing units (`TextLoadOptions`, `TextDiffOptions`,
+`TextMergeOptions`) travel inside the Format option structs, so a text file merges the same way at top level and
+inside a container. `dump` and `inspect` complete the API.
 
 - Errors are exceptions deriving from `semsplinter::Error` with a category (`invalid_input`,
   `unsupported`, `limit`, `io`, `internal`) **[D-11]**. The CLI maps categories to exit codes.

@@ -7,6 +7,8 @@
 #include <semsplinter/limits.hpp>
 #include <semsplinter/merge.hpp>
 #include <semsplinter/model.hpp>
+#include <semsplinter/render.hpp>
+#include <semsplinter/textopts.hpp>
 
 #include <array>
 #include <map>
@@ -57,9 +59,11 @@ struct Context {
 
 struct LoadOptions {
     Context& ctx;
+    TextLoadOptions text; // for text-bearing units
 };
 struct DiffOptions {
     Context& ctx;
+    TextDiffOptions text;
 };
 struct MergeOptions {
     Context& ctx;
@@ -67,12 +71,37 @@ struct MergeOptions {
     std::array<std::string, 3> labels; // ours, base, theirs
     // Fill MergeResult::visual: always for --visual, on_conflict for the --conflict=mark sidecar.
     enum class Visual : std::uint8_t { none, on_conflict, always } visual = Visual::none;
+    TextMergeOptions text; // its labels and conflict are taken from the fields above
 };
 struct SaveOptions {
     Context& ctx;
 };
 struct DumpOptions {
     Context& ctx;
+};
+
+// How a comparison is shown (SPEC §7.2).
+struct RenderRequest {
+    OutputStyle style = OutputStyle::normal;
+    RenderOptions options;
+    std::array<std::string, 2> paths;  // operands as given (diagnostics)
+    std::array<std::string, 2> names;  // --label or path (messages such as "Binary files A and B differ")
+    std::array<std::string, 2> labels; // unified/context header labels, timestamps included
+    const Churn* churn = nullptr;      // byte churn, summarized under a structured normal report
+};
+
+// A computed two-way diff of one format, rendered on demand. It refers to the documents and the
+// DiffOptions it was made from, which must outlive it.
+class Comparison {
+public:
+    virtual ~Comparison() = default;
+    virtual bool differs() const = 0;      // a semantic difference: diff exit status 1
+    virtual ChangeSet changes() const = 0; // for the JSON report
+    virtual nlohmann::ordered_json stats() const { return nlohmann::ordered_json::object(); }
+    virtual nlohmann::ordered_json options() const { return nlohmann::ordered_json::object(); }
+    // Appends the output for `r` (nothing when there is nothing to show). Returns diagnostics that make
+    // the diff fail (exit 2) after printing, as GNU does for ed scripts over a missing final newline.
+    virtual std::vector<std::string> render(std::string& out, const RenderRequest& r) const = 0;
 };
 
 class Format {
@@ -85,6 +114,10 @@ public:
     // Throws Error{invalid_input} on bad data; enforces ctx.budget.
     virtual std::unique_ptr<Document> load(ByteSource, const LoadOptions&) const = 0;
     virtual ChangeSet diff(const Document& a, const Document& b, const DiffOptions&) const = 0;
+    // The diff behind the CLI and library API. The default wraps diff(): any non-encoding change differs;
+    // the normal style lists changes plus the churn line, other styles diff the dump() lines as text.
+    virtual std::unique_ptr<Comparison> compare(const Document& a, const Document& b,
+                                                const DiffOptions&) const;
     // The output document is complete; conflicted units hold the policy-selected side (SPEC §5.4).
     virtual MergeResult merge(const Document& base, const Document& ours, const Document& theirs,
                               const MergeOptions&) const = 0;

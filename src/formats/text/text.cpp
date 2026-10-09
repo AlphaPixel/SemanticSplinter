@@ -1,6 +1,7 @@
 #include <semsplinter/error.hpp>
 #include <semsplinter/formats/text.hpp>
 
+#include <algorithm>
 #include <array>
 
 namespace semsplinter::text {
@@ -14,8 +15,12 @@ std::string_view TextDoc::line(std::size_t i) const {
 
 Eol TextDoc::dominant_eol() const noexcept {
     std::array<std::size_t, 4> n{};
-    for (auto& l : lines)
-        ++n[static_cast<std::size_t>(l.eol)];
+    for (std::size_t i = 0; i < lines.size(); ++i) {
+        auto e = lines[i].eol;
+        if (e == Eol::lf && line(i).ends_with('\r')) // split on LF only: the CR stays in the content
+            e = Eol::crlf;
+        ++n[static_cast<std::size_t>(e)];
+    }
     if (n[2] > n[1] && n[2] >= n[3])
         return Eol::crlf;
     if (n[3] > n[1] && n[3] > n[2])
@@ -177,6 +182,46 @@ nlohmann::ordered_json metrics(const TextDoc& a, const TextDoc& b, const TextDif
 
 namespace {
 
+std::string_view algorithm_name(DiffAlgorithm a) {
+    return a == DiffAlgorithm::myers      ? "myers"
+           : a == DiffAlgorithm::minimal  ? "minimal"
+           : a == DiffAlgorithm::patience ? "patience"
+                                          : "histogram";
+}
+
+// GNU diff output (text.md §5): every style, exactly as GNU renders it.
+class TextComparison final : public Comparison {
+public:
+    TextComparison(const TextDoc& a, const TextDoc& b, const DiffOptions& o) : a_(a), b_(b), o_(o) {
+        auto x = a.src.bytes(), y = b.src.bytes();
+        if (!std::equal(x.begin(), x.end(), y.begin(), y.end()))
+            d_ = text::diff(a, b, o);
+    }
+    bool differs() const override { return d_.differs(); }
+    ChangeSet changes() const override { return text::changes(a_, b_, d_); }
+    nlohmann::ordered_json stats() const override { return metrics(a_, b_, d_); }
+    nlohmann::ordered_json options() const override {
+        return {{"algorithm", algorithm_name(o_.algorithm.algorithm)}};
+    }
+    std::vector<std::string> render(std::string& out, const RenderRequest& r) const override {
+        if (d_.differs() || r.style == OutputStyle::side_by_side) // -y shows equal files too
+            semsplinter::render(out, r.style, diff_side(a_, r.labels[0]), diff_side(b_, r.labels[1]),
+                                d_.edits, d_.ignorable, r.options);
+        // ed scripts cannot express a missing final newline: GNU compares as if it were there, then fails.
+        std::vector<std::string> errors;
+        if (r.style == OutputStyle::ed || r.style == OutputStyle::forward_ed)
+            for (std::size_t k = 0; k < 2; ++k)
+                if ((k ? b_ : a_).missing_newline())
+                    errors.push_back(r.paths[k] + ": No newline at end of file");
+        return errors;
+    }
+
+private:
+    const TextDoc &a_, &b_;
+    const DiffOptions& o_;
+    TextDiff d_;
+};
+
 class TextFormat final : public Format {
 public:
     const FormatInfo& info() const override {
@@ -188,18 +233,25 @@ public:
     }
     std::unique_ptr<Document> load(ByteSource src, const semsplinter::LoadOptions& o) const override {
         o.ctx.budget.charge(src.size() / 2 + 16); // ~16 bytes per line on top of the input (text.md §5.5)
-        return text::load(std::move(src));
+        return text::load(std::move(src), o.text);
     }
-    ChangeSet diff(const Document& a, const Document& b, const semsplinter::DiffOptions&) const override {
+    ChangeSet diff(const Document& a, const Document& b, const semsplinter::DiffOptions& o) const override {
         auto &ta = cast(a), &tb = cast(b);
-        return changes(ta, tb, text::diff(ta, tb));
+        return changes(ta, tb, text::diff(ta, tb, o.text));
+    }
+    std::unique_ptr<Comparison> compare(const Document& a, const Document& b,
+                                        const semsplinter::DiffOptions& o) const override {
+        return std::make_unique<TextComparison>(cast(a), cast(b), o.text);
     }
     MergeResult merge(const Document& base, const Document& ours, const Document& theirs,
                       const semsplinter::MergeOptions& o) const override {
-        text::MergeOptions mo;
+        text::MergeOptions mo = o.text;
         mo.conflict = o.conflict;
         mo.labels = o.labels;
+        if (mo.engine != Engine::gnu) // Git and native write CRLF markers into CRLF files
+            mo.crlf_markers = cast(ours).dominant_eol() == Eol::crlf;
         auto m = text::merge(cast(base), cast(ours), cast(theirs), mo);
+        m.result.marked = m.marked;
         m.result.document = text::load(ByteSource::from_memory(std::move(m.bytes)));
         return std::move(m.result);
     }
