@@ -1,17 +1,13 @@
 // diff personality (CLI.md §2).
 #include "cli.hpp"
 
-#include <semsplinter/envelope.hpp>
-#include <semsplinter/formats/binary.hpp>
-#include <semsplinter/formats/text.hpp>
 #include <semsplinter/report.hpp>
+#include <semsplinter/semsplinter.hpp>
 #include <semsplinter/version.hpp>
 
 #include <algorithm>
-#include <cstdio>
 #include <fstream>
 #include <regex>
-#include <sstream>
 
 namespace splinter::cli {
 
@@ -31,7 +27,7 @@ struct Config {
     std::vector<std::string> excludes;
     std::string starting_file;
     std::optional<std::string> from_file, to_file;
-    text::DiffOptions text;
+    TextDiffOptions text;
     bool strip_cr = false;
     std::size_t gap = 8;
     std::optional<std::string> visual; // --visual=FILE
@@ -101,66 +97,6 @@ bool glob(std::string_view p, std::string_view s) {
     return p[0] == s[0] && glob(p.substr(1), s.substr(1));
 }
 
-// "1.2 MiB", "830 B".
-std::string byte_size(std::uint64_t n) {
-    char buf[32];
-    if (n < 1024)
-        return std::to_string(n) + " B";
-    const bool kib = n < (std::uint64_t{1} << 20);
-    std::snprintf(buf, sizeof buf, kib ? "%.1f KiB" : "%.1f MiB",
-                  static_cast<double>(n) / (kib ? 1024 : 1024 * 1024));
-    return buf;
-}
-
-// The normal report of a structured format (SPEC §7.2): one line per change.
-std::string render_changes(const ChangeSet& cs) {
-    std::string o;
-    for (auto& c : cs) {
-        o += c.op == Op::insert ? '+' : c.op == Op::erase ? '-' : c.op == Op::move ? '>' : '~';
-        o += " " + c.at.to_string();
-        if (c.before.text && c.after.text)
-            o += " " + *c.before.text + " -> " + *c.after.text;
-        else if (c.after.text || c.before.text)
-            o += " " + *(c.after.text ? c.after.text : c.before.text);
-        for (auto& [k, v] : c.metrics.items()) {
-            if (k == "bbox" || k == "depth")
-                continue;
-            std::string val;
-            if (v.is_array())
-                for (auto& x : v)
-                    val += (val.empty() ? "" : ",") + (x.is_string() ? x.get<std::string>() : x.dump());
-            else
-                val = v.is_string() ? v.get<std::string>() : v.dump();
-            o += " " + k + "=" + val;
-        }
-        o += "\n";
-    }
-    return o;
-}
-
-// "# bytes changed 1.2 MiB: 99.8% encoding, <0.1% integrity; content: 212 px in 1 region" (SPEC §12.6).
-std::string churn_line(const Churn& ch, const nlohmann::ordered_json& stats) {
-    std::vector<std::pair<std::uint64_t, std::size_t>> parts;
-    for (std::size_t k = 0; k < kByteClasses; ++k)
-        if (ch.by_class[k])
-            parts.emplace_back(ch.by_class[k], k);
-    std::stable_sort(parts.begin(), parts.end(), [](auto& x, auto& y) { return x.first > y.first; });
-    std::string o = "# bytes changed " + byte_size(ch.total()) + ":";
-    for (std::size_t i = 0; i < parts.size(); ++i) {
-        double pct = 100.0 * static_cast<double>(parts[i].first) / static_cast<double>(ch.total());
-        char buf[16];
-        std::snprintf(buf, sizeof buf, pct < 0.1 ? "<0.1%%" : "%.1f%%", pct);
-        o += std::string(i ? ", " : " ") + buf + " " +
-             std::string(to_string(static_cast<ByteClass>(parts[i].second)));
-    }
-    if (stats.value("regions", std::uint64_t{0})) {
-        auto regions = stats.value("regions", std::uint64_t{0});
-        o += "; content: " + std::to_string(stats.value("pixels_changed", std::uint64_t{0})) + " px in " +
-             std::to_string(regions) + (regions == 1 ? " region" : " regions");
-    }
-    return o + "\n";
-}
-
 class Differ {
 public:
     Differ(Config& cfg, Console& c, const Registry& reg) : cfg_(cfg), c_(c), reg_(reg) {}
@@ -188,14 +124,8 @@ public:
 
     int dump(const std::string& path) {
         Limits budget = cfg_.common.limits;
-        auto src = read_input(path, budget, c_);
-        const Format& f =
-            cfg_.force_text ? *reg_.find("text") : reg_.detect(src.bytes(), path, cfg_.common.format);
-        Context ctx{reg_, budget, 0, cfg_.common.format_options};
-        auto doc = f.load(src, {ctx});
-        std::ostringstream os;
-        f.dump(*doc, os, {ctx});
-        out(os.str());
+        out(semsplinter::dump(reg_, {read_input(path, budget, c_), path}, cfg_.common.format, cfg_.force_text,
+                              budget, cfg_.common.format_options));
         return 0;
     }
 
@@ -230,138 +160,34 @@ private:
 
     int files(const std::string& a, const std::string& b, bool in_dir, bool absent_a = false,
               bool absent_b = false) {
-        Limits budget = cfg_.common.limits;
-        ByteSource sa = absent_a ? ByteSource::from_memory({}, a) : read_input(a, budget, c_);
-        ByteSource sb = absent_b ? ByteSource::from_memory({}, b) : read_input(b, budget, c_);
-        const auto xa = sa.bytes(), xb = sb.bytes();
-        const bool same_bytes = xa.size() == xb.size() && std::equal(xa.begin(), xa.end(), xb.begin());
-
-        const Format* fa = &reg_.detect(xa, a, cfg_.common.format);
-        const Format* fb = &reg_.detect(xb, b, cfg_.common.format);
-        if (cfg_.force_text)
-            fa = fb = reg_.find("text");
-        // Different formats on the two sides (or a missing side under -N) compare as bytes.
-        const bool binary = fa->info().name == "binary" || fb->info().name == "binary" || fa != fb;
-        const std::string fmt = binary ? "binary" : std::string(fa->info().name);
-
-        Report rep;
-        rep.mode = "diff";
-        rep.format = fmt;
-        rep.inputs = {{"a", a, hash128(xa), xa.size()}, {"b", b, hash128(xb), xb.size()}};
-        int status = 0;
-
-        if (cfg_.visual && (binary || fa->info().name == "text"))
-            throw Error(ErrorCategory::unsupported, "--visual: no visual diff for text or binary files");
-        if (binary) {
-            auto da = binary::load(sa), db = binary::load(sb);
-            auto d = binary::diff(*da, *db, cfg_.gap);
-            if (cfg_.common.json) {
-                rep.changes = binary::changes(*da, *db, d);
-                rep.format_stats = binary::metrics(*da, *db, d);
-            }
-            status = d.identical() ? 0 : 1;
-            if (status)
-                out((cfg_.brief ? "Files " : "Binary files ") + name(0, a) + " and " + name(1, b) +
-                    " differ\n");
-        } else if (fa->info().name != "text") {
-            status = structured(*fa, sa, sb, rep, a, b, in_dir, budget);
-        } else {
-            text::LoadOptions lo;
-            lo.strip_trailing_cr = cfg_.strip_cr;
-            lo.bom_is_content = true;
-            auto da = text::load(sa, lo), db = text::load(sb, lo);
-            budget.charge(16 * (da->lines.size() + db->lines.size()));
-            text::TextDiff d;
-            if (!same_bytes)
-                d = text::diff(*da, *db, cfg_.text);
-            if (cfg_.common.json) {
-                rep.changes = text::changes(*da, *db, d);
-                rep.format_stats = text::metrics(*da, *db, d);
-            }
-            status = d.differs() ? 1 : 0;
-            if (status && cfg_.brief) {
-                out("Files " + name(0, a) + " and " + name(1, b) + " differ\n");
-            } else if (status ||
-                       (cfg_.style == OutputStyle::side_by_side && !cfg_.brief)) { // -y shows equal files too
-                std::string o;
-                if (in_dir) {
-                    o = "diff";
-                    for (auto& t : cfg_.option_tokens)
-                        o += " " + shell_quote(t);
-                    o += " " + a + " " + b + "\n";
-                }
-                auto sa_side = text::diff_side(*da, label(0, a, absent_a));
-                auto sb_side = text::diff_side(*db, label(1, b, absent_b));
-                render(o, cfg_.style, sa_side, sb_side, d.edits, d.ignorable, cfg_.render);
-                out(o);
-            }
-            // ed scripts cannot express a missing final newline: GNU compares as if it were there, then
-            // fails.
-            const bool ed = cfg_.style == OutputStyle::ed || cfg_.style == OutputStyle::forward_ed;
-            if (ed && !cfg_.brief)
-                for (auto [doc, path] : {std::pair{da.get(), &a}, std::pair{db.get(), &b}})
-                    if (doc->missing_newline()) {
-                        diag(c_, *path + ": No newline at end of file");
-                        status = 2;
-                    }
-        }
-        if (!status && cfg_.report_identical)
-            out("Files " + name(0, a) + " and " + name(1, b) + " are identical\n");
-        rep.options["algorithm"] =
-            std::string(cfg_.text.algorithm.algorithm == DiffAlgorithm::myers      ? "myers"
-                        : cfg_.text.algorithm.algorithm == DiffAlgorithm::minimal  ? "minimal"
-                        : cfg_.text.algorithm.algorithm == DiffAlgorithm::patience ? "patience"
-                                                                                   : "histogram");
-        if (cfg_.common.json)
-            reports_.push_back(to_json(rep));
-        return status;
-    }
-
-    // A structured format (SPEC §7.2): normal report, or unified/context/side-by-side over dump lines.
-    int structured(const Format& f, const ByteSource& sa, const ByteSource& sb, Report& rep,
-                   const std::string& a, const std::string& b, bool in_dir, Limits& budget) {
-        if (cfg_.style == OutputStyle::ed || cfg_.style == OutputStyle::forward_ed ||
-            cfg_.style == OutputStyle::rcs)
-            throw Error(ErrorCategory::unsupported, std::string("option '") +
-                                                        (cfg_.style == OutputStyle::ed    ? "-e"
-                                                         : cfg_.style == OutputStyle::rcs ? "-n"
-                                                                                          : "-f") +
-                                                        "' not supported for format '" +
-                                                        std::string(f.info().name) + "'");
-        Context ctx{reg_, budget, 0, cfg_.common.format_options};
-        auto da = f.load(sa, {ctx}), db = f.load(sb, {ctx});
-        auto cs = f.diff(*da, *db, {ctx});
-        // Encoding-only changes leave the files semantically identical (SPEC §12.2).
-        int status =
-            std::any_of(cs.begin(), cs.end(), [](const Change& c) { return c.kind != "encoding"; }) ? 1 : 0;
-        Churn churn;
-        auto *ma = f.envelope(*da), *mb = f.envelope(*db);
-        if (ma && mb)
-            churn = attribute_churn(sa.bytes(), *ma, sb.bytes(), *mb);
-        auto stats = f.stats(*da, *db, cs);
-        auto ia = f.inspect(*da), ib = f.inspect(*db);
-        for (auto [j, path] : {std::pair{&ia, &a}, std::pair{&ib, &b}})
-            if (j->contains("warnings"))
-                for (auto& w : (*j)["warnings"]) {
-                    rep.warnings.push_back({w.value("code", ""), w.value("at", ""), w.value("message", "")});
-                    if (!cfg_.common.json)
-                        diag(c_, "warning: " + *path + ": " + w.value("message", "") + " (" +
-                                     w.value("at", "") + ")");
-                }
-        if (cfg_.common.json) {
-            rep.changes = cs;
-            rep.format_stats = stats;
-            nlohmann::ordered_json env;
-            env["integrity"] = {{"a", ia.value("integrity", nlohmann::ordered_json("not-checked"))},
-                                {"b", ib.value("integrity", nlohmann::ordered_json("not-checked"))}};
-            env["churn"] = churn.to_json();
-            rep.envelope = std::move(env);
-        }
+        DiffRequest rq;
+        rq.limits = cfg_.common.limits;
+        rq.a = {absent_a ? ByteSource::from_memory({}, a) : read_input(a, rq.limits, c_), a};
+        rq.b = {absent_b ? ByteSource::from_memory({}, b) : read_input(b, rq.limits, c_), b};
+        rq.format = cfg_.common.format;
+        rq.force_text = cfg_.force_text;
+        rq.format_options = cfg_.common.format_options;
+        rq.text_load.strip_trailing_cr = cfg_.strip_cr;
+        rq.text_load.bom_is_content = true; // GNU
+        rq.text = cfg_.text;
+        rq.report = cfg_.common.json.has_value();
+        rq.visual = cfg_.visual.has_value();
+        if (!cfg_.brief)
+            rq.render = RenderRequest{cfg_.style,
+                                      cfg_.render,
+                                      {a, b},
+                                      {name(0, a), name(1, b)},
+                                      {label(0, a, absent_a), label(1, b, absent_b)}};
+        auto r = semsplinter::diff(reg_, rq);
+        if (!cfg_.common.json)
+            for (auto& [path, w] : r.warnings)
+                diag(c_, "warning: " + path + ": " + w.message + " (" + w.at + ")");
         if (cfg_.visual)
-            atomic_write(to_path(*cfg_.visual), f.visual(*da, *db, {ctx}));
+            atomic_write(to_path(*cfg_.visual), r.visual);
+        int status = r.differs ? 1 : 0;
         if (status && cfg_.brief) {
             out("Files " + name(0, a) + " and " + name(1, b) + " differ\n");
-        } else if (!cfg_.brief && (!cs.empty() || cfg_.style == OutputStyle::side_by_side)) {
+        } else if (!r.text.empty()) {
             std::string o;
             if (in_dir) {
                 o = "diff";
@@ -369,25 +195,16 @@ private:
                     o += " " + shell_quote(t);
                 o += " " + a + " " + b + "\n";
             }
-            if (cfg_.style == OutputStyle::normal) {
-                o += render_changes(cs);
-                if (churn.total())
-                    o += churn_line(churn, stats);
-            } else {
-                auto dump = [&](const Document& d) {
-                    std::ostringstream os;
-                    f.dump(d, os, {ctx});
-                    auto str = os.str();
-                    auto* p = reinterpret_cast<const std::byte*>(str.data());
-                    return text::load(ByteSource::from_memory({p, p + str.size()}), {});
-                };
-                auto ta = dump(*da), tb = dump(*db);
-                auto d = text::diff(*ta, *tb, cfg_.text);
-                render(o, cfg_.style, text::diff_side(*ta, label(0, a, false)),
-                       text::diff_side(*tb, label(1, b, false)), d.edits, d.ignorable, cfg_.render);
-            }
-            out(o);
+            out(o + r.text);
         }
+        for (auto& e : r.errors) {
+            diag(c_, e);
+            status = 2;
+        }
+        if (!status && cfg_.report_identical)
+            out("Files " + name(0, a) + " and " + name(1, b) + " are identical\n");
+        if (r.report)
+            reports_.push_back(to_json(*r.report));
         return status;
     }
 

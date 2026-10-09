@@ -4,6 +4,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -120,8 +121,15 @@ struct MergeResult {
     std::vector<Conflict> conflicts;
     std::vector<Warning> warnings;
     std::vector<std::byte> visual; // the merge visual when MergeOptions::visual asked for one
+    // Text formats count marker blocks written (GNU/Git exit status); others leave it empty.
+    std::optional<std::size_t> marked;
 
     std::size_t unresolved_conflicts() const noexcept;
+    // What the merging tools report: unresolved conflicts, or more marked blocks when a text merge wrote
+    // markers that are not conflicts (GNU -A brackets identical changes).
+    std::size_t conflict_count() const noexcept {
+        return std::max(marked.value_or(0), unresolved_conflicts());
+    }
 };
 
 } // namespace semsplinter

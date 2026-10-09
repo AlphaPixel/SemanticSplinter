@@ -389,6 +389,30 @@ MergeResult merge(const BinDoc& base, const BinDoc& ours, const BinDoc& theirs, 
 
 namespace {
 
+// --gap (Q-BIN-4): ranges closer than this many bytes are reported as one; 8 by default.
+std::size_t gap_of(const OptionValues& o) {
+    auto it = o.find("gap");
+    return it == o.end() ? 8 : static_cast<std::size_t>(std::stoull(it->second));
+}
+
+class BinaryComparison final : public Comparison {
+public:
+    BinaryComparison(const BinDoc& a, const BinDoc& b, std::size_t gap)
+        : a_(a), b_(b), d_(binary::diff(a, b, gap)) {}
+    bool differs() const override { return !d_.identical(); }
+    ChangeSet changes() const override { return binary::changes(a_, b_, d_); }
+    nlohmann::ordered_json stats() const override { return metrics(a_, b_, d_); }
+    std::vector<std::string> render(std::string& out, const RenderRequest& r) const override {
+        if (differs()) // GNU's message, whatever the output style
+            out += "Binary files " + r.names[0] + " and " + r.names[1] + " differ\n";
+        return {};
+    }
+
+private:
+    const BinDoc &a_, &b_;
+    BinDiff d_;
+};
+
 class BinaryFormat final : public Format {
 public:
     const FormatInfo& info() const override {
@@ -408,9 +432,13 @@ public:
         o.ctx.budget.charge(src.size() / 512 + 64); // chunk table
         return binary::load(std::move(src));
     }
-    ChangeSet diff(const Document& a, const Document& b, const semsplinter::DiffOptions&) const override {
+    ChangeSet diff(const Document& a, const Document& b, const semsplinter::DiffOptions& o) const override {
         auto &x = cast(a), &y = cast(b);
-        return changes(x, y, binary::diff(x, y));
+        return changes(x, y, binary::diff(x, y, gap_of(o.ctx.format_options)));
+    }
+    std::unique_ptr<Comparison> compare(const Document& a, const Document& b,
+                                        const semsplinter::DiffOptions& o) const override {
+        return std::make_unique<BinaryComparison>(cast(a), cast(b), gap_of(o.ctx.format_options));
     }
     MergeResult merge(const Document& base, const Document& ours, const Document& theirs,
                       const semsplinter::MergeOptions& o) const override {

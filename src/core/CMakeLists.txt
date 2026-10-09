@@ -2,6 +2,7 @@ find_package(nlohmann_json CONFIG REQUIRED)
 find_package(xxHash CONFIG REQUIRED)
 
 add_library(semantic-splinter STATIC
+    api.cpp
     basics.cpp
     diff.cpp
     emit.cpp
