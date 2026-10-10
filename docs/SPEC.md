@@ -612,7 +612,7 @@ semsplinter::MergeRequest m{.base = input("b.png"), .ours = input("o.png"), .the
 semsplinter::MergeOutcome mo = semsplinter::merge(reg, m);     // writes atomically; Report, conflict count
 ```
 
-`diff` and `merge` detect the format (inputs of different formats compare and merge as bytes), load through
+`diff` and `merge` detect the format (inputs of different formats compare and merge as text or bytes, §11), load through
 the Format contract, and render through the format's `Comparison` (`Format::compare`): text renders GNU output,
 binary the GNU "differ" line, and every other format its change list and churn line, or unified, context, and
 side-by-side output over its dump lines. Options for text-bearing units (`TextLoadOptions`, `TextDiffOptions`,
@@ -640,7 +640,11 @@ inside a container. `dump` and `inspect` complete the API.
 3. Content probe by all registered formats. Highest confidence wins, and ties are broken by registry order.
 4. `text` if the content looks like text (no NUL bytes in the first 8 KiB, valid UTF-8 or a declared encoding), else `binary`.
 
-If base, ours, and theirs detect as different formats, the merge refuses with "trouble" unless `--format` is given.
+Diff and merge inputs that detect as different formats (for example a `.json` file whose conflict markers make it
+fail to parse, beside clean JSON) are compared and merged as `text` when every input is text underneath (no NUL
+bytes in the first 8 KiB, the step 4 test), with the warning `formats-mixed` naming the formats. Otherwise, and
+whenever any input detects as `binary`, they are compared and merged as `binary`. `--format` or `-a` overrides
+this **[D-54]**.
 
 ---
 

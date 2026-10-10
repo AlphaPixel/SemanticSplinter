@@ -182,7 +182,8 @@ private:
         auto r = semsplinter::diff(reg_, rq);
         if (!cfg_.common.json)
             for (auto& [path, w] : r.warnings)
-                diag(c_, "warning: " + path + ": " + w.message + " (" + w.at + ")");
+                diag(c_, "warning: " + (path.empty() ? "" : path + ": ") + w.message +
+                             (w.at.empty() ? "" : " (" + w.at + ")"));
         if (cfg_.visual)
             atomic_write(to_path(*cfg_.visual), r.visual);
         int status = r.differs ? 1 : 0;

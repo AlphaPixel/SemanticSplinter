@@ -132,7 +132,8 @@ int git_diff(const std::vector<std::string>& args, Host& h, const Registry& reg)
             text ? OutputStyle::unified : OutputStyle::normal, {}, {pos[1], pos[4]}, {la, lb}, {la, lb}};
         auto r = semsplinter::diff(reg, rq);
         for (auto& [p, w] : r.warnings)
-            diag(h, "warning: " + p + ": " + w.message + " (" + w.at + ")");
+            diag(h, "warning: " + (p.empty() ? "" : p + ": ") + w.message +
+                        (w.at.empty() ? "" : " (" + w.at + ")"));
 
         std::string extra;
         if (pos.size() == 9 && !pos[8].empty())

@@ -246,6 +246,27 @@ TEST_CASE("cli png: --max-memory covers the grid merge") {
     CHECK(lim.err_text.find("--max-memory=10000") != std::string::npos);
 }
 
+TEST_CASE("cli: inputs of different text-like formats merge and diff as text (#41)") {
+    Scratch s("mixed");
+    auto base = s.file("base.json", "{\n  \"a\": 1,\n  \"x\": 0,\n  \"b\": 2\n}\n");
+    auto ours = s.file("ours.json", "{\n<<<<<<< HEAD\n  \"a\": 3,\n=======\n  \"a\": 4,\n>>>>>>> other\n"
+                                    "  \"x\": 0,\n  \"b\": 2\n}\n");
+    auto theirs = s.file("theirs.json", "{\n  \"a\": 1,\n  \"x\": 0,\n  \"b\": 5\n}\n");
+    auto out = splinter::cli::from_path(s.dir / "out.json");
+    CaptureConsole m;
+    CHECK(run_cli(m, {"-m", "-o", out, ours, base, theirs}) == 0);
+    CHECK(s.read(out) == "{\n<<<<<<< HEAD\n  \"a\": 3,\n=======\n  \"a\": 4,\n>>>>>>> other\n"
+                         "  \"x\": 0,\n  \"b\": 5\n}\n");
+    CHECK(m.err_text.find(
+              "warning: inputs detect as different formats (json, text, json); comparing as text") !=
+          std::string::npos);
+    CaptureConsole d;
+    CHECK(run_cli(d, {base, ours}) == 1);
+    CHECK(d.out_text.starts_with("2c2,6\n< "));
+    CHECK(d.err_text ==
+          "splinter: warning: inputs detect as different formats (json, text); comparing as text\n");
+}
+
 TEST_CASE("cli: json diff and merge") {
     Scratch s("json");
     auto base = s.file("base.json",

@@ -127,6 +127,18 @@ TEST_CASE("git adapter: git-merge forms, policy, sidecar") {
     fs::current_path(saved);
 }
 
+// #41: a .json side holding conflict markers detects as text, so the merge is a text merge with markers.
+TEST_CASE("git adapter: git-merge of mixed text-like formats marks conflicts as text") {
+    const auto reg = semsplinter::Registry::with_builtin_formats();
+    Dir d;
+    auto o = d.file("o", "{\n  \"a\": 1\n}\n"), b = d.file("b", "{\n  \"a\": 2\n}\n");
+    auto a = d.file("a", "{\n<<<<<<< HEAD\n  \"a\": 3\n=======\n  \"a\": 4\n>>>>>>> x\n}\n");
+    FakeHost h;
+    CHECK(splinter::git::git_merge({o, a, b, "7"}, h, reg) == 1);
+    CHECK(d.read("a").find("<<<<<<< ours\n<<<<<<< HEAD\n") != std::string::npos);
+    CHECK(h.err_text.find("different formats") != std::string::npos);
+}
+
 TEST_CASE("git adapter: git-setup") {
     FakeHost p;
     CHECK(splinter::git::git_setup({"--print", "--program=C:\\Tools\\splinter.exe"}, p) == 0);
