@@ -644,7 +644,7 @@ Diff and merge inputs that detect as different formats (for example a `.json` fi
 fail to parse, beside clean JSON) are compared and merged as `text` when every input is text underneath (no NUL
 bytes in the first 8 KiB, the step 4 test), with the warning `formats-mixed` naming the formats. Otherwise, and
 whenever any input detects as `binary`, they are compared and merged as `binary`. `--format` or `-a` overrides
-this.
+this **[D-54]**.
 
 ---
 
