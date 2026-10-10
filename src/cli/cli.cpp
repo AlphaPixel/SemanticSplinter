@@ -316,30 +316,40 @@ int formats(const std::vector<std::string>& args, Console& c, const Registry& re
     return 0;
 }
 
-// splinter inspect [--json] [--layout] [--format=NAME] FILE (CLI.md §6).
+// splinter inspect [--json[=FILE]] [--layout] [--format=NAME] [--max-*] [format options] FILE (CLI.md §6).
 int inspect(const std::vector<std::string>& args, Console& c, const Registry& reg) {
-    bool json = false, layout = false;
-    std::string format;
-    std::vector<std::string> files;
+    // --layout is a flag here (the merge personalities give it a value); the shared options come from the
+    // diff table, so limits and format options behave as in diff and dump (#52).
+    bool layout = false;
+    std::vector<std::string> rest;
     for (auto& a : args) {
-        if (a == "--json")
-            json = true;
-        else if (a == "--layout")
+        if (a == "--layout")
             layout = true;
-        else if (a.starts_with("--format="))
-            format = a.substr(9);
-        else if (a.size() > 1 && a[0] == '-')
-            throw UsageError("unrecognized option '" + a + "'");
         else
-            files.push_back(a);
+            rest.push_back(a);
     }
+    CommonOptions common;
+    auto tbl = table(Personality::diff, reg);
+    auto p = parse(rest, tbl, c.env("POSIXLY_CORRECT").has_value());
+    for (auto& o : p.opts)
+        if (!common.apply(o, reg))
+            throw UsageError("unrecognized option '" + o.spelling + "'");
+    auto& files = p.operands;
     if (files.size() != 1)
         throw UsageError(files.empty() ? "missing operand after 'inspect'"
                                        : "extra operand '" + files[1] + "'");
-    Limits limits;
-    auto j = semsplinter::inspect(reg, {read_input(files[0], limits, c), files[0]}, format, layout);
-    c.out(json ? j.dump(2) + "\n" : render_inspect(j));
-    return 0;
+    try {
+        auto j = semsplinter::inspect(reg, {read_input(files[0], common.limits, c), files[0]}, common.format,
+                                      layout, common.limits, common.format_options);
+        if (common.json)
+            write_json(c, common.json, j.dump(2));
+        else
+            c.out(render_inspect(j));
+        return 0;
+    } catch (const Error& e) {
+        diag(c, e.what());
+        return exit_code(e.category(), common.extended_exit);
+    }
 }
 
 // The Git adapter's view of the console (D-53: the adapter does not include CLI headers).

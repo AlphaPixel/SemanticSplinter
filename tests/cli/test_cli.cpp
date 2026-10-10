@@ -222,6 +222,13 @@ TEST_CASE("cli png: report, merge, sidecar, visual, inspect") {
     CHECK(v["layout"][0] ==
           nlohmann::json{
               {"offset", 0}, {"length", 8}, {"class", "framing"}, {"unit", "/signature"}, {"layer", ""}});
+    // #52: inspect honours the limits (the image is 40 pixels wide) and rejects options it has no use for.
+    CaptureConsole lim;
+    CHECK(run_cli(lim, {"inspect", "--max-pixels=100", "--exit-codes=extended",
+                        splinter::cli::from_path(s.dir / "v.png")}) == 4);
+    CaptureConsole bad;
+    CHECK(run_cli(bad, {"inspect", "-u", splinter::cli::from_path(s.dir / "v.png")}) == 2);
+    CHECK(bad.err_text.find("unrecognized option '-u'") != std::string::npos);
     CaptureConsole mf;
     CHECK(run_cli(mf, {"merge-file", "-p", po, pb, pt}) == 255);
 }
