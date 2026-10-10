@@ -227,8 +227,11 @@ TEST_CASE("SequenceMerge: keyed chunks with moves, inserts and deletes are pinne
         std::mt19937 rng(seed);
         auto r = [&](std::size_t n) { return static_cast<std::size_t>(rng() % n); };
         std::vector<std::pair<int, int>> base; // (id or -1 for none, content)
-        for (int i = 0; i < 60; ++i)
-            base.emplace_back(r(5) ? i : -1, static_cast<int>(r(3)));
+        for (int i = 0; i < 60; ++i) {
+            // Draws sequenced explicitly (argument evaluation order differs between compilers).
+            auto content = static_cast<int>(r(3));
+            base.emplace_back(r(5) ? i : -1, content);
+        }
         int next = 1000;
         auto edit = [&](std::vector<std::pair<int, int>> v) {
             for (int e = static_cast<int>(r(8)); e > 0; --e) {
