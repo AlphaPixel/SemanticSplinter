@@ -18,8 +18,17 @@ const Format& by_name(const Registry& reg, std::string_view name) {
     return *f;
 }
 
-// The format all inputs share; inputs of different formats (or any binary one) compare as bytes.
-const Format& common_format(const Registry& reg, std::initializer_list<const Input*> in,
+bool plain(const Format& f) {
+    return f.info().name == "text" || f.info().name == "binary";
+}
+
+InputInfo info(std::string role, const Input& i) {
+    return {std::move(role), i.path, hash128(i.source.bytes()), i.source.size()};
+}
+
+} // namespace
+
+const Format& detect_format(const Registry& reg, std::initializer_list<const Input*> in,
                             const std::string& format, bool force_text) {
     if (force_text)
         return by_name(reg, "text");
@@ -33,20 +42,10 @@ const Format& common_format(const Registry& reg, std::initializer_list<const Inp
     return mixed ? by_name(reg, "binary") : *first;
 }
 
-bool plain(const Format& f) {
-    return f.info().name == "text" || f.info().name == "binary";
-}
-
-InputInfo info(std::string role, const Input& i) {
-    return {std::move(role), i.path, hash128(i.source.bytes()), i.source.size()};
-}
-
-} // namespace
-
 DiffResult diff(const Registry& reg, const DiffRequest& rq) {
     Limits budget = rq.limits;
     Context ctx{reg, budget, 0, rq.format_options};
-    const Format& f = common_format(reg, {&rq.a, &rq.b}, rq.format, rq.force_text);
+    const Format& f = detect_format(reg, {&rq.a, &rq.b}, rq.format, rq.force_text);
     if (rq.visual && plain(f))
         throw Error(ErrorCategory::unsupported, "--visual: no visual diff for text or binary files");
     const LoadOptions lo{ctx, rq.text_load};
@@ -99,7 +98,7 @@ DiffResult diff(const Registry& reg, const DiffRequest& rq) {
 MergeOutcome merge(const Registry& reg, const MergeRequest& rq) {
     Limits budget = rq.limits;
     Context ctx{reg, budget, 0, rq.format_options};
-    const Format& f = common_format(reg, {&rq.base, &rq.ours, &rq.theirs}, rq.format, rq.force_text);
+    const Format& f = detect_format(reg, {&rq.base, &rq.ours, &rq.theirs}, rq.format, rq.force_text);
     if (rq.text_only && f.info().name != "text")
         throw Error(ErrorCategory::unsupported, "Cannot merge binary files: " + rq.ours.path);
     if (rq.visual && plain(f))
@@ -107,7 +106,14 @@ MergeOutcome merge(const Registry& reg, const MergeRequest& rq) {
     const LoadOptions lo{ctx, rq.text_load};
     auto db = f.load(rq.base.source, lo), dob = f.load(rq.ours.source, lo), dt = f.load(rq.theirs.source, lo);
     // --conflict=mark on a format without markers: ours plus the merge visual as a sidecar (png.md §6.6).
-    const bool sidecar = rq.conflict.policy == Policy::mark && rq.output;
+    std::filesystem::path sidecar_path;
+    if (rq.conflict.policy == Policy::mark) {
+        if (rq.mark_visual)
+            sidecar_path = *rq.mark_visual;
+        else if (rq.output)
+            sidecar_path = *rq.output, sidecar_path += ".splinter-conflicts.png";
+    }
+    const bool sidecar = !sidecar_path.empty();
     using V = MergeOptions::Visual;
     MergeOptions mo{ctx, rq.conflict, rq.labels,
                     rq.visual ? V::always
@@ -126,11 +132,8 @@ MergeOutcome merge(const Registry& reg, const MergeRequest& rq) {
         atomic_write(*rq.output, out.bytes);
     if (rq.visual)
         atomic_write(*rq.visual, r.visual);
-    if (sidecar && out.conflicts && !r.visual.empty()) {
-        auto p = *rq.output;
-        p += ".splinter-conflicts.png";
-        atomic_write(p, r.visual);
-    }
+    if (sidecar && out.conflicts && !r.visual.empty())
+        atomic_write(sidecar_path, r.visual);
 
     Report& rep = out.report;
     rep.mode = "merge";

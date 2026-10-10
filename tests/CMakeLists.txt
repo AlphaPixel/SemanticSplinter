@@ -15,9 +15,13 @@ add_executable(semsplinter-tests
     formats/test_binary.cpp
     formats/test_png.cpp
     formats/test_text.cpp
+    git/test_adapter.cpp
+    git/test_git.cpp
 )
 target_link_libraries(semsplinter-tests PRIVATE splinter-cli Catch2::Catch2WithMain)
-target_compile_definitions(semsplinter-tests PRIVATE SEMSPLINTER_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+target_compile_definitions(semsplinter-tests PRIVATE SEMSPLINTER_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
+    SPLINTER_EXE="$<TARGET_FILE:splinter>") # the driver the [git] tests configure
+add_dependencies(semsplinter-tests splinter)
 catch_discover_tests(semsplinter-tests)
 
 add_test(NAME cli.version COMMAND splinter --version)

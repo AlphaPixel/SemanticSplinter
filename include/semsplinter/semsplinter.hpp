@@ -11,6 +11,7 @@
 
 #include <array>
 #include <filesystem>
+#include <initializer_list>
 #include <optional>
 #include <string>
 #include <utility>
@@ -22,6 +23,10 @@ struct Input {
     ByteSource source;
     std::string path; // shown in reports and messages; its extension also guides detection
 };
+
+// The format all inputs share (SPEC §11). Inputs of different formats, or any binary one, give "binary".
+const Format& detect_format(const Registry&, std::initializer_list<const Input*>,
+                            const std::string& format = {}, bool force_text = false);
 
 struct DiffRequest {
     Input a, b;
@@ -63,6 +68,9 @@ struct MergeRequest {
     std::string output_name = "-";                       // the result path recorded in the report
     std::optional<std::filesystem::path> visual;         // --visual
     std::optional<std::filesystem::path> conflicts_file; // --conflicts: the JSON report
+    // Where --conflict=mark puts the merge visual of a format without markers: by default
+    // <output>.splinter-conflicts.png; an empty path writes none.
+    std::optional<std::filesystem::path> mark_visual;
 };
 
 struct MergeOutcome {
@@ -73,8 +81,8 @@ struct MergeOutcome {
     Report report;
 };
 
-// With --conflict=mark and an output path, a format without in-band markers also writes its merge
-// visual next to the output as <output>.splinter-conflicts.png (png.md §6.6).
+// With --conflict=mark, a format without in-band markers also writes its merge visual (png.md §6.6), next to
+// the output unless MergeRequest::mark_visual says otherwise.
 MergeOutcome merge(const Registry&, const MergeRequest&);
 
 // The canonical dump (textconv).

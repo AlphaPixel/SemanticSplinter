@@ -9,13 +9,14 @@ It works standalone and as a Git textconv, external diff driver, and merge drive
   `patch`, and RCS `merge` / `git merge-file`.
 - **License:** MIT ([LICENSE](LICENSE)).
 
-**Status:** specification complete for v1, and all v1 decisions are settled (2026-10-08). Phases 0–3 of
+**Status:** specification complete for v1, and all v1 decisions are settled (2026-10-08). Phases 0–4 of
 [docs/PLAN.md](docs/PLAN.md) are done: the build skeleton, the format-neutral core (data model, hashing, I/O,
 merge primitives, conflict policy, envelope map, fix-up Emitter, JSON report), the text and binary formats
-with the diff, diff3, merge, and merge-file personalities, and PNG (region diff, three-way pixel and metadata
-merge, heatmaps, `inspect --layout`). On text, `splinter` reproduces GNU diff 3.12, GNU diff3, and
-`git merge-file` byte for byte on the golden corpus in `tests/golden/`. Patch mode, Git drivers, and the
-other structured formats come in later phases.
+with the diff, diff3, merge, and merge-file personalities, PNG (region diff, three-way pixel and metadata
+merge, heatmaps, `inspect --layout`), the library API, and the Git drivers (`git-setup`, `git-diff`,
+`git-merge`, Git LFS). On text, `splinter` reproduces GNU diff 3.12, GNU diff3, and
+`git merge-file` byte for byte on the golden corpus in `tests/golden/`. Patch mode and the other structured
+formats come in later phases.
 
 ## Why
 

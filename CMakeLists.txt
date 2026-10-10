@@ -27,6 +27,7 @@ endif()
 
 add_subdirectory(src/core)
 add_subdirectory(src/formats)
+add_subdirectory(src/git)
 add_subdirectory(src/cli)
 
 if(SEMSPLINTER_BUILD_TESTS)
