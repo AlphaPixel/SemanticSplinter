@@ -224,3 +224,43 @@ TEST_CASE("cli png: report, merge, sidecar, visual, inspect") {
     CaptureConsole mf;
     CHECK(run_cli(mf, {"merge-file", "-p", po, pb, pt}) == 255);
 }
+
+TEST_CASE("cli: json diff and merge") {
+    Scratch s("json");
+    auto base = s.file("base.json",
+                       "{\n  \"name\": \"splinter\",\n  \"version\": \"0.1.0\",\n  \"tags\": [\"a\"]\n}\n");
+    auto ours = s.file("ours.json",
+                       "{\n  \"name\": \"splinter\",\n  \"version\": \"0.2.0\",\n  \"tags\": [\"a\"]\n}\n");
+    auto theirs =
+        s.file("theirs.json",
+               "{\n  \"name\": \"splinter\",\n  \"version\": \"0.1.0\",\n  \"tags\": [\"a\", \"b\"]\n}\n");
+    auto clash = s.file("clash.json", "{\"name\": \"splinter\", \"version\": \"0.3.0\", \"tags\": [\"a\"]}");
+    CaptureConsole d;
+    CHECK(run_cli(d, {base, ours}) == 1);
+    CHECK(d.out_text == "~ /version \"0.1.0\" -> \"0.2.0\"\n");
+    CaptureConsole u;
+    CHECK(run_cli(u, {"-u", "--label", "a", "--label", "b", base, ours}) == 1);
+    CHECK(u.out_text == "--- a\n+++ b\n@@ -1,3 +1,3 @@\n /name = \"splinter\"\n /tags/0 = \"a\"\n"
+                        "-/version = \"0.1.0\"\n+/version = \"0.2.0\"\n");
+    CaptureConsole js;
+    CHECK(run_cli(js, {"--json", base, theirs}) == 1);
+    auto j = nlohmann::json::parse(js.out_text);
+    CHECK(j["format"] == "json");
+    CHECK(j["changes"][0]["at"] == "/tags/1");
+    CaptureConsole dump;
+    CHECK(run_cli(dump, {"dump", base}) == 0);
+    CHECK(dump.out_text == "/name = \"splinter\"\n/tags/0 = \"a\"\n/version = \"0.1.0\"\n");
+
+    auto out = splinter::cli::from_path(s.dir / "out.json");
+    CaptureConsole m;
+    CHECK(run_cli(m, {"-m", "-o", out, ours, base, theirs}) == 0);
+    CHECK(s.read(out) ==
+          "{\n  \"name\": \"splinter\",\n  \"version\": \"0.2.0\",\n  \"tags\": [\"a\", \"b\"]\n}\n");
+    CaptureConsole x;
+    auto report = splinter::cli::from_path(s.dir / "r.json");
+    CHECK(run_cli(x, {"-m", "--json=" + report, "-o", out, ours, base, clash}) == 1);
+    CHECK(s.read(out) == s.read(ours));
+    auto r = nlohmann::json::parse(s.read(report));
+    CHECK(r["conflicts"][0]["at"] == "/version");
+    CHECK(r["conflicts"][0]["reason"] == "both-modified");
+}

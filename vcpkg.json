@@ -21,6 +21,9 @@
         "libpng",
         "zlib"
       ]
+    },
+    "json": {
+      "description": "JSON format module"
     }
   }
 }

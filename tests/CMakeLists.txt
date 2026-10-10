@@ -14,6 +14,7 @@ add_executable(semsplinter-tests
     core/test_version.cpp
     formats/test_api.cpp
     formats/test_binary.cpp
+    formats/test_json.cpp
     formats/test_png.cpp
     formats/test_text.cpp
     git/test_adapter.cpp
