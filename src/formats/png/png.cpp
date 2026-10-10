@@ -328,9 +328,11 @@ Opts options(const OptionValues& o) {
     return r;
 }
 
-// Save timestamps (png.md §6.2): tIME, and the ISO 8601 date:create/modify/timestamp text that ImageMagick writes.
+// Save timestamps (png.md §6.2): tIME, and the ISO 8601 date:create/modify/timestamp text that ImageMagick
+// writes.
 bool volatile_key(std::string_view key) {
-    return key == "/chunks/tIME" || key.starts_with("/chunks/tEXt:date:") || key.starts_with("/chunks/iTXt:date:");
+    return key == "/chunks/tIME" || key.starts_with("/chunks/tEXt:date:") ||
+           key.starts_with("/chunks/iTXt:date:");
 }
 
 bool ignored(const std::string& key, const Opts& o) {
@@ -425,6 +427,34 @@ private:
     std::array<const Raster*, 3> ptr_{};
 };
 
+constexpr const char* kEncodingAttrs[] = {"color_type", "bit_depth", "interlace"};
+constexpr const char* kColorTypes[] = {"gray", "?", "rgb", "index", "graya", "?", "rgba"};
+
+// The text of /encoding/NAME, and back.
+std::string encoding_attr(const Encoding& e, std::string_view name) {
+    if (name == "color_type")
+        return e.color_type < 7 ? kColorTypes[e.color_type] : "?";
+    if (name == "bit_depth")
+        return std::to_string(e.bit_depth);
+    return e.interlace ? "adam7" : "none";
+}
+
+void set_encoding_attr(Encoding& e, std::string_view name, std::string_view v) {
+    if (name == "color_type") {
+        for (std::uint8_t k = 0; k < 7; ++k)
+            if (v == kColorTypes[k] && v != "?")
+                return void(e.color_type = k);
+    } else if (name == "bit_depth") {
+        for (std::uint8_t d :
+             {std::uint8_t{1}, std::uint8_t{2}, std::uint8_t{4}, std::uint8_t{8}, std::uint8_t{16}})
+            if (v == std::to_string(d))
+                return void(e.bit_depth = d);
+    } else if (name == "interlace" && (v == "adam7" || v == "none")) {
+        return void(e.interlace = v == "adam7");
+    }
+    bad("patch: bad value '" + std::string(v) + "' for /encoding/" + std::string(name));
+}
+
 std::string dims(const PngDoc& d) {
     return std::to_string(d.width) + "x" + std::to_string(d.height);
 }
@@ -458,17 +488,14 @@ Change region_change(const Raster& a, const Raster& b, const GridRegion& r, Side
 // Encoding attributes, shape, and ancillary keys of b against a.
 void meta_changes(const PngDoc& a, const PngDoc& b, const Raster& ra, const Raster& rb, Side side,
                   const Opts& opt, ChangeSet& out) {
-    static const char* ct_names[] = {"gray", "?", "rgb", "index", "graya", "?", "rgba"};
-    auto field = [&](const char* name, std::string before, std::string after) {
+    for (const char* name : kEncodingAttrs) {
+        auto before = encoding_attr(a.enc, name), after = encoding_attr(b.enc, name);
         if (before == after)
-            return;
+            continue;
         auto c = make_change(side, Op::update, {std::string("/encoding/") + name}, "encoding");
         c.before.text = std::move(before), c.after.text = std::move(after);
         out.push_back(std::move(c));
-    };
-    field("color_type", ct_names[a.enc.color_type], ct_names[b.enc.color_type]);
-    field("bit_depth", std::to_string(a.enc.bit_depth), std::to_string(b.enc.bit_depth));
-    field("interlace", a.enc.interlace ? "adam7" : "none", b.enc.interlace ? "adam7" : "none");
+    }
     if (a.width != b.width || a.height != b.height) {
         auto c = make_change(side, Op::update, {"/shape"}, "shape");
         c.before.text = dims(a), c.after.text = dims(b);
@@ -589,6 +616,52 @@ bool before_idat(const PngDoc& d, std::size_t chunk) {
         if (d.chunks[i].type == "IDAT")
             return false;
     return true;
+}
+
+// A generated IDAT stream in `lay`'s chunk size: all but the last chunk share it; one chunk stays one chunk.
+void push_idat(std::vector<Item>& items, const std::vector<std::byte>& stream, const PngDoc& lay) {
+    std::size_t n = 0, size = 0;
+    for (auto& x : lay.chunks)
+        if (x.type == "IDAT")
+            size = n++ ? size : x.length;
+    const std::size_t chunk = n > 1 && size ? size : n == 1 ? std::size_t{0x7FFFFFFF} : 65536;
+    for (std::size_t at = 0; at < stream.size(); at += chunk)
+        items.push_back({"IDAT",
+                         nullptr,
+                         0,
+                         {stream.begin() + static_cast<long>(at),
+                          stream.begin() + static_cast<long>(std::min(stream.size(), at + chunk))},
+                         false});
+}
+
+// Ranks each item by the region it sits in, clamped to its legal class, sorts stably, and writes the file.
+std::vector<std::byte> write_items(std::vector<Item> items, bool repair) {
+    const bool has_plte =
+        std::any_of(items.begin(), items.end(), [](const Item& x) { return x.type == "PLTE"; });
+    int region = 1;
+    for (auto& it : items) {
+        if (it.type == "PLTE")
+            region = 3;
+        else if (it.type == "IDAT")
+            region = 5;
+        auto [lo, hi] = rank_range(it.type, has_plte, it.pre_idat);
+        it.rank = std::clamp(it.type == "IHDR"   ? 0
+                             : it.type == "IDAT" ? 4
+                             : it.type == "IEND" ? 6
+                             : it.type == "PLTE" ? 2
+                                                 : region,
+                             lo, hi);
+    }
+    std::stable_sort(items.begin(), items.end(),
+                     [](const Item& a, const Item& b) { return a.rank < b.rank; });
+    Writer w;
+    for (auto& it : items) {
+        if (it.doc)
+            w.raw(*it.doc, it.doc->chunks[it.chunk], repair);
+        else
+            w.chunk(it.type, it.data);
+    }
+    return w.finish();
 }
 
 using KeyList = std::vector<std::pair<std::string, Hash128>>;
@@ -723,20 +796,7 @@ std::vector<std::byte> write_plan(const Plan& p, const Opts& opt, std::vector<Wa
                         items.push_back({"IDAT", pix_src, j, {}, false});
                 continue;
             }
-            // ours' IDAT chunk size: all but the last chunk share it; one chunk stays one chunk.
-            std::size_t n = 0, size = 0;
-            for (auto& x : lay.chunks)
-                if (x.type == "IDAT")
-                    size = n++ ? size : x.length;
-            const std::size_t chunk = n > 1 && size ? size : n == 1 ? std::size_t{0x7FFFFFFF} : 65536;
-            for (std::size_t at = 0; at < img.stream.size(); at += chunk)
-                items.push_back(
-                    {"IDAT",
-                     nullptr,
-                     0,
-                     {img.stream.begin() + static_cast<long>(at),
-                      img.stream.begin() + static_cast<long>(std::min(img.stream.size(), at + chunk))},
-                     false});
+            push_idat(items, img.stream, lay);
         } else if (t == "IEND") {
             items.push_back({t, &lay, i, {}, false});
         } else if (kAnimation.count(t)) {
@@ -802,33 +862,200 @@ std::vector<std::byte> write_plan(const Plan& p, const Opts& opt, std::vector<Wa
         }
         fill("hIST", generated("hIST", h));
     }
-    // Ranks: the region an item sits in, clamped to its legal class; then a stable sort.
-    const bool has_plte =
-        std::any_of(items.begin(), items.end(), [](const Item& x) { return x.type == "PLTE"; });
-    int region = 1;
-    for (auto& it : items) {
-        if (it.type == "PLTE")
-            region = 3;
-        else if (it.type == "IDAT")
-            region = 5;
-        auto [lo, hi] = rank_range(it.type, has_plte, it.pre_idat);
-        it.rank = std::clamp(it.type == "IHDR"   ? 0
-                             : it.type == "IDAT" ? 4
-                             : it.type == "IEND" ? 6
-                             : it.type == "PLTE" ? 2
-                                                 : region,
-                             lo, hi);
+    return write_items(std::move(items), opt.repair);
+}
+
+// ---- Patch payloads (SPEC §6) ----
+// /pixels#rect=...: a storage flag (1 = 16-bit), then the rectangle's cells row by row, as 8-bit or
+// big-endian 16-bit RGBA. /shape: width and height (big-endian u32), then the same for the whole image.
+// /encoding/NAME: the attribute's text. Ancillary keys: each chunk as length (u32), type, and data.
+
+void put32(std::vector<std::byte>& o, std::uint32_t v) {
+    for (int s = 24; s >= 0; s -= 8)
+        o.push_back(std::byte((v >> s) & 0xFF));
+}
+
+void put_cells(std::vector<std::byte>& o, const Raster& r, const Rect& rc) {
+    o.push_back(std::byte(r.wide));
+    for (auto y = rc.y; y < rc.y + rc.h; ++y)
+        for (auto x = rc.x; x < rc.x + rc.w; ++x)
+            for (auto v : r.get(y * r.width + x)) {
+                if (r.wide)
+                    o.push_back(std::byte(v >> 8));
+                o.push_back(std::byte(r.wide ? v & 0xFF : v >> 8));
+            }
+}
+
+// Reads put_cells() data at `at` into `r` (widened if the payload is 16-bit).
+void get_cells(std::span<const std::byte> v, std::size_t at, Raster& r, const Rect& rc) {
+    if (at >= v.size())
+        bad("patch: truncated pixel payload");
+    const bool wide = v[at++] != std::byte{0};
+    if (v.size() - at != rc.w * rc.h * (wide ? 8 : 4))
+        bad("patch: pixel payload size does not match " + to_string(Region{rc}));
+    if (wide && !r.wide)
+        r = r.widened();
+    for (auto y = rc.y; y < rc.y + rc.h; ++y)
+        for (auto x = rc.x; x < rc.x + rc.w; ++x) {
+            raster::Cell c;
+            for (auto& ch : c) {
+                ch = wide ? static_cast<std::uint16_t>(std::to_integer<unsigned>(v[at]) << 8 |
+                                                       std::to_integer<unsigned>(v[at + 1]))
+                          : static_cast<std::uint16_t>(std::to_integer<unsigned>(v[at]) * 257);
+                at += wide ? 2 : 1;
+            }
+            r.set(y * r.width + x, c);
+        }
+}
+
+std::optional<std::vector<std::byte>> unit_payload(const PngDoc& d, const Address& at) {
+    std::vector<std::byte> o;
+    if (at.path == "/pixels") {
+        auto* rc = at.region ? std::get_if<Rect>(&*at.region) : nullptr;
+        if (!rc || rc->x + rc->w > d.width || rc->y + rc->h > d.height)
+            return std::nullopt;
+        put_cells(o, d.pixels, *rc);
+    } else if (at.path == "/shape") {
+        put32(o, d.width), put32(o, d.height);
+        put_cells(o, d.pixels, {0, 0, d.width, d.height});
+    } else if (at.path.starts_with("/encoding/")) {
+        auto s = encoding_attr(d.enc, std::string_view(at.path).substr(10));
+        auto b = as_bytes(s);
+        o.assign(b.begin(), b.end());
+    } else if (at.path == "/animation") {
+        throw Error(ErrorCategory::unsupported, "PNG: patches of APNG animation chunks are not supported");
+    } else {
+        auto* e = entry(d, at.path);
+        if (!e)
+            return std::nullopt;
+        for (auto i : e->chunks) {
+            auto& c = d.chunks[i];
+            put32(o, c.length);
+            auto t = as_bytes(c.type);
+            o.insert(o.end(), t.begin(), t.end());
+            auto data = d.data(c);
+            o.insert(o.end(), data.begin(), data.end());
+        }
     }
-    std::stable_sort(items.begin(), items.end(),
-                     [](const Item& a, const Item& b) { return a.rank < b.rank; });
-    Writer w;
-    for (auto& it : items) {
-        if (it.doc)
-            w.raw(*it.doc, it.doc->chunks[it.chunk], opt.repair);
-        else
-            w.chunk(it.type, it.data);
+    return o;
+}
+
+// `t` with the units set, as a PNG file: pixels and encoding re-encoded when they change, replaced chunks at
+// the position of the chunk they replace, new ones ranked into their legal place (png.md §7.2).
+std::vector<std::byte> implant_units(const PngDoc& t, std::span<const UnitValue> units, const Opts& opt,
+                                     std::vector<Warning>& warnings) {
+    Raster px = t.pixels;
+    Encoding enc = t.enc;
+    std::map<std::string, const std::vector<std::byte>*> keys; // null: removed
+    for (auto& u : units) {
+        const auto& p = u.at.path;
+        if (p == "/pixels" || p == "/shape") {
+            if (!u.value)
+                bad("patch: " + p + " cannot be removed");
+            std::span<const std::byte> v(*u.value);
+            if (p == "/shape") {
+                if (v.size() < 9)
+                    bad("patch: truncated /shape payload");
+                const std::uint32_t w = be32(v, 0), h = be32(v, 4);
+                if (!w || !h || std::uint64_t{w} * h > (std::uint64_t{1} << 40))
+                    bad("patch: bad /shape size");
+                px = Raster(w, h, px.wide);
+                get_cells(v, 8, px, {0, 0, w, h});
+            } else {
+                auto* rc = u.at.region ? std::get_if<Rect>(&*u.at.region) : nullptr;
+                if (!rc || rc->x + rc->w > px.width || rc->y + rc->h > px.height)
+                    bad("patch: " + u.at.to_string() + " lies outside the " + std::to_string(px.width) + "x" +
+                        std::to_string(px.height) + " image");
+                get_cells(v, 0, px, *rc);
+            }
+        } else if (p.starts_with("/encoding/")) {
+            if (!u.value)
+                bad("patch: " + p + " cannot be removed");
+            set_encoding_attr(enc, std::string_view(p).substr(10), str(*u.value));
+        } else if (p == "/animation") {
+            throw Error(ErrorCategory::unsupported,
+                        "PNG: patches of APNG animation chunks are not supported");
+        } else {
+            keys[p] = u.value;
+        }
     }
-    return w.finish();
+    auto chunks_of = [&](const std::vector<std::byte>& v, bool pre_idat) {
+        std::vector<Item> out;
+        for (std::size_t at = 0; at < v.size();) {
+            if (v.size() - at < 8)
+                bad("patch: truncated chunk payload");
+            const std::uint32_t n = be32(v, at);
+            if (v.size() - at - 8 < n)
+                bad("patch: truncated chunk payload");
+            std::string type = str(std::span(v).subspan(at + 4, 4));
+            if (kCritical.count(type) || type == "tRNS" || type == "hIST")
+                bad("patch: a key payload cannot carry " + type);
+            out.push_back({type,
+                           nullptr,
+                           0,
+                           {v.begin() + static_cast<long>(at + 8), v.begin() + static_cast<long>(at + 8 + n)},
+                           pre_idat});
+            at += 8 + n;
+        }
+        return out;
+    };
+
+    const bool reencode = px != t.pixels || enc != t.enc;
+    Image img;
+    if (reencode) {
+        Source src = source_of(t);
+        img = encode(px, enc, &src, warnings);
+        warnings.push_back({"encoding-reencoded", "/pixels",
+                            std::string("IDAT stream re-encoded with ") +
+                                (img.params.inferred ? "inferred" : "fallback") + " zlib settings"});
+    }
+    std::vector<Item> items;
+    std::set<std::string> placed;
+    bool idat_done = false, had_hist = false;
+    for (std::size_t i = 0; i < t.chunks.size(); ++i) {
+        const std::string& type = t.chunks[i].type;
+        had_hist |= type == "hIST";
+        if (reencode &&
+            (type == "IHDR" || type == "PLTE" || type == "tRNS" || type == "hIST" || type == "IDAT")) {
+            if (type == "IHDR") {
+                for (auto [ty, d] : {std::pair{"IHDR", &img.ihdr}, std::pair{"PLTE", &img.plte},
+                                     std::pair{"tRNS", &img.trns}})
+                    if (!d->empty())
+                        items.push_back({ty, nullptr, 0, *d});
+            } else if (type == "IDAT" && !idat_done) {
+                idat_done = true;
+                push_idat(items, img.stream, t);
+            }
+            continue;
+        }
+        const Entry* owner = nullptr;
+        for (auto& e : t.entries)
+            if (std::find(e.chunks.begin(), e.chunks.end(), i) != e.chunks.end())
+                owner = &e;
+        if (owner && keys.count(owner->key)) {
+            if (i == owner->chunks[0] && keys[owner->key])
+                for (auto& it : chunks_of(*keys[owner->key], before_idat(t, i)))
+                    items.push_back(std::move(it));
+            placed.insert(owner->key);
+            continue;
+        }
+        items.push_back({type, &t, i, {}, before_idat(t, i)});
+    }
+    if (reencode && had_hist && img.enc.color_type == 3) {
+        std::vector<std::byte> h;
+        for (auto x : img.hist)
+            h.push_back(std::byte(x >> 8)), h.push_back(std::byte(x & 0xFF));
+        items.push_back({"hIST", nullptr, 0, h});
+        warnings.push_back({"derived-regenerated", "/hist", "hIST recomputed from the patched pixels"});
+    }
+    auto iend = std::find_if(items.begin(), items.end(), [](const Item& x) { return x.type == "IEND"; });
+    std::vector<Item> added;
+    for (auto& [k, v] : keys)
+        if (v && !placed.count(k))
+            for (auto& it : chunks_of(*v, true))
+                added.push_back(std::move(it));
+    items.insert(iend, std::make_move_iterator(added.begin()), std::make_move_iterator(added.end()));
+    return write_items(std::move(items), opt.repair);
 }
 
 std::vector<std::byte> write_image(const Raster&, Encoding, const DeflateParams&);
@@ -841,7 +1068,7 @@ public:
             "png",
             "Portable Network Graphics (APNG: default image)",
             {".png", ".apng"},
-            {true, true, false, true, true},
+            {true, true, true, true, true},
             {{"png-mode", OptionSpec::Arg::required, "pixel domain: auto or rgba (index: v1.1)"},
              {"alpha-zero-equal", OptionSpec::Arg::none, "fully transparent pixels compare equal"},
              {"png-ignore-chunks", OptionSpec::Arg::required,
@@ -898,6 +1125,20 @@ public:
     }
 
     const EnvelopeMap* envelope(const Document& d) const override { return &doc(d).map; }
+
+    std::optional<std::vector<std::byte>> payload(const Document& d, const Address& at) const override {
+        return unit_payload(doc(d), at);
+    }
+
+    std::unique_ptr<Document> implant(const Document& t, std::span<const UnitValue> units,
+                                      const LoadOptions& o) const override {
+        const Opts opt = options(o.ctx.format_options);
+        std::vector<Warning> warnings;
+        auto bytes = implant_units(doc(t), units, opt, warnings);
+        auto d = load_doc(ByteSource::from_memory(std::move(bytes), doc(t).src.name()), o.ctx.budget, opt);
+        d->warnings.insert(d->warnings.end(), warnings.begin(), warnings.end());
+        return d;
+    }
 
     std::vector<std::byte> visual(const Document& a, const Document& b, const DiffOptions& o) const override {
         auto& pa = doc(a);

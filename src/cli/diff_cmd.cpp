@@ -18,7 +18,7 @@ namespace {
 struct Config {
     OutputStyle style = OutputStyle::normal;
     bool style_set = false;
-    bool brief = false, report_identical = false, force_text = false, dump = false;
+    bool brief = false, report_identical = false, force_text = false, dump = false, patch = false;
     RenderOptions render;
     Palette palette;
     std::string color = "never";
@@ -172,6 +172,7 @@ private:
         rq.text = cfg_.text;
         rq.report = cfg_.common.json.has_value();
         rq.visual = cfg_.visual.has_value();
+        rq.patch = cfg_.patch;
         if (!cfg_.brief)
             rq.render = RenderRequest{cfg_.style,
                                       cfg_.render,
@@ -187,7 +188,7 @@ private:
         int status = r.differs ? 1 : 0;
         if (status && cfg_.brief) {
             out("Files " + name(0, a) + " and " + name(1, b) + " differ\n");
-        } else if (!r.text.empty()) {
+        } else if (!r.text.empty() || !r.patch.empty()) {
             std::string o;
             if (in_dir) {
                 o = "diff";
@@ -195,7 +196,7 @@ private:
                     o += " " + shell_quote(t);
                 o += " " + a + " " + b + "\n";
             }
-            out(o + r.text);
+            out(o + (r.patch.empty() ? r.text : r.patch));
         }
         for (auto& e : r.errors) {
             diag(c_, e);
@@ -474,8 +475,8 @@ int run_diff(const std::vector<std::string>& args, Console& c, const Registry& r
                 cfg.strip_cr = true;
                 break;
             case o_binary:
-                throw Error(ErrorCategory::unsupported,
-                            "--binary (patch output) is not implemented yet (Phase 5)");
+                cfg.patch = true; // SPEC §6: an applicable patch (unified for text)
+                break;
             case o_ifdef:
             case o_group_format:
             case o_line_format:
@@ -547,6 +548,14 @@ int run_diff(const std::vector<std::string>& args, Console& c, const Registry& r
     } catch (const Error& e) {
         diag(c, e.what());
         return exit_code(e.category(), cfg.common.extended_exit);
+    }
+    if (cfg.patch) {
+        if (cfg.common.json) {
+            diag(c, "--binary --json (a JSON patch) is not implemented yet");
+            return exit_code(ErrorCategory::unsupported, cfg.common.extended_exit);
+        }
+        if (!cfg.style_set)
+            cfg.style = OutputStyle::unified;
     }
     if (context)
         cfg.render.context = (cfg.style == OutputStyle::context || cfg.style == OutputStyle::unified) &&

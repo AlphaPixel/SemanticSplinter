@@ -256,6 +256,8 @@ constexpr std::string_view kHelp =
        splinter -3 [OPTION]... MINE OLDER YOURS   three-way report (GNU diff3)
        splinter merge [OPTION]... FILE1 FILE2 FILE3   merge into FILE1 (RCS merge)
        splinter merge-file [OPTION]... CURRENT BASE OTHER   (git merge-file)
+       splinter -P [OPTION]... [ORIGFILE [PATCHFILE]]   apply a patch (GNU patch)
+       splinter --binary FILE1 FILE2 > PATCH   applicable patch (any format)
        splinter dump FILE | splinter inspect [--json] [--layout] FILE
        splinter git-setup [--print|--local|--global]   Git drivers (git-diff, git-merge)
        splinter formats [--json] | splinter version
@@ -358,11 +360,6 @@ private:
     Console& c_;
 };
 
-int not_yet(Console& c, std::string_view what, std::string_view phase) {
-    diag(c, std::string(what) + " is not implemented yet (" + std::string(phase) + ")");
-    return 2;
-}
-
 } // namespace
 
 int run(std::vector<std::string> args, Console& c) {
@@ -394,7 +391,7 @@ int run(std::vector<std::string> args, Console& c) {
         if (base.find("merge") != std::string::npos)
             return run_merge(rest, c, reg);
         if (base.find("patch") != std::string::npos)
-            return not_yet(c, "patch mode", "Phase 5");
+            return run_patch(rest, c, reg);
         if (base.find("diff") == std::string::npos && !rest.empty()) {
             // Rule 2: a subcommand word. Rule 3: a mode flag.
             const std::string first = rest[0];
@@ -410,7 +407,7 @@ int run(std::vector<std::string> args, Console& c) {
             if (first == "merge-file")
                 return run_merge_file(tail, c, reg);
             if (first == "patch" || first == "-P" || first == "--patch")
-                return not_yet(c, "patch mode", "Phase 5");
+                return run_patch(tail, c, reg);
             if (first == "dump") {
                 tail.insert(tail.begin(), "--dump");
                 return run_diff(tail, c, reg);

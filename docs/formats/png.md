@@ -285,20 +285,25 @@ was rejected because it invents pixels neither side made.
 
 ### 6.7 Patch payloads
 
-For each `/pixels#rect=` hunk: a binary record, then compressed by the envelope (zstd or zlib):
+Each hunk carries the unit's value before and after (SPEC §6), compressed by the envelope:
 
 ```text
-u32 magic 'SPPX', u8 version=1, u8 mode (0 rgba16, 1 rgba8, 2 index8)
-u32 x, y, w, h
-mask: w*h bits, row-major, LSB-first, rows padded to bytes
-before: samples for masked cells only, row-major
-after:  samples for masked cells only, row-major
+/pixels#rect=x,y,w,h   u8 storage (0: 8-bit, 1: 16-bit), then the rect's cells row by row as RGBA,
+                       8-bit or big-endian 16-bit
+/shape                 u32 width, u32 height (big-endian), then the whole image as above
+/encoding/NAME         the attribute's text: rgba, 8, adam7, ...
+ancillary keys         each chunk of the key: u32 length, type, data (raw, so tEXt stays tEXt)
 ```
 
-Applying: `merge(base = before-view, ours = target, theirs = after-view)` restricted to the rect. With
-fuzz F > 0, if the before-cells do not match at (x,y), the applier searches offsets within ±F pixels
-(raster order, first exact match wins, deterministic) and reports the offset. A mismatch is a reject
-(= conflict). Metadata hunks use the generic text/opaque payloads.
+The rect is the region's bounding box, without a cell mask: cells inside it that the region does not change
+have equal before and after values, so the merge below keeps the target's value there.
+
+Applying (SPEC §4): with an exact base hash, the after values are set directly (`implant`). Otherwise
+`merge(base = target with the before values, ours = target, theirs = target with the after values)`; a hunk that
+overlaps an unresolved conflict is a reject and the target keeps its pixels. Pixels or encoding that change are
+re-encoded with the target's filters and inferred zlib settings; replaced chunks take the place of the chunk they
+replace, and new chunks are ranked into their legal position (§7.2). `/animation` hunks are not supported (exit 3).
+The fuzzy offset search (locating a rect at ±F pixels) is v1.1.
 
 ## 7. Serialization and preservation
 
@@ -487,7 +492,9 @@ and promotion; per-row filter reuse and zlib parameter inference; `hIST` regener
 reload validation; color-dependency upgrade (v1.1); ΔE00 in sRGB; dump; heatmap and merge visuals and the
 `--conflict=mark` sidecar; EnvelopeMap, churn line, and `inspect --layout`.
 
-Not yet: indexed mode (`--png-mode=index` exits 3), patch payloads (Phase 5), the Git driver (Phase 4), ΔE through
+Phase 4 added the Git drivers and Phase 5 the patch payloads (§6.7).
+
+Not yet: indexed mode (`--png-mode=index` exits 3), the fuzzy patch offset search (v1.1), ΔE through
 lcms2 (`png-icc`), the `iCCP` description tag, `requantized`, `--visual=side-by-side`, `--signatures` handling of
 `caBX`/`dSIG` (kept as opaque chunks), `sbit-mismatch`, and the PngSuite corpus and fuzz targets (Phase 7+ tracks).
 A `cropped-away` conflict resolved to the painting side writes that side's whole image.

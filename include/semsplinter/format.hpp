@@ -104,6 +104,12 @@ public:
     virtual std::vector<std::string> render(std::string& out, const RenderRequest& r) const = 0;
 };
 
+// A unit set by Format::implant(): the unit at `at` gets `value`, or is removed when it is null.
+struct UnitValue {
+    Address at;
+    const std::vector<std::byte>* value = nullptr;
+};
+
 class Format {
 public:
     virtual ~Format() = default;
@@ -133,6 +139,13 @@ public:
     virtual nlohmann::ordered_json stats(const Document&, const Document&, const ChangeSet&) const {
         return nlohmann::ordered_json::object();
     }
+    // Patch support (SPEC §4, §6), at the content layer: the value of the unit at an address diff()
+    // reports (nullopt when the document has no such unit), and a copy of `target` with units set to such
+    // values. A patch applies as merge(implant(target, before), target, implant(target, after)). Formats
+    // with caps.patch implement both; the defaults throw Error{unsupported}.
+    virtual std::optional<std::vector<std::byte>> payload(const Document&, const Address&) const;
+    virtual std::unique_ptr<Document> implant(const Document& target, std::span<const UnitValue>,
+                                              const LoadOptions&) const;
 };
 
 class Registry {

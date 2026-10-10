@@ -1,10 +1,11 @@
 #pragma once
 
-// The library API (SPEC §10, D-53): diff, merge, dump, and inspect over a Registry. Command-line tools and
-// version-control adapters map their arguments onto these requests and print the results; everything else
+// The library API (SPEC §10, D-53): diff, merge, patch, dump, and inspect over a Registry. Command-line tools
+// and version-control adapters map their arguments onto these requests and print the results; everything else
 // (format detection, conflict policy, atomic output, sidecars, reports) happens here.
 
 #include <semsplinter/format.hpp>
+#include <semsplinter/patch.hpp>
 #include <semsplinter/report.hpp>
 
 #include <nlohmann/json.hpp>
@@ -38,6 +39,7 @@ struct DiffRequest {
     TextDiffOptions text;
     bool report = false;                 // fill DiffResult::report (--json)
     bool visual = false;                 // fill DiffResult::visual (--visual)
+    bool patch = false;                  // fill DiffResult::patch (--binary), except for text (render -u)
     std::optional<RenderRequest> render; // fill DiffResult::text
 };
 
@@ -49,6 +51,7 @@ struct DiffResult {
     std::vector<std::pair<std::string, Warning>> warnings; // (input path, load-time warning)
     std::optional<Report> report;
     std::vector<std::byte> visual;
+    std::string patch; // an envelope section (SPEC §6) when the inputs differ
 };
 
 DiffResult diff(const Registry&, const DiffRequest&);
@@ -84,6 +87,43 @@ struct MergeOutcome {
 // With --conflict=mark, a format without in-band markers also writes its merge visual (png.md §6.6), next to
 // the output unless MergeRequest::mark_visual says otherwise.
 MergeOutcome merge(const Registry&, const MergeRequest&);
+
+// GNU patch's backup options (-b, -V, -z, -B, -Y, --backup-if-mismatch).
+struct BackupOptions {
+    bool always = false;     // -b
+    bool if_mismatch = true; // GNU's default unless POSIXLY_CORRECT
+    enum class Method : std::uint8_t { simple, numbered, existing } method = Method::simple;
+    std::string suffix = ".orig", prefix, basename_prefix;
+};
+
+struct PatchRequest {
+    std::string patch;                      // envelope sections and unified diffs, mixed
+    std::optional<std::string> target;      // ORIGFILE: every section applies to it
+    std::filesystem::path directory;        // -d: section paths resolve against it
+    std::optional<std::size_t> strip;       // -p; unset: names are used whole
+    std::optional<std::string> output;      // -o; "-" returns the result in PatchOutcome::output
+    std::optional<std::string> reject_file; // -r; "-" discards rejects
+    bool reverse = false;                   // -R
+    TextApplyOptions text;                  // -F, -l, -N / -t / -f
+    bool dry_run = false;
+    bool remove_empty = false; // -E
+    bool mark = false;         // --merge: conflicts as --conflict=mark instead of rejects
+    BackupOptions backup;
+    Limits limits;
+    OptionValues format_options;
+};
+
+struct PatchOutcome {
+    std::string messages;          // GNU patch's report: "patching file x", "Hunk #2 FAILED at 7." ...
+    std::vector<std::byte> output; // the patched file for -o -
+    std::size_t failed = 0;        // failed or ignored hunks: exit status 1
+    std::vector<Warning> warnings;
+};
+
+// Applies a patch (SPEC §4, §6): unified sections as GNU patch does, envelope sections by base hash, else by
+// identity as a three-way merge whose conflicts are rejects. Writes files atomically; throws Error on
+// trouble.
+PatchOutcome apply_patch(const Registry&, const PatchRequest&);
 
 // The canonical dump (textconv).
 std::string dump(const Registry&, const Input&, const std::string& format = {}, bool force_text = false,

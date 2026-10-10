@@ -463,17 +463,34 @@ with unified diffs in one file. The payload is binary-safe encoded:
 
 ```text
 splinter-patch 1
---- a/art/logo.png	xxh3:7c1e…
-+++ b/art/logo.png	xxh3:90ab…
+--- art/logo.png	xxh3:7c1e…
++++ art/logo.png	xxh3:90ab…
 format png
 @@ update /pixels#rect=10,20,32,8 c-4f1a99e0c2b7 @@
-# 212 pixels changed, max ΔE00 14.2
-payload zstd+base85 1840
+payload before zlib+base85 1840
+<base85 lines…>
+payload after zlib+base85 1912
 <base85 lines…>
 @@ update /chunks/tEXt:Author c-0be2… @@
-- Alice
-+ Bob
+- "Alice"
++ "Bob"
+payload before zlib+base85 21
+<base85 lines…>
+payload after zlib+base85 19
+<base85 lines…>
 ```
+
+- Every envelope section starts with its own `splinter-patch 1` line, so envelope sections and unified diffs
+  can follow each other in any order. Text outside a section (mail headers, `diff` lines) is skipped, as GNU
+  patch does.
+- The `---`/`+++` names are the operands as given (like `diff -u`), each followed by a tab and the hash of that
+  file. The `format` line names the format module.
+- A hunk header is `@@ OP ADDRESS CHANGE-ID @@` (the address may contain spaces; the operation and the ID
+  cannot). `- ` and `+ ` lines show the before and after values for review and are ignored when applying;
+  `#` lines are comments. `payload before|after CODEC N` is followed by the base85 lines of N encoded bytes
+  (64 bytes, 80 characters per line, Git's base85 alphabet). A side without a payload is absent (insert,
+  erase).
+- What a payload holds is defined by the format's `payload()` (SPEC §4); png.md §6.7 has PNG's.
 
 - `diff` mode writes a human report only, unless `--binary` is given. With `--binary` it writes the
   envelope with payloads, mirroring `git diff --binary`. For text files the output is a plain unified
@@ -481,7 +498,7 @@ payload zstd+base85 1840
 - Hunks carry *before* and *after* for each touched unit, so `patch -R` (reverse) is symmetric and
   application can run as a three-way merge (§4).
 - Multi-file patches (from `-r`) list multiple `---/+++` sections. `-pNUM` strips path components exactly as GNU patch does.
-- Compression is zstd if that module is enabled, else zlib **[D-7]**.
+- Compression is zlib (`zlib+base85`); zstd is added when the zstd module is (Phase 6) **[D-7]**.
 - `--binary --json` writes the same patch as JSON: the §7.1 report with each change carrying its payload
   (`payload: {codec, encoding: "base64", bytes}`). `patch` mode accepts both serializations **[D-6]**.
 - Payloads are expressed at the **content layer** (decoded pixels, samples, text), not as encoded bytes, so a

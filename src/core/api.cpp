@@ -87,6 +87,24 @@ DiffResult diff(const Registry& reg, const DiffRequest& rq) {
     }
     if (rq.visual)
         r.visual = f.visual(*da, *db, dopt);
+    if (rq.patch && r.format != "text" && r.differs) {
+        PatchSection s;
+        s.old_name = rq.a.path, s.new_name = rq.b.path;
+        s.old_hash = hash128(rq.a.source.bytes()), s.new_hash = hash128(rq.b.source.bytes());
+        s.format = r.format;
+        auto one_line = [](const std::optional<std::string>& t) {
+            return t && t->find('\n') == std::string::npos ? t : std::nullopt;
+        };
+        for (auto& c : cmp->changes()) {
+            UnitHunk u{c.op, c.at, c.id, one_line(c.before.text), one_line(c.after.text), {}, {}};
+            if (c.op != Op::insert)
+                u.before = f.payload(*da, c.at);
+            if (c.op != Op::erase)
+                u.after = f.payload(*db, c.at);
+            s.units.push_back(std::move(u));
+        }
+        r.patch = write_section(s);
+    }
     if (rq.render) {
         RenderRequest req = *rq.render;
         req.churn = &churn;

@@ -135,6 +135,17 @@ std::vector<std::byte> Format::visual(const Document&, const Document&, const Di
                 "--visual: format '" + std::string(info().name) + "' has no visual diff");
 }
 
+std::optional<std::vector<std::byte>> Format::payload(const Document&, const Address&) const {
+    throw Error(ErrorCategory::unsupported,
+                "patches for format '" + std::string(info().name) + "' are not supported");
+}
+
+std::unique_ptr<Document> Format::implant(const Document&, std::span<const UnitValue>,
+                                          const LoadOptions&) const {
+    throw Error(ErrorCategory::unsupported,
+                "patches for format '" + std::string(info().name) + "' are not supported");
+}
+
 void Registry::add(std::unique_ptr<Format> f) {
     formats_.push_back(std::move(f));
 }

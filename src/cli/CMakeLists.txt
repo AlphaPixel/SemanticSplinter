@@ -1,5 +1,5 @@
 # The CLI as a library, so tests can drive it in-process.
-add_library(splinter-cli STATIC args.cpp tables.cpp cli.cpp diff_cmd.cpp merge_cmd.cpp process.cpp)
+add_library(splinter-cli STATIC args.cpp tables.cpp cli.cpp diff_cmd.cpp merge_cmd.cpp patch_cmd.cpp process.cpp)
 target_include_directories(splinter-cli PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(splinter-cli PUBLIC SemanticSplinter::formats splinter-git)
 
