@@ -305,12 +305,17 @@ Git then line-diffs canonical dumps. This works with `git log -p`, `--word-diff`
 path old-file old-hex old-mode new-file new-hex new-mode [new-path rename-info]
 ```
 
-- A missing side appears as `/dev/null`, literally on all platforms, and is treated as empty or absent.
+- A missing side appears as `/dev/null`, or as `nul` from Git for Windows (observed with Git 2.54), and is
+  treated as absent. An unmerged path is passed as the single argument `path`; splinter prints
+  `* Unmerged path PATH` and exits 0.
+- Output: `diff --git a/PATH b/NEW-PATH`, Git's rename information (the 9th argument) and mode lines, then a
+  unified diff without timestamps for text, or the format's normal report and churn line for other formats.
 - Format detection uses `path`, not the temp file names.
 - **Exit 0 on differences**, because Git treats a non-zero exit from an external diff as a failure, unless trust is
   enabled **[D-16]**. Since Git 2.46, `diff.trustExitCode` (or `diff.<driver>.trustExitCode`) makes Git expect GNU
-  codes. Splinter enables the same: `--trust-exit-code` in the driver command, or automatically when `git config --get`
-  reports either key as true (`--driver=NAME` names the driver; default `splinter`). Then it exits 0 for equal, 1 for
+  codes. Splinter enables the same: `--trust-exit-code` in the driver command, the environment variable
+  `GIT_EXTERNAL_DIFF_TRUST_EXIT_CODE` (which Git also documents), or automatically when `git config --get` reports
+  either key as true (`--driver=NAME` names the driver; default `splinter`). Then it exits 0 for equal, 1 for
   different, and 2 for trouble.
 - `GIT_DIFF_PATH_COUNTER` and `GIT_DIFF_PATH_TOTAL` are used only to separate output.
 
@@ -325,27 +330,44 @@ path old-file old-hex old-mode new-file new-hex new-mode [new-path rename-info]
 
 - Operands: `%O` base, `%A` ours (**result is written here**), `%B` theirs, `%L` marker size, `%P` path.
   Current Git also documents `%S %X %Y` (conflict labels for ancestor, local, and other; verified against the
-  gitattributes docs on 2026-10-07). Accept them as optional trailing `-L` labels.
+  gitattributes docs on 2026-10-07). They are accepted as optional trailing arguments, and `-L LABEL` (ours, base,
+  theirs) works too. `git-setup` writes only `%O %A %B %L %P`, which every Git version substitutes.
+- Text merges use the `git merge-file` engine (myers, zealous-alnum refinement) with markers of `%L` characters,
+  labelled `ours`, `base`, and `theirs` unless labels are given.
 - Exit 0 for clean, non-zero for conflicted or trouble. On conflict, `%A` holds the policy output
   (default per D-21: `mark` for formats marked with classic `<<<<<<<` markers, `ours` for the rest; override with
-  `git config splinter.conflict ours|theirs|mark`) plus a sidecar
-  `<%P>.splinter-conflicts.json` in the work tree, and a summary on stderr.
+  `git config splinter.conflict ours|theirs|base|mark`, or `--conflict=` in the driver command) plus a sidecar
+  `<%P>.splinter-conflicts.json` in the work tree, and a summary on stderr. With `mark`, a format without markers
+  also writes `<%P>.splinter-conflicts.png`. A clean merge removes a stale JSON sidecar. Sidecars are untracked
+  files: `git merge --abort` leaves them, so add `*.splinter-conflicts.*` to `.gitignore`.
+  Exit status: 0 clean, 1 conflicts, 2 trouble (Git treats every non-zero status as a conflict).
 - Temp files have no extensions. Detection uses `%P`, with content probing as a fallback.
 - `recursive = binary` makes inner merges of a recursive merge take the simple route.
 - Envelope behaviour in Git modes: `--ignore=volatile` is on, the signature policy is `auto`, and splinter **never re-signs**
   unless `git config splinter.signKey` or `splinter.signCommand` is set. Signing is normally a CI step after the merge.
 - **Git LFS:** without help, a merge driver receives LFS *pointers*, not content. Git LFS ships
   `git lfs merge-driver`, which smudges the three versions, runs `--program` (placeholders `%O %A %B %D %L`,
-  with `%%` doubled inside Git config), and cleans the result. The documented form of the man page
-  was checked against git-lfs 3.8 **[D-17]**:
+  with `%%` doubled inside Git config), and cleans the result. It exists since **git-lfs 3.2.0** (May 2022, the
+  minimum, D-17); the form below was checked against the git-lfs 3.8 man page and runs end to end in the
+  Phase 4 tests with git-lfs 3.7.1:
 
   ```ini
   [merge "splinter-lfs"]
       driver = git lfs merge-driver --ancestor %O --current %A --other %B --marker-size %L --output %A --program 'splinter git-merge %%O %%A %%B %%L --output %%D'
   ```
 
-  `git-setup` emits this variant for paths that also have `filter=lfs`. The `%P` path is not
-  available through the wrapper, so `--format` must be given explicitly, or detection falls back to content probing.
+  `git-setup` writes this driver as `merge.splinter-lfs`; use it for paths that also have `filter=lfs`. The `%P`
+  path is not available through the wrapper, so detection falls back to content probing (`--format=NAME` in the
+  program forces a format), and no sidecar is written.
+
+### 7.3.1 `git-setup`
+
+`splinter git-setup [--print|--local|--global] [--program=CMD]` writes `diff.splinter` (textconv, cached),
+`merge.splinter`, and `merge.splinter-lfs` with `git config`; `--print` (the default) shows them as config-file
+text with suggested `.gitattributes` and `.gitignore` lines. `--program` names the executable (default
+`splinter`, found on `PATH`); backslashes become slashes and a path with spaces is quoted, because Git runs
+drivers through `sh`. The external diff (`diff.splinter.command = splinter git-diff`) is optional and not
+written. The adapter lives in `src/git/` and is compiled against the public headers only (D-53).
 
 ### 7.4 Named-flag form
 

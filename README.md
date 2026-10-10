@@ -9,13 +9,14 @@ It works standalone and as a Git textconv, external diff driver, and merge drive
   `patch`, and RCS `merge` / `git merge-file`.
 - **License:** MIT ([LICENSE](LICENSE)).
 
-**Status:** specification complete for v1, and all v1 decisions are settled (2026-10-08). Phases 0–3 of
+**Status:** specification complete for v1, and all v1 decisions are settled (2026-10-08). Phases 0–4 of
 [docs/PLAN.md](docs/PLAN.md) are done: the build skeleton, the format-neutral core (data model, hashing, I/O,
 merge primitives, conflict policy, envelope map, fix-up Emitter, JSON report), the text and binary formats
-with the diff, diff3, merge, and merge-file personalities, and PNG (region diff, three-way pixel and metadata
-merge, heatmaps, `inspect --layout`). On text, `splinter` reproduces GNU diff 3.12, GNU diff3, and
-`git merge-file` byte for byte on the golden corpus in `tests/golden/`. Patch mode, Git drivers, and the
-other structured formats come in later phases.
+with the diff, diff3, merge, and merge-file personalities, PNG (region diff, three-way pixel and metadata
+merge, heatmaps, `inspect --layout`), the library API, and the Git drivers (`git-setup`, `git-diff`,
+`git-merge`, Git LFS). On text, `splinter` reproduces GNU diff 3.12, GNU diff3, and
+`git merge-file` byte for byte on the golden corpus in `tests/golden/`. Patch mode and the other structured
+formats come in later phases.
 
 ## Why
 
@@ -47,18 +48,23 @@ diffs and merges those, and writes a valid file back:
 **After v1:** PDF rendering and page-content merge, and signature verification and re-signing (`crypto`
 feature). [docs/formats/README.md](docs/formats/README.md) lists the v1 formats and their documents.
 
-## Usage (planned)
+## Usage
+
+Working today, for text, unknown binaries, and PNG:
 
 ```bash
 splinter old.png new.png                     # diff: changed regions, metrics, and metadata
-splinter -u old.svg new.svg                  # unified diff over canonical dump lines
-splinter --json=report.json a.zip b.zip      # machine-readable report (--md for Markdown)
+splinter -u old.png new.png                  # unified diff over canonical dump lines
+splinter --json=report.json a.png b.png      # machine-readable report
 splinter -m mine.png base.png theirs.png     # three-way merge, as diff3 -m
-splinter --binary a.png b.png > logo.patch   # applicable semantic patch
-splinter -P < logo.patch                     # apply it, as patch
-splinter dump data.sqlite                    # canonical text dump (Git textconv)
-splinter inspect --layout photo.jpg          # structure, checksums, and byte layout
+splinter merge-file cur.txt base.txt other.txt   # as git merge-file
+splinter dump photo.png                      # canonical text dump (Git textconv)
+splinter inspect --layout photo.png          # structure, checksums, and byte layout
+splinter formats                             # list the built-in formats
 ```
+
+Planned: patch mode (`--binary a.png b.png > logo.patch`, then `splinter -P < logo.patch`), the `--md`
+Markdown report, and the other formats in the v1 scope.
 
 Personality selection follows the program name (`splinter-diff`, `splinter-merge`, ...), then a subcommand
 (`splinter merge ...`), then a mode flag (`-m`, `-3`, `-P`). Plain `splinter` is `diff`.
@@ -79,16 +85,21 @@ splinter git-setup --global      # writes the drivers below; --print shows them 
     recursive = binary
 ```
 
+`git-setup` also writes `merge.splinter-lfs`, the same driver wrapped in `git lfs merge-driver` (git-lfs 3.2.0+).
+
 ```gitattributes
 *.png  diff=splinter merge=splinter
-*.zip  diff=splinter merge=splinter
+```
+
+```gitignore
+*.splinter-conflicts.*
 ```
 
 On conflict the merge driver still writes a complete, loadable file, exits non-zero, and leaves a
 `<file>.splinter-conflicts.json` sidecar. Text-like formats get classic conflict markers, as Git does;
-binary formats keep "ours" in conflicted regions (D-21). Git LFS repositories wrap the driver with
-`git lfs merge-driver` (CLI.md §7.3). An external diff driver (`splinter git-diff`) gives richer output
-than textconv.
+binary formats keep "ours" in conflicted regions (D-21); `git config splinter.conflict theirs|base|mark`
+changes that. For paths with `filter=lfs`, use `merge=splinter-lfs` (CLI.md §7.3). The optional external
+diff driver (`diff.splinter.command = splinter git-diff`) gives richer output than textconv.
 
 ## Documentation
 

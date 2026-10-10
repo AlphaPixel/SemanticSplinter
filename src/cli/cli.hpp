@@ -16,6 +16,14 @@
 
 namespace splinter::cli {
 
+struct ProcessResult {
+    int status = 0;
+    std::string out; // standard output; standard error passes through
+};
+
+// Runs argv[0] (searched on PATH) without a shell. nullopt when it cannot be started.
+std::optional<ProcessResult> run_process(const std::vector<std::string>& argv);
+
 // Where output goes. The executable binds it to stdout/stderr; tests capture it.
 class Console {
 public:
@@ -25,6 +33,9 @@ public:
     virtual bool out_is_terminal() const { return false; }
     virtual std::optional<std::string> env(const char*) const { return std::nullopt; }
     virtual std::vector<std::byte> read_stdin() { return {}; }
+    virtual std::optional<ProcessResult> run(const std::vector<std::string>& argv) {
+        return run_process(argv);
+    }
 };
 
 // Entry point: args[0] is the program name (personality rule 1).

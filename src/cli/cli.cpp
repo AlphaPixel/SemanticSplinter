@@ -1,4 +1,5 @@
 #include "cli.hpp"
+#include "git.hpp"
 
 #include <semsplinter/semsplinter.hpp>
 #include <semsplinter/version.hpp>
@@ -256,6 +257,7 @@ constexpr std::string_view kHelp =
        splinter merge [OPTION]... FILE1 FILE2 FILE3   merge into FILE1 (RCS merge)
        splinter merge-file [OPTION]... CURRENT BASE OTHER   (git merge-file)
        splinter dump FILE | splinter inspect [--json] [--layout] FILE
+       splinter git-setup [--print|--local|--global]   Git drivers (git-diff, git-merge)
        splinter formats [--json] | splinter version
 
 The personality also follows the program name: splinter-diff, splinter-diff3,
@@ -338,6 +340,24 @@ int inspect(const std::vector<std::string>& args, Console& c, const Registry& re
     return 0;
 }
 
+// The Git adapter's view of the console (D-53: the adapter does not include CLI headers).
+class GitHost final : public git::Host {
+public:
+    explicit GitHost(Console& c) : c_(c) {}
+    void out(std::string_view s) override { c_.out(s); }
+    void err(std::string_view s) override { c_.err(s); }
+    std::optional<std::string> env(const char* name) const override { return c_.env(name); }
+    std::optional<std::pair<int, std::string>> git(const std::vector<std::string>& args) override {
+        std::vector<std::string> argv{"git"};
+        argv.insert(argv.end(), args.begin(), args.end());
+        auto r = c_.run(argv);
+        return r ? std::optional(std::pair{r->status, r->out}) : std::nullopt;
+    }
+
+private:
+    Console& c_;
+};
+
 int not_yet(Console& c, std::string_view what, std::string_view phase) {
     diag(c, std::string(what) + " is not implemented yet (" + std::string(phase) + ")");
     return 2;
@@ -399,8 +419,12 @@ int run(std::vector<std::string> args, Console& c) {
                 return formats(tail, c, reg);
             if (first == "inspect")
                 return inspect(tail, c, reg);
-            if (first == "git-diff" || first == "git-merge" || first == "git-setup")
-                return not_yet(c, first, "Phase 4");
+            if (first == "git-diff" || first == "git-merge" || first == "git-setup") {
+                GitHost host(c);
+                return first == "git-diff"    ? git::git_diff(tail, host, reg)
+                       : first == "git-merge" ? git::git_merge(tail, host, reg)
+                                              : git::git_setup(tail, host);
+            }
             if (first == "help") {
                 c.out(kHelp);
                 return 0;
