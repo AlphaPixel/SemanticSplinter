@@ -51,6 +51,9 @@
       "dependencies": [
         "expat"
       ]
+    },
+    "csv": {
+      "description": "CSV/TSV format module"
     }
   }
 }
