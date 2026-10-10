@@ -21,6 +21,12 @@ add_executable(semsplinter-tests
     git/test_adapter.cpp
     git/test_git.cpp
 )
+if(SEMSPLINTER_FORMAT_ZIP AND SEMSPLINTER_FORMAT_PNG AND SEMSPLINTER_FORMAT_JSON) # the exit test nests a PNG and a JSON
+    target_sources(semsplinter-tests PRIVATE formats/test_zip.cpp)
+endif()
+if(SEMSPLINTER_FORMAT_TAR)
+    target_sources(semsplinter-tests PRIVATE formats/test_tar.cpp)
+endif()
 target_link_libraries(semsplinter-tests PRIVATE splinter-cli Catch2::Catch2WithMain)
 target_compile_definitions(semsplinter-tests PRIVATE SEMSPLINTER_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
     SPLINTER_EXE="$<TARGET_FILE:splinter>") # the driver the [git] tests configure
