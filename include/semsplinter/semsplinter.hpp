@@ -133,7 +133,7 @@ std::string dump(const Registry&, const Input&, const std::string& format = {}, 
 
 // Structure overview: format, size, hash, the format's inspect() fields, and with `layout` the EnvelopeMap.
 nlohmann::ordered_json inspect(const Registry&, const Input&, const std::string& format = {},
-                               bool layout = false);
+                               bool layout = false, const Limits& = {}, const OptionValues& = {});
 std::string render_inspect(const nlohmann::ordered_json&); // "key value" lines, then the layout table
 
 } // namespace semsplinter

@@ -218,9 +218,9 @@ std::string dump(const Registry& reg, const Input& in, const std::string& format
     return os.str();
 }
 
-nlohmann::ordered_json inspect(const Registry& reg, const Input& in, const std::string& format, bool layout) {
-    Limits budget;
-    OptionValues options;
+nlohmann::ordered_json inspect(const Registry& reg, const Input& in, const std::string& format, bool layout,
+                               const Limits& limits, const OptionValues& options) {
+    Limits budget = limits;
     Context ctx{reg, budget, 0, options};
     const Format& f = reg.detect(in.source.bytes(), in.path, format);
     auto doc = f.load(in.source, {ctx});

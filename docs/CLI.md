@@ -298,7 +298,7 @@ Behaviour as implemented (Phase 5):
 | Command | Purpose |
 |---|---|
 | `splinter dump FILE` (≡ `splinter --dump FILE`) | canonical text dump. Intended for `textconv` |
-| `splinter inspect FILE [--json] [--layout]` | structure overview: detected format, units, statistics, warnings, and integrity and signature verification. `--layout` prints the EnvelopeMap (byte ranges with class and unit) |
+| `splinter inspect FILE [--json] [--layout]` | structure overview: detected format, units, statistics, warnings, and integrity and signature verification. `--layout` prints the EnvelopeMap (byte ranges with class and unit). Also takes `--json=FILE`, `--format`, the `--max-*` limits, `--exit-codes`, and format options |
 | `splinter formats [--json]` | list compiled-in formats, extensions, and capabilities |
 | `splinter git-diff …` | Git external diff driver (§7) |
 | `splinter git-merge …` | Git merge driver (§7) |
