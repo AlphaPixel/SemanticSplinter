@@ -221,7 +221,7 @@ void dump(const BinDoc& d, std::ostream& os, const DumpOptions& o) {
     auto s = d.src.bytes();
     os << "# binary " << s.size() << " bytes " << hash_ref(d.hash) << '\n';
     const bool rows = s.size() <= o.max_dump;
-    char buf[16];
+    char buf[17]; // 16 hex digits of a 64-bit offset
     for (std::size_t k = 0; k < d.chunks.size(); ++k) {
         auto& c = d.chunks[k];
         auto bytes = s.subspan(c.off, c.len);
