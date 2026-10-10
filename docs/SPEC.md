@@ -467,16 +467,16 @@ splinter-patch 1
 +++ art/logo.png	xxh3:90ab…
 format png
 @@ update /pixels#rect=10,20,32,8 c-4f1a99e0c2b7 @@
-payload before zlib+base85 1840
+payload before zstd+base85 1840
 <base85 lines…>
-payload after zlib+base85 1912
+payload after zstd+base85 1912
 <base85 lines…>
 @@ update /chunks/tEXt:Author c-0be2… @@
 - "Alice"
 + "Bob"
-payload before zlib+base85 21
+payload before zstd+base85 21
 <base85 lines…>
-payload after zlib+base85 19
+payload after zstd+base85 19
 <base85 lines…>
 ```
 
@@ -498,8 +498,8 @@ payload after zlib+base85 19
 - Hunks carry *before* and *after* for each touched unit, so `patch -R` (reverse) is symmetric and
   application can run as a three-way merge (§4).
 - Multi-file patches (from `-r`) list multiple `---/+++` sections. `-pNUM` strips path components exactly as GNU patch does.
-- Compression is zstd (`zstd+base85`, level 19) in builds with the zstd module (the `zip` or `tar` feature), else
-  zlib (`zlib+base85`). Every build reads `zlib+base85`; `zstd+base85` needs the zstd module, else exit 3 **[D-7]**.
+- Compression is zstd (`zstd+base85`, level 19). zstd and zlib are core dependencies, so every build writes
+  `zstd+base85` and reads both `zstd+base85` and `zlib+base85` (Phase 5 patches) **[D-7]**.
 - `--binary --json` writes the same patch as JSON: the §7.1 report with each change carrying its payload
   (`payload: {codec, encoding: "base64", bytes}`). `patch` mode accepts both serializations **[D-6]**.
 - Payloads are expressed at the **content layer** (decoded pixels, samples, text), not as encoded bytes, so a

@@ -69,3 +69,6 @@ Testing/
 
 # Local-only notes (never committed)
 *-local-*
+
+# Claude Code agent worktrees
+.claude/worktrees/

@@ -1,6 +1,7 @@
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(xxHash CONFIG REQUIRED)
 find_package(ZLIB REQUIRED)
+find_package(zstd CONFIG REQUIRED)
 
 add_library(semantic-splinter STATIC
     api.cpp
@@ -29,13 +30,6 @@ target_include_directories(semantic-splinter PUBLIC
 )
 target_link_libraries(semantic-splinter
     PUBLIC nlohmann_json::nlohmann_json
-    PRIVATE xxHash::xxhash ZLIB::ZLIB
+    PRIVATE xxHash::xxhash ZLIB::ZLIB zstd::libzstd
 )
 target_compile_definitions(semantic-splinter PRIVATE SEMSPLINTER_VERSION="${PROJECT_VERSION}")
-
-# The zstd module (D-7): patch payloads use zstd when the zip or tar feature brings it.
-if(SEMSPLINTER_FORMAT_ZIP OR SEMSPLINTER_FORMAT_TAR)
-    find_package(zstd CONFIG REQUIRED)
-    target_link_libraries(semantic-splinter PRIVATE zstd::libzstd)
-    target_compile_definitions(semantic-splinter PRIVATE SEMSPLINTER_HAVE_ZSTD)
-endif()

@@ -6,7 +6,9 @@
   "builtin-baseline": "b08975f4fdf01ad9a5c08db8f1953a57d11e8b26",
   "dependencies": [
     "nlohmann-json",
-    "xxhash"
+    "xxhash",
+    "zlib",
+    "zstd"
   ],
   "features": {
     "tests": {
