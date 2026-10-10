@@ -62,6 +62,13 @@ if(SEMSPLINTER_FORMAT_XML)
     list(APPEND formats xml)
 endif()
 
+if(SEMSPLINTER_FORMAT_CSV)
+    add_library(semantic-splinter-csv STATIC csv/csv.cpp)
+    add_library(SemanticSplinter::csv ALIAS semantic-splinter-csv)
+    target_link_libraries(semantic-splinter-csv PUBLIC SemanticSplinter::core)
+    list(APPEND formats csv)
+endif()
+
 # Registry::with_builtin_formats() over every enabled module, in registration order (SPEC §2.3, §11).
 set(includes "")
 set(calls "")

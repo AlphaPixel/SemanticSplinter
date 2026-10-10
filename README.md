@@ -51,7 +51,7 @@ feature). [docs/formats/README.md](docs/formats/README.md) lists the v1 formats 
 
 ## Usage
 
-Working today, for text, unknown binaries, PNG, ZIP/TAR archives, XML, and JSON:
+Working today, for text, unknown binaries, PNG, ZIP/TAR archives, XML, JSON, and CSV/TSV:
 
 ```bash
 splinter old.png new.png                     # diff: changed regions, metrics, and metadata
@@ -72,7 +72,10 @@ Archive members are diffed and merged by their own format and reported under `/e
 XML merges elements by identity (id attributes, then content), attributes per key, and text per node. JSON and
 JSONC are addressed by JSON Pointer (`/items/id:7/label`): objects merge per key and arrays per element (by an
 `id`-like key when every element has one). XML and JSON write untouched bytes back verbatim, so formatting,
-comments, and number spelling survive outside the changed values. Patches (`--binary`) cover text and PNG so far.
+comments, and number spelling survive outside the changed values. CSV/TSV rows merge by a key column (`id`,
+`--csv-key`) or by position, cell by cell, so a column added on one side merges with row edits on the other;
+untouched records are copied verbatim and output keeps ours' dialect (delimiter, quoting, BOM, line ends).
+Patches (`--binary`) cover text and PNG so far.
 
 Planned: the `--md` Markdown report, JSON patches (`--binary --json`), and the other formats in the v1 scope.
 

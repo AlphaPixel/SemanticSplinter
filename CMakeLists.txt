@@ -6,6 +6,7 @@ option(SEMSPLINTER_FORMAT_ZIP "ZIP format module (zlib, zstd)" ON)
 option(SEMSPLINTER_FORMAT_TAR "TAR format module (zlib, zstd, liblzma, bzip2)" ON)
 option(SEMSPLINTER_FORMAT_JSON "JSON format module (no dependencies)" ON)
 option(SEMSPLINTER_FORMAT_XML "XML format module (expat)" ON)
+option(SEMSPLINTER_FORMAT_CSV "CSV/TSV format module (no dependencies)" ON)
 
 # An ON option enables the vcpkg manifest feature it names (SPEC §2.3). Must run before project().
 macro(semsplinter_vcpkg_feature option feature)
@@ -19,6 +20,7 @@ semsplinter_vcpkg_feature(SEMSPLINTER_FORMAT_ZIP zip)
 semsplinter_vcpkg_feature(SEMSPLINTER_FORMAT_TAR tar)
 semsplinter_vcpkg_feature(SEMSPLINTER_FORMAT_JSON json)
 semsplinter_vcpkg_feature(SEMSPLINTER_FORMAT_XML xml)
+semsplinter_vcpkg_feature(SEMSPLINTER_FORMAT_CSV csv)
 
 project(SemanticSplinter VERSION 0.1.0 DESCRIPTION "Format-aware diff, merge, and patch" LANGUAGES CXX)
 

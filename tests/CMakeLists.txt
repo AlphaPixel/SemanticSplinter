@@ -28,6 +28,9 @@ endif()
 if(SEMSPLINTER_FORMAT_TAR)
     target_sources(semsplinter-tests PRIVATE formats/test_tar.cpp)
 endif()
+if(SEMSPLINTER_FORMAT_CSV)
+    target_sources(semsplinter-tests PRIVATE formats/test_csv.cpp)
+endif()
 target_link_libraries(semsplinter-tests PRIVATE splinter-cli Catch2::Catch2WithMain)
 target_compile_definitions(semsplinter-tests PRIVATE SEMSPLINTER_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
     SPLINTER_EXE="$<TARGET_FILE:splinter>") # the driver the [git] tests configure

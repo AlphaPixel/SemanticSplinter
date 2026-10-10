@@ -2,6 +2,7 @@
 
 **Tier:** T1 · **Module:** `semantic-splinter-csv` · **vcpkg feature:** `csv` · **Depends on modules:** `text` (core seqdiff, encoding detection)
 **Extensions / magic:** `.csv`, `.tsv`, `.tab`, `.psv`. No magic; content probe sniffs the dialect on the first 64 KiB and returns confidence 70 when at least 5 records have a consistent field count ≥ 2 under one dialect, 40 for 2 to 4 records. Extension alone gives 60.
+**Status (v1 = MVP, #10):** own tokenizer (RFC 4180, doubled quotes, quoted newlines, CR/LF/CRLF, blank lines, ragged rows, `sep=` line), sniffer over `, \t ; |`, UTF-8 with or without BOM, UTF-16/32 through `src/core/text` (other bytes compared as is and reported `windows-1252`), header and key detection (§2, §3), keyed rows by KeyedMerge and unkeyed rows by SequenceMerge with a three-way merge per cell, column add/delete with `modify-delete` per column, span-splice writer (`src/formats/common/splice.hpp`) in ours' dialect with `dialect-mismatch`, dump, diff with numeric `delta`/`rel`, `--csv-key`, `--csv-header=auto|yes|no`. Deviations: the content probe needs *every* sampled record to share the field count (40 only for 3 or more fields) and rejects text-like samples (a column empty in every record, as in `x = 1;` lines, or most later fields starting with a space); a header is also detected when row 0 names a key column (`id`, `key`, …, `*_id`); column order is ours' (theirs' when only theirs reordered) instead of a SequenceMerge, and a column reorder is one `column-order` change; unkeyed merges pair rows only in equal-length runs; the writer reuses the splice helper rather than the Emitter, since CSV has no framing or integrity fields (§7.1); `--conflict=mark` falls back to ours (`mark-unsupported`). Not yet (v2 or later): rename detection, `--csv-order`, sorted-table re-sorting (Q-CSV-4), `--csv-mark`, `--csv-cell-lines`, `--delimiter`/`--quote`/`--encoding`/`--ignore-space`/`--numeric`/`--ignore-columns`/`--trim-empty-columns`, backslash escapes and `'` quotes, comment lines, `possible-rename`, `auto: filled-empty` reporting, the grid and HTML renderers, patch payloads, `.csv.gz`, and fuzz targets.
 
 ## 1. Why it matters
 
@@ -176,7 +177,12 @@ Lost: nothing for untouched rows. A rebuilt row may change from irregular quotin
 | record terminators, final newline | encoding | ours' dominant style; untouched rows keep their own |
 | quoting and quote doubling | encoding | per field, raw span of the winning side when valid (section 7) |
 | delimiter, `sep=` line | encoding | ours' |
-| gzip mtime / CRC-32, ISIZE | volatile / integrity | ours' header; recomputed trailer |
+| blank lines between records | encoding | kept with the following record of ours; dropped from rows of other sides |
+| gzip mtime / CRC-32, ISIZE | volatile / integrity | ours' header; recomputed trailer (not in v1: `.csv.gz` is not detected) |
+
+Reviewed for v1 (#10): the table matches the parser except for the two rows amended above. UTF-16BE and
+UTF-32 also load (through `src/core/text`), and a diff reports all of these fields as one `encoding` change at
+`/dialect`. With no framing or integrity, the writer splices record spans rather than using the Emitter.
 
 No framing, integrity, authenticity, or volatile fields in CSV itself. Checksum sidecars (`SHA256SUMS`, `.sfv`) and
 Frictionless `datapackage.json` resource `hash` values are external integrity references held in *other* files,
