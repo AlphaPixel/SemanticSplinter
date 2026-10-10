@@ -5,6 +5,7 @@
 #include <catch2/generators/catch_generators_range.hpp>
 
 #include <algorithm>
+#include <chrono>
 #include <random>
 
 using namespace semsplinter;
@@ -215,6 +216,98 @@ TEST_CASE("SequenceMerge: ID-matched moves") {
         };
         REQUIRE(sequence_merge(B, O, T, opt)[1].kind == SeqKind::recursed);
     }
+}
+
+TEST_CASE("SequenceMerge: keyed chunks with moves, inserts and deletes are pinned") {
+    // A digest of the exact chunk lists over random keyed sequences, both sides moving, inserting,
+    // deleting and editing, with some id-less elements mixed in. Taken before the #38 speedup; any
+    // change to the chunks changes it. Only mt19937 raw output is used, so it is portable.
+    std::string all;
+    for (unsigned seed = 1; seed <= 40; ++seed) {
+        std::mt19937 rng(seed);
+        auto r = [&](std::size_t n) { return static_cast<std::size_t>(rng() % n); };
+        std::vector<std::pair<int, int>> base; // (id or -1 for none, content)
+        for (int i = 0; i < 60; ++i) {
+            // Draws sequenced explicitly (argument evaluation order differs between compilers).
+            auto content = static_cast<int>(r(3));
+            base.emplace_back(r(5) ? i : -1, content);
+        }
+        int next = 1000;
+        auto edit = [&](std::vector<std::pair<int, int>> v) {
+            for (int e = static_cast<int>(r(8)); e > 0; --e) {
+                if (v.empty())
+                    break;
+                auto p = r(v.size());
+                switch (r(4)) {
+                case 0: { // move
+                    auto x = v[p];
+                    v.erase(v.begin() + static_cast<std::ptrdiff_t>(p));
+                    v.insert(v.begin() + static_cast<std::ptrdiff_t>(r(v.size() + 1)), x);
+                    break;
+                }
+                case 1:
+                    v.erase(v.begin() + static_cast<std::ptrdiff_t>(p));
+                    break;
+                case 2:
+                    v.insert(v.begin() + static_cast<std::ptrdiff_t>(p),
+                             {r(2) ? next++ : -1, static_cast<int>(r(3))});
+                    break;
+                default:
+                    v[p].second += 1 + static_cast<int>(r(2));
+                }
+            }
+            return v;
+        };
+        auto make = [](const std::vector<std::pair<int, int>>& v) {
+            std::vector<SeqItem> s;
+            for (auto [id, c] : v)
+                s.push_back({hash128(std::to_string(id < 0 ? 0 : id) + ":" + std::to_string(c)),
+                             id < 0 ? std::nullopt : std::optional(hash128(std::to_string(id)))});
+            return s;
+        };
+        auto B = make(base), O = make(edit(base)), T = make(edit(base));
+        SeqMergeOptions opt;
+        opt.insertion_order_insignificant = seed % 2;
+        for (auto& c : sequence_merge(B, O, T, opt)) {
+            all += std::string(to_string(c.kind)) + (c.moved ? "m" : "") + c.reason;
+            for (auto* l : {&c.base, &c.ours, &c.theirs}) {
+                all += '|';
+                for (auto i : *l)
+                    all += std::to_string(i) + ',';
+            }
+            all += ';';
+        }
+        all += '\n';
+    }
+    REQUIRE(hash128(all).hex() == "daa261ede12e44e408dde90bbc64eecc");
+}
+
+// Benchmark for #38, hidden from CI: run `semsplinter-tests "[.perf]"` in Release.
+TEST_CASE("SequenceMerge: 100k keyed elements", "[.perf]") {
+    const int n = 100000;
+    std::vector<std::pair<int, int>> b;
+    for (int i = 0; i < n; ++i)
+        b.emplace_back(i, 0);
+    auto o = b, t = b;
+    std::rotate(o.begin() + 100, o.begin() + 101, o.begin() + 5000); // ours moves one element
+    o.erase(o.begin() + 20100, o.begin() + 20110);                   // and deletes ten
+    t.insert(t.begin() + 70000, {n + 1, 0});                         // theirs inserts one
+    for (auto& [id, c] : o)
+        c = id % 1000 == 3; // each side edits one element in a thousand
+    for (auto& [id, c] : t)
+        c = id % 1000 == 7;
+    auto make = [](const std::vector<std::pair<int, int>>& v) {
+        std::vector<SeqItem> s;
+        for (auto [id, c] : v)
+            s.push_back({hash128(std::to_string(id) + ":" + std::to_string(c)), hash128(std::to_string(id))});
+        return s;
+    };
+    auto B = make(b), O = make(o), T = make(t);
+    auto t0 = std::chrono::steady_clock::now();
+    auto r = sequence_merge(B, O, T);
+    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0);
+    CHECK_FALSE(has_conflict(r));
+    WARN("sequence_merge " << ms.count() << " ms");
 }
 
 TEST_CASE("SequenceMerge with ids reproduces one-sided rearrangements") {

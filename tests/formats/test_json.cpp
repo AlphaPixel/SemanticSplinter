@@ -4,6 +4,8 @@
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
+#include <chrono>
 #include <functional>
 #include <iterator>
 #include <random>
@@ -316,4 +318,37 @@ TEST_CASE("json: generated disjoint merges") {
         CHECK(fx.text(fx.merge(sb, so, so)) == so);
         CHECK(fx.text(fx.merge(sb, so, sb)) == so);
     }
+}
+
+// Benchmark for #38, hidden from CI: run `semsplinter-tests "[.perf]"` in Release.
+TEST_CASE("json: merge of a 100k-record keyed array", "[.perf]") {
+    Fx fx;
+    const std::size_t n = 100000;
+    std::vector<std::size_t> b(n);
+    for (std::size_t i = 0; i < n; ++i)
+        b[i] = i;
+    auto o = b, t = b;
+    std::rotate(o.begin() + 100, o.begin() + 101, o.begin() + 5000); // ours moves one record
+    o.erase(o.begin() + 20100, o.begin() + 20110);                   // and deletes ten
+    t.insert(t.begin() + 70000, n + 1);                              // theirs inserts one
+    // Each side also edits one record in a thousand.
+    auto text = [](const std::vector<std::size_t>& ids, std::size_t edit) {
+        std::string s = "{\"items\": [\n";
+        for (std::size_t k = 0; k < ids.size(); ++k) {
+            auto id = std::to_string(ids[k]);
+            s += (k ? ",\n  {\"id\": " : "  {\"id\": ") + id + ", \"name\": \"record " + id +
+                 "\", \"tags\": [\"alpha\", \"beta\"], \"v\": \"" + (ids[k] % 1000 == edit ? "edited" : "v") +
+                 "\"}";
+        }
+        return s + "\n]}\n";
+    };
+    auto sb = text(b, 1000), so = text(o, 3), st = text(t, 7);
+    auto t0 = std::chrono::steady_clock::now();
+    auto db = fx.load(sb), dob = fx.load(so), dt = fx.load(st);
+    auto t1 = std::chrono::steady_clock::now();
+    auto r = fx.json.merge(*db, *dob, *dt, MergeOptions{fx.ctx, {}, {}});
+    auto t2 = std::chrono::steady_clock::now();
+    CHECK(r.conflicts.empty());
+    auto ms = [](auto d) { return std::chrono::duration_cast<std::chrono::milliseconds>(d).count(); };
+    WARN(sb.size() << " bytes; load " << ms(t1 - t0) << " ms, merge " << ms(t2 - t1) << " ms");
 }
