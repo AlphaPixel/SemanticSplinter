@@ -1,4 +1,5 @@
 // Golden comparisons against GNU diffutils and Git (tests/golden/generate.py records them).
+#include "../scratch.hpp"
 #include "console.hpp"
 
 #include <catch2/catch_test_macros.hpp>
@@ -64,7 +65,7 @@ const std::set<std::string> kKnown = {
 // Runs every case of a corpus file; `command` builds the argument list from the case's options.
 template <class F> void check_corpus(const char* name, F command) {
     auto corpus = load(name);
-    auto dir = fs::temp_directory_path() / (std::string("splinter-golden-") + name);
+    auto dir = scratch_path(std::string("golden-") + name);
     fs::remove_all(dir);
     fs::create_directories(dir);
     std::size_t runs = 0, failures = 0;

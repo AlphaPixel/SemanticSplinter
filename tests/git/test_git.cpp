@@ -1,5 +1,6 @@
 // End-to-end Git integration (CLI.md §7, PLAN Phase 4): real repositories, real git, the built splinter as
 // the diff and merge driver. Skipped when git (or git-lfs) is not installed.
+#include "../scratch.hpp"
 #include "cli.hpp"
 
 #include <semsplinter/formats/png.hpp>
@@ -38,7 +39,7 @@ std::vector<std::byte> png_of(const std::vector<std::array<std::uint32_t, 5>>& p
 struct Repo {
     fs::path dir, saved;
     explicit Repo(const std::string& name) {
-        dir = fs::temp_directory_path() / ("splinter-git-" + name);
+        dir = scratch_path("git-" + name);
         fs::remove_all(dir);
         fs::create_directories(dir);
         saved = fs::current_path();
@@ -188,6 +189,11 @@ TEST_CASE("git: the external diff driver", "[git]") {
     // D-16: untrusted, differences exit 0; trusted (Git 2.46+), git diff --exit-code reports them.
     CHECK(r.git({"-c", "diff.splinter.trustExitCode=true", "diff", "--ext-diff", "--exit-code", "HEAD~1",
                  "HEAD", "--", "img.png"}) == 1);
+}
+
+// #53: a fixed name collided when two suites (worktrees, ctest -j) ran at once.
+TEST_CASE("git: each test process gets its own repository directory", "[git]") {
+    CHECK(scratch_path("git-lfs") != scratch_path("git-lfs"));
 }
 
 TEST_CASE("git: the Git LFS merge-driver wrapper", "[git][lfs]") {

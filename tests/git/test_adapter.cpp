@@ -1,4 +1,5 @@
 // The Git adapter's argument and exit-code mapping (CLI.md §7), with a fake host: no git needed.
+#include "../scratch.hpp"
 #include "git.hpp"
 
 #include <semsplinter/formats/png.hpp>
@@ -38,7 +39,7 @@ struct FakeHost final : Host {
 struct Dir {
     fs::path d;
     Dir() {
-        d = fs::temp_directory_path() / "splinter-test-adapter";
+        d = scratch_path("test-adapter");
         fs::remove_all(d);
         fs::create_directories(d);
     }

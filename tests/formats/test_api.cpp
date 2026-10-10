@@ -1,3 +1,5 @@
+#include "../scratch.hpp"
+
 #include <semsplinter/formats/png.hpp>
 #include <semsplinter/formats/text.hpp>
 #include <semsplinter/semsplinter.hpp>
@@ -71,7 +73,7 @@ TEST_CASE("api: text options travel through the Format contract") {
 // #26: the library does detection, conflict policy, atomic output, reports, and sidecars.
 TEST_CASE("api: merge writes the output, the conflicts report, and counts conflicts") {
     const auto reg = Registry::with_builtin_formats();
-    auto dir = fs::temp_directory_path() / "splinter-test-api";
+    auto dir = scratch_path("test-api");
     fs::remove_all(dir);
     fs::create_directories(dir);
 
