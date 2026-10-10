@@ -16,6 +16,7 @@ struct Limits {
     int max_depth = 8;                                    // --max-depth
 
     std::uint64_t memory_used = 0;
+    std::uint64_t zip_used = 0; // decompressed container bytes, across every recursion level
 
     // Reserves decoded memory from the budget. Throws Error{limit} when it would exceed max_memory.
     void charge(std::uint64_t bytes);

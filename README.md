@@ -9,15 +9,15 @@ It works standalone and as a Git textconv, external diff driver, and merge drive
   `patch`, and RCS `merge` / `git merge-file`.
 - **License:** MIT ([LICENSE](LICENSE)).
 
-**Status:** specification complete for v1, and all v1 decisions are settled (2026-10-08). Phases 0–5 of
+**Status:** specification complete for v1, and all v1 decisions are settled (2026-10-08). Phases 0–6 of
 [docs/PLAN.md](docs/PLAN.md) are done: the build skeleton, the format-neutral core (data model, hashing, I/O,
 merge primitives, conflict policy, envelope map, fix-up Emitter, JSON report), the text and binary formats
 with the diff, diff3, merge, and merge-file personalities, PNG (region diff, three-way pixel and metadata
 merge, heatmaps, `inspect --layout`), the library API, the Git drivers (`git-setup`, `git-diff`,
-`git-merge`, Git LFS), and patches (`--binary`, `splinter -P`). On text, `splinter` reproduces GNU diff 3.12, GNU diff3, and
-`git merge-file` byte for byte on the golden corpus in `tests/golden/`. The other structured formats come in
-later phases. Phase 6 adds generic XML: diff and merge by element identity, attribute, and text, with untouched
-bytes written back verbatim.
+`git-merge`, Git LFS), patches (`--binary`, `splinter -P`), ZIP and TAR archives (gzip, zstd, xz, bzip2) with
+recursion into members, and generic XML and JSON. On text, `splinter` reproduces GNU diff 3.12, GNU diff3, and
+`git merge-file` byte for byte on the golden corpus in `tests/golden/`. The other formats of the v1 scope come
+in later steps.
 
 ## Why
 
@@ -51,13 +51,14 @@ feature). [docs/formats/README.md](docs/formats/README.md) lists the v1 formats 
 
 ## Usage
 
-Working today, for text, unknown binaries, and PNG:
+Working today, for text, unknown binaries, PNG, ZIP/TAR archives, XML, and JSON:
 
 ```bash
 splinter old.png new.png                     # diff: changed regions, metrics, and metadata
 splinter -u old.png new.png                  # unified diff over canonical dump lines
 splinter --json=report.json a.png b.png      # machine-readable report
 splinter -m mine.png base.png theirs.png     # three-way merge, as diff3 -m
+splinter -m mine.zip base.zip theirs.zip     # members merged by path, each by its own format
 splinter -m a.csproj base.csproj b.csproj    # XML: elements, attributes, and text merge by identity
 splinter merge-file cur.txt base.txt other.txt   # as git merge-file
 splinter dump photo.png                      # canonical text dump (Git textconv)
@@ -67,9 +68,11 @@ splinter -P < logo.patch                     # apply it, as patch (also to an ed
 splinter formats                             # list the built-in formats
 ```
 
-JSON and JSONC (`.json`, `.jsonc`, ...) work the same way: changes are addressed by JSON Pointer (`/items/id:7/label`),
-objects merge per key and arrays per element (by an `id`-like key when every element has one), and the merged
-file keeps ours' formatting, comments, and number spelling outside the changed values.
+Archive members are diffed and merged by their own format and reported under `/entries/<path>/content/…`.
+XML merges elements by identity (id attributes, then content), attributes per key, and text per node. JSON and
+JSONC are addressed by JSON Pointer (`/items/id:7/label`): objects merge per key and arrays per element (by an
+`id`-like key when every element has one). XML and JSON write untouched bytes back verbatim, so formatting,
+comments, and number spelling survive outside the changed values. Patches (`--binary`) cover text and PNG so far.
 
 Planned: the `--md` Markdown report, JSON patches (`--binary --json`), and the other formats in the v1 scope.
 

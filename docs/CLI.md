@@ -134,6 +134,7 @@ FILES: FILE1 FILE2 | DIR1 DIR2 | DIR FILE | FILE DIR | --from-file=F FILE... | -
 | `--exit-codes=posix\|extended` | SPEC §8 |
 | `--diff-algorithm=myers\|minimal\|patience\|histogram` | text: sequence algorithm (default myers, as GNU) |
 | `--png-mode=auto\|rgba`, `--alpha-zero-equal`, `--png-ignore-chunks=LIST`, `--png-color-dependency=conflict\|warn` (merge) | PNG options (png.md §4, §6.2), declared by the module (D-51) |
+| `--zip-lenient`, `--zip-times=ignore\|strict` | ZIP/TAR options (containers.md §2.1, §4): trust the central directory over a disagreeing local header (warning); hide member time changes, or count them as differences (by default they are listed but do not count) |
 | `--xml-ws=formatting\|significant`, `--xml-ignore-comments`, `--xml-ignore-pis`, `--xml-strict-prefixes`, `--xml-strict-cdata`, `--dump-attr-lines` | XML options (xml.md §4, §5), declared by the module (D-51) |
 | `--verbose`, `--quiet` | diagnostics on stderr |
 
@@ -192,7 +193,7 @@ The operand order is **mine, old, yours**, the same as GNU `diff3`, RCS `merge`,
 | `--conflicts=FILE` | write conflict report JSON | |
 | `--integrity=…`, `--show=…`, `--lenient`, `--verify-key=FILE` | as in diff (SPEC §12) | |
 | `--layout=stable\|compact` | keep payload offsets and bytes stable (default) or rewrite canonically (SPEC §12.4) | |
-| `--signatures=auto\|keep\|strip\|resign` | signature policy for the output (SPEC §12.5) | |
+| `--signatures=auto\|keep\|strip\|resign` | signature policy for the output (SPEC §12.5). ZIP (containers.md §6.3): `auto` and `strip` remove JAR/APK v1 signature files, the APK Signing Block, and `.signature.p7s` when the content changes; `resign` exits 3 until `--sign-command` lands | |
 | `--sign-key=FILE`, `--sign-cert=FILE`, `--sign-pass-file=FILE` | signing material for `resign`. A private key is required. Post-v1 (D-36): v1 exits 2 | |
 | `--sign-command=CMD` | external signer run on the validated output before the final rename. `%f` is the file | |
 | `--mac-key=FILE` | key for formats protected by a keyed MAC. Never bundled, never guessed | |

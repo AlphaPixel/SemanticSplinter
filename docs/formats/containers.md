@@ -1,8 +1,8 @@
 # Containers (ZIP, TAR) — Implementation Document
 
-> **Decided (D-27, 2026-10-08):** the MVP uses **minizip-ng in raw mode** (built with `default-features: false` plus `zlib` and `zstd`), not the own implementation recommended in §9. The own reader and writer described here is the fallback if the Phase 6 byte-exact spike fails (raw span copy, APK Signing Block, zipalign, pre-allocation limits). Q-ZIP-1 is superseded.
+> **Decided (D-27, amended 2026-10-10):** the Phase 6 spike rejected minizip-ng (its writer rebuilds every local header from the central record and models neither prefix data nor the APK Signing Block), so the **own reader and writer** of §9 is used, over zlib and zstd. Q-ZIP-1 is superseded. Status: §12.1.
 
-**Tier:** T0 · **Module:** `semantic-splinter-zip` (ZIP, JAR/APK/NUPKG, mimetype-first profile) and `semantic-splinter-tar` (TAR family) · **vcpkg feature:** `zip` (deps: `zlib`, optional `zstd`), `tar` (deps: `zlib`, optional `zstd`, `liblzma`, `bzip2`) · **Depends on modules:** core only.
+**Tier:** T0 · **Module:** `semantic-splinter-zip` (ZIP, JAR/APK/NUPKG, mimetype-first profile) and `semantic-splinter-tar` (TAR family) · **vcpkg feature:** `zip` (deps: `zlib`, `zstd`), `tar` (deps: `zlib`, `zstd`, `liblzma`, `bzip2`); both share the helper `semantic-splinter-container` (member layer and codecs) · **Depends on modules:** core only.
 **Extensions / magic:** ZIP `PK\x03\x04` at 0, or an end-of-central-directory record `PK\x05\x06` found in the last 64 KiB + 22 bytes (covers self-extracting stubs and empty archives `PK\x05\x06` at 0). `.zip .jar .war .ear .apk .aab .nupkg .whl .xpi .vsix .crx` (CRX has a header before the ZIP). TAR: `ustar` at offset 257 (`ustar\0` POSIX or `ustar  \0` GNU), or a valid header checksum in block 0. `.tar .tar.gz .tgz .tar.zst .tzst .tar.xz .txz .tar.bz2`. gzip `1F 8B`, zstd `28 B5 2F FD`, xz `FD 37 7A 58 5A 00`.
 
 ## 1. Why it matters
@@ -308,6 +308,31 @@ Optional external validators for CI (not runtime dependencies): `zip -T`/`unzip 
 | MVP | ZIP reader with all defences, writer with raw copy and deterministic touched members, deflate/stored, member KeyedMerge with recursion, rename by hash, dump, mimetype-first profile | L |
 | v2 | zstd method, TAR family with gzip/zstd/xz, signatures handling (`--signatures=`, JAR v1 manifest handling per D-50; JAR v1 re-sign with `--sign-key` is post-v1, D-36), zipalign preservation, similarity renames | M |
 | later | libarchive-based read-only module for 7z/RAR/ISO, Git binary patch interop for members | M |
+
+### 12.1 Implementation status (Phase 6)
+
+Done (v1 = MVP + v2 without similarity renames): the ZIP reader with every §8.1 defence (strict end record
+search, ZIP64, local/central agreement with `--zip-lenient`, duplicates, overlaps, entry count, declared size and
+ratio checked before decoding, one `--max-zip-size` budget and `--max-depth` across recursion); stored, deflate,
+and zstd members (id 20 read, written as 93); CP437 and Info-ZIP Unicode Path names; data descriptors; prefix
+data and its offset shift; APK Signing Block detection. The writer copies untouched members as raw spans and
+rewrites only central-record offsets, writes ours verbatim when nothing changed, and writes touched members
+deterministically (deflate level from flag bits 1-2 and a trial up to 1 MiB, zstd level 3), keeping ZIP64 where
+the source had it and zipalign 4-byte (`.so`: 4 or 16 KiB) alignment (`realigned`). Mimetype-first order,
+`--signatures=auto|strip|keep` (`resign` exits 3), and D-50 manifest digest removal. TAR: ustar, pax, and GNU
+(base-256, signed checksums, `L`/`K`, `path#N` duplicates), gzip/zstd/xz/bzip2 wrappers re-encoded with ours'
+header and parameters, verbatim member copy, touched headers in the source flavour. Shared: member diff and
+KeyedMerge with renames by content hash, per-field metadata merge (`newest-mtime`), recursion through the
+registry with nested changes and conflicts under `/entries/<path>/content`, nested conflict ids accepted by
+`--resolve`, `zip-times=ignore|strict`, dump with member dumps.
+
+Not yet: container patch payloads (§6.5; no phase row puts them in v1, so `--binary` on archives exits 3), the
+EnvelopeMap (churn line, `inspect --layout`), `--zip-strict`, `--zip-strict-order`, `--max-dump` (fixed at 1 MiB),
+`--validate=full` and `--integrity=strict` (untouched members' CRCs stay `not-checked`), `--strict-limits`,
+`--visual`, and `--layout` (the order is always ours'). Member times are DOS times; 0x5455/0x000A extras follow
+the content side. A value that needs ZIP64 in a record that had none exits 3. The zstd and xz re-encode levels
+are fixed (3, preset 6) instead of inferred; TAR blocking padding is ours' tail verbatim. Fuzz targets, the
+checked-in EPUB/APK/JAR/NuGet fixtures, and the measured hostile corpus are Phase 7+ tracks.
 
 ## 13. Open questions
 

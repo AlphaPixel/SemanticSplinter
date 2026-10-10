@@ -22,6 +22,25 @@
         "zlib"
       ]
     },
+    "zip": {
+      "description": "ZIP format module (deflate, zstd members)",
+      "dependencies": [
+        "zlib",
+        "zstd"
+      ]
+    },
+    "tar": {
+      "description": "TAR format module (gzip, zstd, xz, bzip2 wrappers)",
+      "dependencies": [
+        {
+          "name": "bzip2",
+          "default-features": false
+        },
+        "liblzma",
+        "zlib",
+        "zstd"
+      ]
+    },
     "json": {
       "description": "JSON format module"
     },

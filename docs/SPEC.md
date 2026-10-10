@@ -498,7 +498,8 @@ payload after zlib+base85 19
 - Hunks carry *before* and *after* for each touched unit, so `patch -R` (reverse) is symmetric and
   application can run as a three-way merge (§4).
 - Multi-file patches (from `-r`) list multiple `---/+++` sections. `-pNUM` strips path components exactly as GNU patch does.
-- Compression is zlib (`zlib+base85`); zstd is added when the zstd module is (Phase 6) **[D-7]**.
+- Compression is zstd (`zstd+base85`, level 19) in builds with the zstd module (the `zip` or `tar` feature), else
+  zlib (`zlib+base85`). Every build reads `zlib+base85`; `zstd+base85` needs the zstd module, else exit 3 **[D-7]**.
 - `--binary --json` writes the same patch as JSON: the §7.1 report with each change carrying its payload
   (`payload: {codec, encoding: "base64", bytes}`). `patch` mode accepts both serializations **[D-6]**.
 - Payloads are expressed at the **content layer** (decoded pixels, samples, text), not as encoded bytes, so a

@@ -122,7 +122,7 @@ applies to a third file that differs elsewhere.
 
 ## Phase 6: Containers, XML, JSON (M–L)
 
-- `zip` (minizip-ng in raw mode **[D-27]**, built with `default-features: false` plus `zlib` and `zstd`: raw copy of untouched entries, deterministic writer, bomb limits) and `tar`. Week 1 is a byte-exact go/no-go spike (raw span copy, zipalign, pre-allocation limits); if it fails, switch to the own reader/writer per D-27. The OPC layer is post-v1 (D-44).
+- `zip` (own reader and writer over zlib and zstd **[D-27]**, after the minizip-ng byte-exact spike failed: raw copy of untouched entries, deterministic writer, bomb limits) and `tar`. The OPC layer is post-v1 (D-44).
 - Shared helpers as they become needed: `src/core/text`, `src/formats/common/splice` (SPEC §2.3).
 - `xml` (expat tokenizer plus an own span tree **[D-26]**, identity profiles, attribute KeyedMerge, children SequenceMerge, splice writer).
 - `json` (order- and format-preserving, identity key rules, JSON Pointer addresses).

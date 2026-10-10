@@ -137,8 +137,12 @@ bool apply_merge_option(Config& c, const ParsedOpt& o, const Registry& reg, Cons
     case o_sign_cert:
     case o_sign_pass_file:
         throw Error(ErrorCategory::unsupported, "unsupported (built without crypto) (D-37)");
-    case o_layout:
     case o_signatures:
+        if (v != "auto" && v != "keep" && v != "strip" && v != "resign")
+            throw UsageError("invalid signatures policy '" + v + "'");
+        c.common.format_options["signatures"] = v; // containers.md §6.3
+        return true;
+    case o_layout:
     case o_sign_command:
     case o_mac_key:
     case o_verify_key:

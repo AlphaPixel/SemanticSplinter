@@ -2,11 +2,15 @@
 #include <semsplinter/patch.hpp>
 
 #include <zlib.h>
+#ifdef SEMSPLINTER_HAVE_ZSTD
+#include <zstd.h>
+#endif
 
 #include <algorithm>
 #include <array>
 #include <cctype>
 #include <cstring>
+#include <memory>
 
 namespace semsplinter {
 
@@ -21,7 +25,16 @@ Error bad(const std::string& what) {
     return Error(ErrorCategory::invalid_input, "patch: " + what);
 }
 
+// The codec of payload_codec() (D-7): zstd when this build has it, else zlib.
 std::vector<std::byte> compress(std::span<const std::byte> in) {
+#ifdef SEMSPLINTER_HAVE_ZSTD
+    std::vector<std::byte> z(ZSTD_compressBound(in.size()));
+    std::size_t zn = ZSTD_compress(z.data(), z.size(), in.data(), in.size(), 19);
+    if (ZSTD_isError(zn))
+        throw Error(ErrorCategory::internal, "patch: zstd compression failed");
+    z.resize(zn);
+    return z;
+#else
     uLongf n = compressBound(static_cast<uLong>(in.size()));
     std::vector<std::byte> out(n);
     if (compress2(reinterpret_cast<Bytef*>(out.data()), &n, reinterpret_cast<const Bytef*>(in.data()),
@@ -29,7 +42,30 @@ std::vector<std::byte> compress(std::span<const std::byte> in) {
         throw Error(ErrorCategory::internal, "patch: zlib compression failed");
     out.resize(n);
     return out;
+#endif
 }
+
+#ifdef SEMSPLINTER_HAVE_ZSTD
+std::vector<std::byte> unzstd(std::span<const std::byte> in, std::uint64_t limit) {
+    std::unique_ptr<ZSTD_DStream, decltype(&ZSTD_freeDStream)> d(ZSTD_createDStream(), ZSTD_freeDStream);
+    std::vector<std::byte> out;
+    std::array<std::byte, 65536> buf;
+    ZSTD_inBuffer zin{in.data(), in.size(), 0};
+    for (;;) {
+        ZSTD_outBuffer zout{buf.data(), buf.size(), 0};
+        std::size_t rc = ZSTD_decompressStream(d.get(), &zout, &zin);
+        if (ZSTD_isError(rc))
+            throw bad("corrupt payload");
+        out.insert(out.end(), buf.begin(), buf.begin() + static_cast<std::ptrdiff_t>(zout.pos));
+        if (out.size() > limit)
+            throw Error(ErrorCategory::limit, "patch: payload exceeds the input limit");
+        if (rc == 0 && zin.pos == zin.size)
+            return out;
+        if (zin.pos == zin.size && zout.pos < zout.size)
+            throw bad("corrupt payload"); // truncated frame
+    }
+}
+#endif
 
 std::vector<std::byte> inflate_all(std::span<const std::byte> in, std::uint64_t limit) {
     z_stream z{};
@@ -187,7 +223,19 @@ std::string encode_payload(std::span<const std::byte> raw) {
     return std::to_string(z.size()) + "\n" + out;
 }
 
-std::vector<std::byte> decode_payload(std::string_view lines, std::size_t n, std::uint64_t limit) {
+std::string_view payload_codec() noexcept {
+#ifdef SEMSPLINTER_HAVE_ZSTD
+    return "zstd+base85";
+#else
+    return "zlib+base85";
+#endif
+}
+
+std::vector<std::byte> decode_payload(std::string_view lines, std::size_t n, std::uint64_t limit,
+                                      std::string_view codec) {
+    if (codec != "zlib+base85" && codec != payload_codec())
+        throw Error(ErrorCategory::unsupported,
+                    "patch: payload codec '" + std::string(codec) + "' is not supported (D-7)");
     std::array<int, 256> val;
     val.fill(-1);
     for (int i = 0; i < 85; ++i)
@@ -213,6 +261,10 @@ std::vector<std::byte> decode_payload(std::string_view lines, std::size_t n, std
     if (k || z.size() < n || z.size() - n >= 4)
         throw bad("payload length does not match");
     z.resize(n);
+#ifdef SEMSPLINTER_HAVE_ZSTD
+    if (codec == "zstd+base85")
+        return unzstd(z, limit);
+#endif
     return inflate_all(z, limit);
 }
 
@@ -303,9 +355,6 @@ std::vector<PatchSection> parse_patch(std::string_view text, std::uint64_t paylo
                             throw bad("line " + std::to_string(i + 1) + ": bad payload line");
                         auto which = f.substr(0, a), codec = f.substr(a + 1, b - a - 1);
                         auto n = static_cast<std::size_t>(to_u64(f.substr(b + 1)));
-                        if (codec != "zlib+base85")
-                            throw Error(ErrorCategory::unsupported,
-                                        "patch: payload codec '" + codec + "' is not supported (D-7)");
                         if (which != "before" && which != "after")
                             throw bad("line " + std::to_string(i + 1) + ": bad payload line");
                         std::size_t want = (n + 3) / 4 * 5;
@@ -313,7 +362,8 @@ std::vector<PatchSection> parse_patch(std::string_view text, std::uint64_t paylo
                         ++i;
                         while (b85.size() < want && i < lines.size())
                             b85 += trim_cr(lines[i++]);
-                        (which == "before" ? u.before : u.after) = decode_payload(b85, n, payload_limit);
+                        (which == "before" ? u.before : u.after) =
+                            decode_payload(b85, n, payload_limit, codec);
                     } else {
                         break;
                     }
@@ -386,7 +436,8 @@ std::string write_section(const PatchSection& s) {
                 o += "+ " + *u.after_text + "\n";
             for (auto [which, v] : {std::pair{"before", &u.before}, std::pair{"after", &u.after}})
                 if (*v)
-                    o += std::string("payload ") + which + " zlib+base85 " + encode_payload(**v);
+                    o += std::string("payload ") + which + " " + std::string(payload_codec()) + " " +
+                         encode_payload(**v);
         }
         return o;
     }

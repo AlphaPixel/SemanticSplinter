@@ -32,3 +32,10 @@ target_link_libraries(semantic-splinter
     PRIVATE xxHash::xxhash ZLIB::ZLIB
 )
 target_compile_definitions(semantic-splinter PRIVATE SEMSPLINTER_VERSION="${PROJECT_VERSION}")
+
+# The zstd module (D-7): patch payloads use zstd when the zip or tar feature brings it.
+if(SEMSPLINTER_FORMAT_ZIP OR SEMSPLINTER_FORMAT_TAR)
+    find_package(zstd CONFIG REQUIRED)
+    target_link_libraries(semantic-splinter PRIVATE zstd::libzstd)
+    target_compile_definitions(semantic-splinter PRIVATE SEMSPLINTER_HAVE_ZSTD)
+endif()

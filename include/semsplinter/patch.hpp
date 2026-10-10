@@ -16,11 +16,15 @@
 
 namespace semsplinter {
 
-// Payload codec (D-7): zlib, then base85 with Git's alphabet. encode_payload() returns the compressed size
-// and a newline, then lines of at most 80 characters (64 bytes).
+// Payload codec (D-7): zstd if this build has it, else zlib, then base85 with Git's alphabet.
+// payload_codec() names the one encode_payload() writes: "zstd+base85" or "zlib+base85".
+std::string_view payload_codec() noexcept;
+// Returns the compressed size and a newline, then lines of at most 80 characters (64 bytes).
 std::string encode_payload(std::span<const std::byte>);
-// Decodes `n` compressed bytes from base85 `lines`; inflates at most `limit` bytes.
-std::vector<std::byte> decode_payload(std::string_view lines, std::size_t n, std::uint64_t limit);
+// Decodes `n` compressed bytes from base85 `lines` of `codec` (zlib+base85 always, zstd+base85 when this
+// build has zstd, else Error{unsupported}); decompresses at most `limit` bytes.
+std::vector<std::byte> decode_payload(std::string_view lines, std::size_t n, std::uint64_t limit,
+                                      std::string_view codec = payload_codec());
 
 // One touched unit of an envelope section, with its value on each side (nullopt: the unit is absent).
 struct UnitHunk {
