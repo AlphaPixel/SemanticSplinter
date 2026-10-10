@@ -102,6 +102,11 @@ TEST_CASE("patch: payload codec and envelope round trip") {
     auto n = std::stoul(enc.substr(0, nl));
     CHECK(semsplinter::decode_payload(enc.substr(nl + 1), n, 1 << 20) == raw);
     CHECK_THROWS(semsplinter::decode_payload(enc.substr(nl + 1), n, 10)); // past the limit
+    // D-7: every build writes zstd and still reads zlib payloads (Phase 5 patches).
+    CHECK(semsplinter::payload_codec() == "zstd+base85");
+    auto hello = semsplinter::decode_payload("c-qTI&B@8vQ7A6R$;>NBEdl^7V+GOx", 23, 100, "zlib+base85");
+    CHECK(std::string(reinterpret_cast<const char*>(hello.data()), hello.size()) == "hello, splinter");
+    CHECK_THROWS_AS(semsplinter::decode_payload("", 0, 10, "lz4+base85"), semsplinter::Error);
 
     semsplinter::PatchSection s;
     s.old_name = "a dir/x.png", s.new_name = "b.png", s.format = "png";

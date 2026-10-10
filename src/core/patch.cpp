@@ -2,9 +2,7 @@
 #include <semsplinter/patch.hpp>
 
 #include <zlib.h>
-#ifdef SEMSPLINTER_HAVE_ZSTD
 #include <zstd.h>
-#endif
 
 #include <algorithm>
 #include <array>
@@ -25,27 +23,16 @@ Error bad(const std::string& what) {
     return Error(ErrorCategory::invalid_input, "patch: " + what);
 }
 
-// The codec of payload_codec() (D-7): zstd when this build has it, else zlib.
+// The codec of payload_codec() (D-7).
 std::vector<std::byte> compress(std::span<const std::byte> in) {
-#ifdef SEMSPLINTER_HAVE_ZSTD
     std::vector<std::byte> z(ZSTD_compressBound(in.size()));
     std::size_t zn = ZSTD_compress(z.data(), z.size(), in.data(), in.size(), 19);
     if (ZSTD_isError(zn))
         throw Error(ErrorCategory::internal, "patch: zstd compression failed");
     z.resize(zn);
     return z;
-#else
-    uLongf n = compressBound(static_cast<uLong>(in.size()));
-    std::vector<std::byte> out(n);
-    if (compress2(reinterpret_cast<Bytef*>(out.data()), &n, reinterpret_cast<const Bytef*>(in.data()),
-                  static_cast<uLong>(in.size()), 9) != Z_OK)
-        throw Error(ErrorCategory::internal, "patch: zlib compression failed");
-    out.resize(n);
-    return out;
-#endif
 }
 
-#ifdef SEMSPLINTER_HAVE_ZSTD
 std::vector<std::byte> unzstd(std::span<const std::byte> in, std::uint64_t limit) {
     std::unique_ptr<ZSTD_DStream, decltype(&ZSTD_freeDStream)> d(ZSTD_createDStream(), ZSTD_freeDStream);
     std::vector<std::byte> out;
@@ -65,7 +52,6 @@ std::vector<std::byte> unzstd(std::span<const std::byte> in, std::uint64_t limit
             throw bad("corrupt payload"); // truncated frame
     }
 }
-#endif
 
 std::vector<std::byte> inflate_all(std::span<const std::byte> in, std::uint64_t limit) {
     z_stream z{};
@@ -224,11 +210,7 @@ std::string encode_payload(std::span<const std::byte> raw) {
 }
 
 std::string_view payload_codec() noexcept {
-#ifdef SEMSPLINTER_HAVE_ZSTD
     return "zstd+base85";
-#else
-    return "zlib+base85";
-#endif
 }
 
 std::vector<std::byte> decode_payload(std::string_view lines, std::size_t n, std::uint64_t limit,
@@ -261,10 +243,8 @@ std::vector<std::byte> decode_payload(std::string_view lines, std::size_t n, std
     if (k || z.size() < n || z.size() - n >= 4)
         throw bad("payload length does not match");
     z.resize(n);
-#ifdef SEMSPLINTER_HAVE_ZSTD
     if (codec == "zstd+base85")
         return unzstd(z, limit);
-#endif
     return inflate_all(z, limit);
 }
 

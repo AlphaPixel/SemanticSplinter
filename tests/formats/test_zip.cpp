@@ -449,16 +449,6 @@ TEST_CASE("zip: mimetype stays first, zipalign padding is kept") {
     }
 }
 
-TEST_CASE("zip: the zstd module's patch payload codec (D-7)") {
-    // The patch payload codec follows D-7: zstd when the build has it, zlib payloads still read.
-    CHECK(payload_codec() == "zstd+base85");
-    std::vector<std::byte> raw(5000, std::byte{'a'});
-    auto enc = encode_payload(raw);
-    auto nl = enc.find('\n');
-    CHECK(decode_payload(enc.substr(nl + 1), std::stoul(enc.substr(0, nl)), 1 << 20) == raw);
-    CHECK_THROWS_AS(decode_payload("", 0, 10, "lz4+base85"), Error);
-}
-
 TEST_CASE("cli zip: diff report and merge options") {
     auto dir = std::filesystem::temp_directory_path() / "splinter-test-zip";
     std::filesystem::remove_all(dir);
