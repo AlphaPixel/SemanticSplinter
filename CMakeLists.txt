@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.25)
 
 option(SEMSPLINTER_BUILD_TESTS "Build the test suite" ON)
 option(SEMSPLINTER_FORMAT_PNG "PNG format module (libpng, zlib)" ON)
+option(SEMSPLINTER_FORMAT_JSON "JSON format module (no dependencies)" ON)
 
 # An ON option enables the vcpkg manifest feature it names (SPEC §2.3). Must run before project().
 macro(semsplinter_vcpkg_feature option feature)
@@ -11,6 +12,7 @@ macro(semsplinter_vcpkg_feature option feature)
 endmacro()
 semsplinter_vcpkg_feature(SEMSPLINTER_BUILD_TESTS tests)
 semsplinter_vcpkg_feature(SEMSPLINTER_FORMAT_PNG png)
+semsplinter_vcpkg_feature(SEMSPLINTER_FORMAT_JSON json)
 
 project(SemanticSplinter VERSION 0.1.0 DESCRIPTION "Format-aware diff, merge, and patch" LANGUAGES CXX)
 

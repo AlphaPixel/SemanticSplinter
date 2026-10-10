@@ -65,6 +65,10 @@ splinter -P < logo.patch                     # apply it, as patch (also to an ed
 splinter formats                             # list the built-in formats
 ```
 
+JSON and JSONC (`.json`, `.jsonc`, ...) work the same way: changes are addressed by JSON Pointer (`/items/id:7/label`),
+objects merge per key and arrays per element (by an `id`-like key when every element has one), and the merged
+file keeps ours' formatting, comments, and number spelling outside the changed values.
+
 Planned: the `--md` Markdown report, JSON patches (`--binary --json`), and the other formats in the v1 scope.
 
 Personality selection follows the program name (`splinter-diff`, `splinter-merge`, ...), then a subcommand

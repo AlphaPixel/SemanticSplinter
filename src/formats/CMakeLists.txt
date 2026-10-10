@@ -23,6 +23,13 @@ if(SEMSPLINTER_FORMAT_PNG)
     list(APPEND formats png)
 endif()
 
+if(SEMSPLINTER_FORMAT_JSON)
+    add_library(semantic-splinter-json STATIC json/json.cpp)
+    add_library(SemanticSplinter::json ALIAS semantic-splinter-json)
+    target_link_libraries(semantic-splinter-json PUBLIC SemanticSplinter::core)
+    list(APPEND formats json)
+endif()
+
 # Registry::with_builtin_formats() over every enabled module, in registration order (SPEC §2.3, §11).
 set(includes "")
 set(calls "")

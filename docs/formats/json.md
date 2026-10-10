@@ -271,6 +271,33 @@ comments in a mutable tree (based on documentation of their feature sets, not te
 - **v2 (M):** JSON5, `--json-key` rules file, RFC 6902 / 7386 / jsondiffpatch export, RFC 6902 import as patch, JSON Lines, conflict comments in JSONC.
 - **Later (S each):** JSON Schema validation, `--json-grid`, rename detection for keyed elements, dialect profile API polish.
 
+### 12.1 Implementation status (Phase 6)
+
+Done (MVP): own `SpanJson` parser for strict JSON and JSONC (comments, trailing commas; BOM, CRLF), depth limit
+512, duplicate names (`invalid-duplicate-key`, last wins); canonical number and string comparison; XXH3 node
+hashes; tree diff with JSON Pointer addresses (`member`, `element`, `value`, `type` kinds, `move` for identified
+elements, numeric `delta`/`rel`); automatic identity keys from the §3 candidate list (`stats.format.array_keys`);
+KeyedMerge on objects and SequenceMerge on arrays through the core primitives, `union` offered on array
+conflicts, `--conflict=mark` falling back to ours with `mark-unsupported`; span-splice writer (ours' bytes outside
+changed units, commas re-derived, same-line comments kept with their member, other sides' values re-indented
+or laid out to match the surrounding inline or multi-line style, EOL and indent unit from ours), reparse
+validation; dump; unified-over-dump; JSON report; detection by the extensions and probe of the header (a
+`.json` file that parses neither as JSON nor as JSONC falls back to `text`; `.babelrc` is not matched).
+Shared helper `src/formats/common/splice.hpp` (SPEC §2.3).
+
+Simplified: unidentified elements pair positionally inside a changed run (equal-length runs in diffs, 1:1:1
+conflicting chunks in merges) instead of the §3 similarity scoring, so no `confidence`; comments in other
+sides' leading text of an inserted member are dropped; an object that is rebuilt keeps shadowed duplicate
+members just before the member that overrides them.
+
+Not yet: JSON5 (`.json5` is not claimed), `--json-key`/`--json-set` rules, `--json-order`, `--json-numeric`,
+`--ignore-order`, `--json-string-lines`, `--dump-full`, exports and patch payloads (`caps.patch` is off),
+JSON Lines, conflict comments in JSONC, lockfile handling (Q-JSON-5), `possible-rename`, `pairing-skipped`,
+UTF-16/32 input, and the JSONTestSuite corpus and fuzz targets (Phase 7+ tracks).
+
+Measured (Release, a 10 MB file with a 100 000-record keyed array, on a loaded machine): parse about 0.5 s,
+merge about 8 s, most of it in the core SequenceMerge over the keyed array (identity maps and move detection).
+
 ## 13. Open questions
 
 - **Q-JSON-1:** Own parser or nlohmann with `JSON_DIAGNOSTIC_POSITIONS`? **Provisional:** own `SpanJson`. **Why:** spans plus raw number text plus duplicate keys, without a program-wide ODR-sensitive macro.
