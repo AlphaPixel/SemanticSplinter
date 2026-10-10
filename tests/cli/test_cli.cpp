@@ -1,3 +1,4 @@
+#include "../scratch.hpp"
 #include "console.hpp"
 
 #include <semsplinter/formats/png.hpp>
@@ -18,7 +19,7 @@ namespace {
 struct Scratch {
     fs::path dir;
     explicit Scratch(const std::string& name) {
-        dir = fs::temp_directory_path() / ("splinter-test-" + name);
+        dir = scratch_path("test-" + name);
         fs::remove_all(dir);
         fs::create_directories(dir);
     }

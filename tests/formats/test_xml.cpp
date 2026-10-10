@@ -1,4 +1,5 @@
 #include "../cli/console.hpp"
+#include "../scratch.hpp"
 
 #include <semsplinter/format.hpp>
 #include <semsplinter/formats/xml.hpp>
@@ -456,7 +457,7 @@ std::string xml_of(const El& e, int style) {
 struct Scratch {
     std::filesystem::path dir;
     explicit Scratch(const std::string& name) {
-        dir = std::filesystem::temp_directory_path() / ("splinter-test-" + name);
+        dir = scratch_path("test-" + name);
         std::filesystem::remove_all(dir);
         std::filesystem::create_directories(dir);
     }

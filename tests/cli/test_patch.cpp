@@ -1,4 +1,5 @@
 // Patch output (--binary) and the patch personality (SPEC §6, CLI.md §5).
+#include "../scratch.hpp"
 #include "console.hpp"
 
 #include <semsplinter/formats/png.hpp>
@@ -19,7 +20,7 @@ namespace {
 struct Dir {
     fs::path d;
     explicit Dir(const std::string& name) {
-        d = fs::temp_directory_path() / ("splinter-test-" + name);
+        d = scratch_path("test-" + name);
         fs::remove_all(d);
         fs::create_directories(d);
     }

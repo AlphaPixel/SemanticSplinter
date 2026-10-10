@@ -11,6 +11,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "../cli/console.hpp"
+#include "../scratch.hpp"
 
 #include <algorithm>
 #include <filesystem>
@@ -460,7 +461,7 @@ TEST_CASE("zip: the zstd module's patch payload codec (D-7)") {
 }
 
 TEST_CASE("cli zip: diff report and merge options") {
-    auto dir = std::filesystem::temp_directory_path() / "splinter-test-zip";
+    auto dir = scratch_path("test-zip");
     std::filesystem::remove_all(dir);
     std::filesystem::create_directories(dir);
     auto put = [&](const std::string& name, const std::vector<std::byte>& b) {
