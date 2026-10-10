@@ -108,7 +108,7 @@ FILES: FILE1 FILE2 | DIR1 DIR2 | DIR FILE | FILE DIR | --from-file=F FILE... | -
 | `-I RE`, `--ignore-matching-lines` | | text: lines. Structured formats: dump lines (documented as approximate) |
 | `--strip-trailing-cr` | | ✔ |
 | `-a`, `--text` | treat all files as text | forces the **text** plugin (no semantic parsing) |
-| `--binary` | binary I/O | **re-purposed**: emit an applicable splinter patch with payloads (as `git diff --binary`) **[D-6]** |
+| `--binary` | binary I/O | **re-purposed**: emit an applicable splinter patch with payloads (as `git diff --binary`) **[D-6]**. Text files get a plain unified diff (`-u` unless another style is given); formats without patch support (binary) are an error |
 | `-r`, `--recursive`, `-N`, `--new-file`, `--unidirectional-new-file`, `-x PAT`, `--exclude`, `-X FILE`, `--exclude-from`, `-S FILE`, `--starting-file`, `--no-dereference`, `--ignore-file-name-case`, `--from-file`, `--to-file` | directory handling | ✔. Each file pair is dispatched by format |
 | `-d`, `--minimal` | minimal diff | exhaustive matching in Sequence primitives (slower) |
 | `--speed-large-files`, `--horizon-lines=NUM` | heuristics | accepted. `--speed-large-files` lets formats subsample metrics |
@@ -262,7 +262,28 @@ plugin, GNU-compatible). Mixed files, where some sections are splinter and some 
 
 Base verification: each envelope section stores the hash of the original file. If the target's hash
 matches, the patch applies at fuzz 0 trivially. If not, it applies by identity, three-way, and the
-report says `base-mismatch: applied by identity`.
+report says `base-mismatch: applying by identity`.
+
+Behaviour as implemented (Phase 5):
+
+- **Target file:** ORIGFILE when given, else GNU's rule over the `---`/`+++` names after `-p` (unset: names are
+  used whole): among the names that exist, fewest components, then shortest basename, then shortest; `/dev/null`
+  on the old side creates the new file. Messages, reject files (`NAME.rej`, or `OUTPUT.rej` with `-o`), the
+  default `--backup-if-mismatch` (off with `POSIXLY_CORRECT` or `--posix`), and exit status 0/1/2 follow GNU
+  patch 2.7, checked against it in the tests.
+- **Unified hunks** use GNU's `locate_hunk`: offsets searched outward from the expected line, then fuzz up to
+  `-F` (default 2) context lines.
+- **Envelope hunks:** an exact base applies every unit directly. Otherwise the target is merged with the patch
+  (`merge(target with the before values, target, target with the after values)`), and a hunk that overlaps an
+  unresolved conflict is rejected: the target keeps its value and the hunk goes to the reject file as an
+  envelope section. `--merge` writes the conflict as `--conflict=mark` does instead (envelope sections only).
+- **Already applied:** splinter never prompts. A unified patch whose first hunk only matches reversed, or an
+  envelope whose units all hold their after values, is skipped with GNU's
+  `Reversed (or previously applied) patch detected!  Skipping patch.` (the `-N` behaviour, also the default);
+  `-t` applies it reversed, `-f` turns the check off.
+- **Not yet:** context, normal, and ed diffs (`-c`, `-n`, `-e`), `-D`, `--merge` on unified sections, `--json`,
+  `GIT binary patch` hunks (Q-BIN-6), and patches of binary files. `-T`, `-Z`, and the other misc options are
+  accepted without effect.
 
 ---
 

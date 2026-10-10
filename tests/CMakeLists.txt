@@ -5,6 +5,7 @@ add_executable(semsplinter-tests
     cli/test_args.cpp
     cli/test_cli.cpp
     cli/test_golden.cpp
+    cli/test_patch.cpp
     core/test_basics.cpp
     core/test_envelope.cpp
     core/test_merge.cpp

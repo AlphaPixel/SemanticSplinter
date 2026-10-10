@@ -9,14 +9,14 @@ It works standalone and as a Git textconv, external diff driver, and merge drive
   `patch`, and RCS `merge` / `git merge-file`.
 - **License:** MIT ([LICENSE](LICENSE)).
 
-**Status:** specification complete for v1, and all v1 decisions are settled (2026-10-08). Phases 0–4 of
+**Status:** specification complete for v1, and all v1 decisions are settled (2026-10-08). Phases 0–5 of
 [docs/PLAN.md](docs/PLAN.md) are done: the build skeleton, the format-neutral core (data model, hashing, I/O,
 merge primitives, conflict policy, envelope map, fix-up Emitter, JSON report), the text and binary formats
 with the diff, diff3, merge, and merge-file personalities, PNG (region diff, three-way pixel and metadata
-merge, heatmaps, `inspect --layout`), the library API, and the Git drivers (`git-setup`, `git-diff`,
-`git-merge`, Git LFS). On text, `splinter` reproduces GNU diff 3.12, GNU diff3, and
-`git merge-file` byte for byte on the golden corpus in `tests/golden/`. Patch mode and the other structured
-formats come in later phases.
+merge, heatmaps, `inspect --layout`), the library API, the Git drivers (`git-setup`, `git-diff`,
+`git-merge`, Git LFS), and patches (`--binary`, `splinter -P`). On text, `splinter` reproduces GNU diff 3.12, GNU diff3, and
+`git merge-file` byte for byte on the golden corpus in `tests/golden/`. The other structured formats come in
+later phases.
 
 ## Why
 
@@ -60,11 +60,12 @@ splinter -m mine.png base.png theirs.png     # three-way merge, as diff3 -m
 splinter merge-file cur.txt base.txt other.txt   # as git merge-file
 splinter dump photo.png                      # canonical text dump (Git textconv)
 splinter inspect --layout photo.png          # structure, checksums, and byte layout
+splinter --binary a.png b.png > logo.patch   # applicable semantic patch
+splinter -P < logo.patch                     # apply it, as patch (also to an edited copy)
 splinter formats                             # list the built-in formats
 ```
 
-Planned: patch mode (`--binary a.png b.png > logo.patch`, then `splinter -P < logo.patch`), the `--md`
-Markdown report, and the other formats in the v1 scope.
+Planned: the `--md` Markdown report, JSON patches (`--binary --json`), and the other formats in the v1 scope.
 
 Personality selection follows the program name (`splinter-diff`, `splinter-merge`, ...), then a subcommand
 (`splinter merge ...`), then a mode flag (`-m`, `-3`, `-P`). Plain `splinter` is `diff`.

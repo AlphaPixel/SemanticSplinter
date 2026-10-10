@@ -47,7 +47,7 @@ TEST_CASE("cli: personality selection") {
     CHECK(c.out_text == "splinter (Semantic Splinter) " + std::string(semsplinter::version()) + "\n");
     for (auto name : {"splinter-diff3.exe", "/usr/bin/splinter-merge", "splinter-patch"}) {
         CaptureConsole k;
-        CHECK(splinter::cli::run({name}, k) == 2); // missing operands, or patch not implemented yet
+        CHECK(splinter::cli::run({name}, k) == 2); // missing operands; patch: empty input
     }
     CaptureConsole d3;
     CHECK(splinter::cli::run({"x/SPLINTER-DIFF3"}, d3) == 2);

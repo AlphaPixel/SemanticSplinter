@@ -86,5 +86,6 @@ int run_diff(const std::vector<std::string>& args, Console&, const semsplinter::
 int run_diff3(const std::vector<std::string>& args, Console&, const semsplinter::Registry&, bool merge_flag);
 int run_merge(const std::vector<std::string>& args, Console&, const semsplinter::Registry&);
 int run_merge_file(const std::vector<std::string>& args, Console&, const semsplinter::Registry&);
+int run_patch(const std::vector<std::string>& args, Console&, const semsplinter::Registry&);
 
 } // namespace splinter::cli
