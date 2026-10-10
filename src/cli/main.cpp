@@ -1,4 +1,5 @@
 #include "cli.hpp"
+#include "no_dialogs.hpp"
 
 #include <cstdio>
 #include <cstdlib>
@@ -57,6 +58,7 @@ public:
 #ifdef _WIN32
 // Arguments are converted to UTF-8 at the edge (D-24). I/O is binary so LF stays LF, as GNU tools write it.
 int wmain(int argc, wchar_t** argv) {
+    splinter::cli::no_dialogs();
     _setmode(_fileno(stdout), _O_BINARY);
     _setmode(_fileno(stderr), _O_BINARY);
     _setmode(_fileno(stdin), _O_BINARY);
