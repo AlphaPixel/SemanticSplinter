@@ -2,6 +2,7 @@ find_package(Catch2 3 CONFIG REQUIRED)
 include(Catch)
 
 add_executable(semsplinter-tests
+    no_dialogs.cpp
     cli/test_args.cpp
     cli/test_cli.cpp
     cli/test_golden.cpp
