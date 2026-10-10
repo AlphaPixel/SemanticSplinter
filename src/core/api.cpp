@@ -26,6 +26,15 @@ InputInfo info(std::string role, const Input& i) {
     return {std::move(role), i.path, hash128(i.source.bytes()), i.source.size()};
 }
 
+// Loads one input on its own budget: limits are per document (SPEC §9), so the inputs of a merge and its
+// result do not add up (#51). The diff or merge step itself has another.
+std::unique_ptr<Document> load(const Registry& reg, const Format& f, const Input& in, const Limits& limits,
+                               const OptionValues& options, const TextLoadOptions& text) {
+    Limits budget = limits.fresh();
+    Context ctx{reg, budget, 0, options};
+    return f.load(in.source, {ctx, text});
+}
+
 } // namespace
 
 const Format& detect_format(const Registry& reg, std::initializer_list<const Input*> in,
@@ -48,8 +57,8 @@ DiffResult diff(const Registry& reg, const DiffRequest& rq) {
     const Format& f = detect_format(reg, {&rq.a, &rq.b}, rq.format, rq.force_text);
     if (rq.visual && plain(f))
         throw Error(ErrorCategory::unsupported, "--visual: no visual diff for text or binary files");
-    const LoadOptions lo{ctx, rq.text_load};
-    auto da = f.load(rq.a.source, lo), db = f.load(rq.b.source, lo);
+    auto da = load(reg, f, rq.a, rq.limits, rq.format_options, rq.text_load);
+    auto db = load(reg, f, rq.b, rq.limits, rq.format_options, rq.text_load);
     const DiffOptions dopt{ctx, rq.text};
     auto cmp = f.compare(*da, *db, dopt);
 
@@ -121,8 +130,9 @@ MergeOutcome merge(const Registry& reg, const MergeRequest& rq) {
         throw Error(ErrorCategory::unsupported, "Cannot merge binary files: " + rq.ours.path);
     if (rq.visual && plain(f))
         throw Error(ErrorCategory::unsupported, "--visual: no visual diff for text or binary files");
-    const LoadOptions lo{ctx, rq.text_load};
-    auto db = f.load(rq.base.source, lo), dob = f.load(rq.ours.source, lo), dt = f.load(rq.theirs.source, lo);
+    auto db = load(reg, f, rq.base, rq.limits, rq.format_options, rq.text_load);
+    auto dob = load(reg, f, rq.ours, rq.limits, rq.format_options, rq.text_load);
+    auto dt = load(reg, f, rq.theirs, rq.limits, rq.format_options, rq.text_load);
     // --conflict=mark on a format without markers: ours plus the merge visual as a sidecar (png.md §6.6).
     std::filesystem::path sidecar_path;
     if (rq.conflict.policy == Policy::mark) {

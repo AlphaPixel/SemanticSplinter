@@ -204,6 +204,26 @@ TEST_CASE("GridMerge: conflicting cells resolve per conflict") {
     REQUIRE(g.result(r)[0] == 0);
 }
 
+// #28: the per-cell state and the region cell lists are charged to --max-memory.
+TEST_CASE("GridMerge: working memory is charged to the budget") {
+    GridShape s{3};
+    Grids g{{0, 0, 0}, {1, 0, 0}, {2, 0, 0}}; // cell 0 is in an ours and a theirs region
+    Limits l;
+    GridOptions opt;
+    opt.budget = &l;
+    grid_merge(s, s, s, g.same(), opt);
+    CHECK(l.memory_used == 3 * 10 + 2 * 8);
+    Limits tight;
+    tight.max_memory = 3 * 10 + 2 * 8 - 1;
+    opt.budget = &tight;
+    try {
+        grid_merge(s, s, s, g.same(), opt);
+        FAIL("no limit error");
+    } catch (const Error& e) {
+        CHECK(e.category() == ErrorCategory::limit);
+    }
+}
+
 TEST_CASE("GridMerge: shape changes") {
     auto same_shape_eq = [](const Grids& g) { return g.same(); };
     Grids g{{0, 0}, {0, 0, 0}, {0, 0}}; // ours grew, theirs untouched

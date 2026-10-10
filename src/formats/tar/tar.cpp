@@ -777,7 +777,8 @@ public:
                                       std::string("the ") + wrapper_name(o.wrapper) +
                                           " stream was re-encoded (the TAR content is exact)"});
         }
-        r.document = load_doc(ByteSource::from_memory(std::move(bytes), o.src.name()), mo.ctx.budget);
+        Limits budget = mo.ctx.budget.fresh(); // the result is a new document (#51)
+        r.document = load_doc(ByteSource::from_memory(std::move(bytes), o.src.name()), budget);
         return std::move(r);
     }
 

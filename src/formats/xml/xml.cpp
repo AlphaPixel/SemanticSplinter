@@ -1866,8 +1866,7 @@ MergeResult XmlFormat::merge(const Document& base_d, const Document& ours_d, con
 
     std::string bytes = Writer(m, res.conflicts, *dia_).write(*root);
     // Validation (xml.md §8): the output must parse.
-    Limits budget = mo.ctx.budget;
-    budget.memory_used = 0;
+    Limits budget = mo.ctx.budget.fresh();
     std::unique_ptr<Doc> out;
     try {
         auto* p = reinterpret_cast<const std::byte*>(bytes.data());

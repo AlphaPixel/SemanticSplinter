@@ -225,6 +225,26 @@ TEST_CASE("cli png: report, merge, sidecar, visual, inspect") {
     CHECK(run_cli(mf, {"merge-file", "-p", po, pb, pt}) == 255);
 }
 
+// #28: a raster merge whose working memory exceeds --max-memory exits `limit`, though each image fits.
+TEST_CASE("cli png: --max-memory covers the grid merge") {
+    using semsplinter::raster::Raster;
+    Scratch s("pngmem");
+    auto put = [&](const std::string& name, const Raster& r) {
+        auto b = semsplinter::png::write(r);
+        return s.file(name, {reinterpret_cast<const char*>(b.data()), b.size()});
+    };
+    Raster base(40, 30, false), ours = base, theirs = base; // 4800 decoded bytes each
+    ours.set(5, {0xFFFF, 0, 0, 0xFFFF});
+    theirs.set(30 * 40 - 1, {0, 0, 0xFFFF, 0xFFFF});
+    auto pb = put("base.png", base), po = put("ours.png", ours), pt = put("theirs.png", theirs);
+    auto out = splinter::cli::from_path(s.dir / "out.png");
+    CaptureConsole ok;
+    CHECK(run_cli(ok, {"-m", "--max-memory=30000", "--exit-codes=extended", "-o", out, po, pb, pt}) == 0);
+    CaptureConsole lim;
+    CHECK(run_cli(lim, {"-m", "--max-memory=10000", "--exit-codes=extended", "-o", out, po, pb, pt}) == 4);
+    CHECK(lim.err_text.find("--max-memory=10000") != std::string::npos);
+}
+
 TEST_CASE("cli: json diff and merge") {
     Scratch s("json");
     auto base = s.file("base.json",

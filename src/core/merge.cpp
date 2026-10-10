@@ -180,8 +180,16 @@ GridResult grid_merge(const GridShape& base, const GridShape& ours, const GridSh
     }
 
     Geometry g(base);
+    // Working memory (#28): class, take, and two labels per cell, then 8 bytes per region cell.
+    constexpr std::uint64_t kPerCell = sizeof(std::uint8_t) + sizeof(Side) + 2 * sizeof(std::int32_t);
+    auto charge = [&](std::uint64_t n, std::uint64_t each) {
+        if (opt.budget)
+            opt.budget->charge(n > UINT64_MAX / each ? UINT64_MAX : n * each);
+    };
+    charge(g.cells, kPerCell);
     std::vector<std::uint8_t> cls(g.cells);
     res.take.assign(g.cells, Side::base);
+    std::uint64_t region_cells = 0; // ours' plus theirs'
     for (std::uint64_t i = 0; i < g.cells; ++i) {
         bool ob = same(Side::base, Side::ours, i), tb = same(Side::base, Side::theirs, i);
         cls[i] = ob && tb                            ? kSame
@@ -190,7 +198,9 @@ GridResult grid_merge(const GridShape& base, const GridShape& ours, const GridSh
                  : same(Side::ours, Side::theirs, i) ? kIdentical
                                                      : kBoth;
         res.take[i] = cls[i] == kSame ? Side::base : cls[i] == kTheirs ? Side::theirs : Side::ours;
+        region_cells += cls[i] == kSame ? 0 : cls[i] == kOurs || cls[i] == kTheirs ? 1 : 2;
     }
+    charge(region_cells, sizeof(std::uint64_t));
     std::vector<std::int32_t> lo, lt;
     res.ours = label(g, cls, true, opt.gap, lo);
     res.theirs = label(g, cls, false, opt.gap, lt);

@@ -104,7 +104,8 @@ Hash128 hash_cells(const Raster& r, std::span<const std::uint64_t> cells) {
     return h.digest();
 }
 
-std::vector<GridRegion> diff_regions(const Raster& a, const Raster& b, const CellCompare& cmp, unsigned gap) {
+std::vector<GridRegion> diff_regions(const Raster& a, const Raster& b, const CellCompare& cmp, unsigned gap,
+                                     Limits* budget) {
     GridShape s{a.width, a.height};
     // b plays "ours" against a as base and theirs; its regions are the changes.
     auto res = grid_merge(s, s, s,
@@ -112,7 +113,7 @@ std::vector<GridRegion> diff_regions(const Raster& a, const Raster& b, const Cel
                               bool bx = x == Side::ours, by = y == Side::ours;
                               return bx == by || cmp.same(bx ? b : a, by ? b : a, i);
                           },
-                          {gap, 0});
+                          {gap, 0, budget});
     return std::move(res.ours);
 }
 

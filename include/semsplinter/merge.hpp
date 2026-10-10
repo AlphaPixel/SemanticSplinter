@@ -2,6 +2,7 @@
 
 #include <semsplinter/error.hpp>
 #include <semsplinter/hash.hpp>
+#include <semsplinter/limits.hpp>
 #include <semsplinter/model.hpp>
 
 #include <cstddef>
@@ -165,8 +166,9 @@ keyed_merge(std::span<const std::pair<K, V>> base, std::span<const std::pair<K, 
 using GridShape = std::vector<std::uint64_t>;
 
 struct GridOptions {
-    unsigned gap = 0;   // --gap: same-side changed cells closer than this join one region
-    unsigned guard = 0; // --guard: ours/theirs regions within this many cells conflict as one (D-10)
+    unsigned gap = 0;         // --gap: same-side changed cells closer than this join one region
+    unsigned guard = 0;       // --guard: ours/theirs regions within this many cells conflict as one (D-10)
+    Limits* budget = nullptr; // charged for the per-cell state and the region cell lists (#28)
 };
 
 struct GridRegion {
@@ -195,7 +197,8 @@ struct GridResult {
 
 // `same(a, b, cell)` compares one cell of two sides (a tolerance lives here). It is called only with
 // equal shapes, except while checking whether a side touched the grid at all.
-// ponytail: dense per-cell labels, ~9 bytes per cell; tile the grid if 2^30-cell merges matter.
+// ponytail: dense per-cell labels, ~10 bytes per cell plus 8 per changed cell and side, all charged to
+// opt.budget; runs per row (png.md §5) if 2^30-cell merges must fit --max-memory.
 GridResult grid_merge(const GridShape& base, const GridShape& ours, const GridShape& theirs,
                       const std::function<bool(Side, Side, std::uint64_t)>& same, const GridOptions& = {});
 
