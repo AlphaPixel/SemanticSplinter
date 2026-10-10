@@ -30,6 +30,14 @@ if(SEMSPLINTER_FORMAT_JSON)
     list(APPEND formats json)
 endif()
 
+if(SEMSPLINTER_FORMAT_XML)
+    find_package(expat CONFIG REQUIRED)
+    add_library(semantic-splinter-xml STATIC xml/xml.cpp)
+    add_library(SemanticSplinter::xml ALIAS semantic-splinter-xml)
+    target_link_libraries(semantic-splinter-xml PUBLIC SemanticSplinter::core PRIVATE expat::expat)
+    list(APPEND formats xml)
+endif()
+
 # Registry::with_builtin_formats() over every enabled module, in registration order (SPEC §2.3, §11).
 set(includes "")
 set(calls "")

@@ -24,6 +24,12 @@
     },
     "json": {
       "description": "JSON format module"
+    },
+    "xml": {
+      "description": "XML format module",
+      "dependencies": [
+        "expat"
+      ]
     }
   }
 }
