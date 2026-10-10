@@ -27,10 +27,10 @@ Legend: **L** = layer stack (outermost → content). **F** = framing. **I** = in
 ### JPEG
 - **L:** markers → entropy-coded segments (byte stuffing `FF00`, restart markers) → Huffman → quantized DCT coefficients (the merge domain, see jpeg.md) → pixels.
 - **F:** segment length (u16, includes itself). `RSTn` markers cycle mod 8 and are re-sequenced. APP1 Exif is a TIFF structure with **internal offsets** (IFD0, ExifIFD, GPS, IFD1 thumbnail `JPEGInterchangeFormat`/`Length`). MPF (APP2) holds offsets relative to the MP header, which point at later images in the same file. ICC profiles are split across APP2 segments with sequence numbers and counts.
-- **I:** none in baseline JPEG. Photoshop IRB 0x0425 (1061) is the MD5 of IPTC 0x0404. It is recomputed only when it matched on input (Q-JPEG-9). **Extended XMP:** `xmpNote:HasExtendedXMP` is the MD5 of the full extended packet (integrity), and each segment carries the full length and an offset.
+- **I:** none in baseline JPEG. Photoshop IRB 0x0425 (1061) is the MD5 of IPTC 0x0404. It is recomputed only when it matched on input (Q-JPEG-9); in v1 it is copied, because digests need the crypto feature (D-50). **Extended XMP:** `xmpNote:HasExtendedXMP` is the MD5 of the full extended packet (integrity), and each segment carries the full length and an offset.
 - **A:** C2PA/JUMBF manifests (APP11) are signed content credentials. **Sig default:** keep the manifest and report `signature-invalidated`, because C2PA defines how an edited asset should reference its parent *(verify)*.
 - **D/V:** Exif thumbnail (derived), Exif `DateTime` (volatile), `PixelXDimension`/`PixelYDimension` (derived).
-- **Watch:** after any pixel change, MPF offsets and Exif thumbnail offsets move. Changing Exif can shift MPF targets.
+- **Watch:** after a pixel change the scan data changes length, so MPF offsets (relative to the MP header, pointing past EOI) move. Exif offsets do not: they are relative to the TIFF header inside APP1. Changing Exif can shift MPF targets. `FF` fill bytes before markers are an encoding choice.
 
 ### TIFF (and DNG, multipage, BigTIFF)
 - **L:** header → IFD chain → strips or tiles → compression (none/LZW/Deflate/PackBits/JPEG/ZSTD/WebP) → predictor (horizontal or float) → samples.

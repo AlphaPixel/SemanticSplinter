@@ -51,7 +51,8 @@ feature). [docs/formats/README.md](docs/formats/README.md) lists the v1 formats 
 
 ## Usage
 
-Working today, for text, unknown binaries, PNG, ZIP/TAR archives, XML, JSON, and CSV/TSV:
+Working today, for text, unknown binaries, PNG, JPEG (whole-MCU merge in the DCT domain), ZIP/TAR archives, XML,
+JSON, and CSV/TSV:
 
 ```bash
 splinter old.png new.png                     # diff: changed regions, metrics, and metadata

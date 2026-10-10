@@ -69,6 +69,17 @@ if(SEMSPLINTER_FORMAT_CSV)
     list(APPEND formats csv)
 endif()
 
+if(SEMSPLINTER_FORMAT_JPEG)
+    if(NOT SEMSPLINTER_FORMAT_PNG)
+        message(FATAL_ERROR "SEMSPLINTER_FORMAT_JPEG needs SEMSPLINTER_FORMAT_PNG (its visuals are PNG files)")
+    endif()
+    find_package(JPEG REQUIRED)
+    add_library(semantic-splinter-jpeg STATIC jpeg/jpeg.cpp jpeg/codec.cpp)
+    add_library(SemanticSplinter::jpeg ALIAS semantic-splinter-jpeg)
+    target_link_libraries(semantic-splinter-jpeg PUBLIC SemanticSplinter::raster PRIVATE SemanticSplinter::png JPEG::JPEG)
+    list(APPEND formats jpeg)
+endif()
+
 # Registry::with_builtin_formats() over every enabled module, in registration order (SPEC §2.3, §11).
 set(includes "")
 set(calls "")

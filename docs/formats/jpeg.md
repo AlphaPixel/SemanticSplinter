@@ -1,6 +1,22 @@
 # JPEG — Implementation Document
 
 **Tier:** T2 · **Module:** `semantic-splinter-jpeg` · **vcpkg feature:** `jpeg` · **Depends on modules:** `semantic-splinter-raster` (helper, see png.md §3.4), `xml` (XMP, v2), shared TIFF/Exif IFD parser from `raster-misc` (v2)
+**Status (Step 9, v1 = MVP):** done: own segment layer with framing checks; libjpeg-turbo coefficient read and
+lossless coefficient write; DCT-domain diff (MCU regions, `mcus`, `blocks_changed`, `coef_l1`, pixel `max_delta`/`mean_delta`/ΔE00)
+and GridMerge over MCUs with guard band and `adjacent-edits`; pixel-mode diff when `/coding/*` differs (`requantized`);
+`encoding-mismatch`/`shape-mismatch` refusal with wholesale win for a one-sided re-encode; metadata units as OpaqueLeaf
+KeyedMerge; ICC dependency conflict; passthrough; metadata-only splice (scan bytes verbatim); ours' scan script, restart
+interval and Huffman tables reused, verified by reload; `derived-stale` for Exif IFD1/JFIF/JFXX thumbnails and MPF;
+C2PA `signature-invalidated` (keep) or `signature-stripped`; dump, inspect, EnvelopeMap, diff and merge visuals.
+Not yet: DCT-mode `--tolerance` and re-encode detection, `--jpeg-reencode`, MPF offset rewrite, patch payloads (all v1.1);
+Exif/XMP/IRB keyed merge, extended XMP reassembly, ICC re-split (v2); `--jpeg-mode`, `--ignore-markers`, `q~` estimate,
+`psnr`, `invisible`; lossless SOF3 and DNL heights (rejected as unsupported); 12-bit fixtures.
+MVP simplifications: segments of one APPn signature form one unit (`/app/APP11:JP`), comments are keyed by index
+(`/com/<i>`), JFIF and IRB are whole units (`/jfif`, `/irb`), extended XMP is `/xmp/extended`; the coefficient writer splices
+the APPn segments around libjpeg-turbo's output instead of `jpeg_write_marker`, and tries ours' Huffman tables first and
+falls back to optimized tables when the reload does not reproduce the coefficients (instead of a symbol pre-pass).
+Pixel metrics are computed in diff only, over the whole decoded image.
+
 **Extensions / magic:** `.jpg`, `.jpeg`, `.jpe`, `.jfif`. Magic `FF D8 FF`. Probe confidence 100 when the first segment after SOI is a valid marker and a SOFn is reached within the probe window, 60 on `FF D8 FF` alone.
 
 ## 1. Why it matters
@@ -224,18 +240,20 @@ split across segments, APP11 JUMBF is split into packets, MPF images follow `EOI
 
 | Field | Class | Verify on load | Regenerate on write |
 |---|---|---|---|
-| Segment length (u16 BE, includes its own 2 bytes, excludes the marker; payload ≤ 65 533) | framing | inside the file, ≥ 2 | `field(u16, BE, size_of(payload) + 2)` |
+| Marker (`FF xx`) and segment length (u16 BE, includes its own 2 bytes, excludes the marker; payload ≤ 65 533) | framing | inside the file, ≥ 2 | `field(u16, BE, size_of(payload) + 2)` |
 | `FF` fill bytes before markers | encoding | any count | dropped in re-encoded output, copied in raw spans |
 | `FF00` stuffing, final-byte 1-bit padding | encoding | decoder | produced by libjpeg-turbo |
+| DQT and SOF payloads (`/coding/*`, `/shape`) | content | well-formed, one SOF before the first SOS | copied from the side the image comes from, or written by libjpeg-turbo from ours (`jpeg_copy_critical_parameters`) |
+| Bytes after `EOI` (`/trailer`) | content | none | raw-copied from the side that wins the unit |
 | `RSTn` markers (n = interval index mod 8) and DRI `Ri` | framing (`RSTn`), encoding (`Ri`) | sequence n = 0..7 cyclic, count matches `Ri` | `Ri` copied from ours; markers emitted by libjpeg-turbo |
 | DHT tables, DAC conditioning, SOS scan script | encoding | well-formed | ours' tables and scan script reused (§7 item 3) |
 | Exif TIFF offsets (IFD0 → ExifIFD, GPS, Interop, IFD1; out-of-line values; IFD1 `JPEGInterchangeFormat`/`Length` 0x0201/0x0202), relative to the TIFF header after `Exif\0\0` | framing | in bounds of the APP1 payload | MVP: segment raw-copied (offsets stay valid because they are segment-relative). v2: `offset_of(g, relative_to tiff_header)` via the shared IFD writer (§7.2) |
-| ICC chunk header `ICC_PROFILE\0` + seq (u8, 1-based) + count (u8), ≤ 65 519 profile bytes per segment | framing | all seq 1..count present once | re-split from the reassembled profile at ours' chunk size |
+| ICC chunk header `ICC_PROFILE\0` + seq (u8, 1-based) + count (u8), ≤ 65 519 profile bytes per segment | framing | all seq 1..count present once *(v1: not checked)* | v1: raw-copied from the winning side; v2: re-split from the reassembled profile at ours' chunk size |
 | Extended XMP header: GUID (32 hex chars), full length (u32 BE), offset (u32 BE), ≤ 65 400 bytes per portion | framing (length, offset), integrity (GUID) | portions tile the full length; GUID = MD5 of the reassembled extended packet; `xmpNote:HasExtendedXMP` in the main packet equals the GUID | `md5(extended)` written as hex into every portion header **and** into the main packet's `xmpNote:HasExtendedXMP` |
 | Photoshop IRB in APP13 (`Photoshop 3.0\0`, `8BIM` resources with even padding) | framing | resource lengths in bounds | `field(u32, BE, size_of(res))`, `align(2, 0)` |
-| IRB 0x0425 (1061) IPTC digest: MD5 of the IPTC-IIM data in 0x0404 | integrity | `ok`/`mismatch` (a mismatch is meaningful to Photoshop, see Q-JPEG-9) | `md5(irb_0404)` when it matched on input; else copied |
+| IRB 0x0425 (1061) IPTC digest: MD5 of the IPTC-IIM data in 0x0404 | integrity | `ok`/`mismatch` (a mismatch is meaningful to Photoshop, see Q-JPEG-9) | `md5(irb_0404)` when it matched on input; else copied. v1: copied (D-50) |
 | APP11 JUMBF packets: `JP` CI, box instance `En` (u16), packet sequence `Z` (u32 BE), repeated LBox/TBox | framing | packets of one box contiguous in sequence | raw-copied (policy below) |
-| MPF (APP2 `MPF\0`): MP Entry individual image size (u32) and data offset (u32, relative to the MP header's byte-order mark, 0 for the primary) | framing | each offset lands on `FF D8` | `size_of(image_i)`, `offset_of(image_i, relative_to mp_header)` after the primary is laid out |
+| MPF (APP2 `MPF\0`): MP Entry individual image size (u32) and data offset (u32, relative to the MP header's byte-order mark, 0 for the primary) | framing | each offset lands on `FF D8` | `size_of(image_i)`, `offset_of(image_i, relative_to mp_header)` after the primary is laid out (v1.1; v1 copies them and warns `derived-stale`) |
 | JFIF/JFXX thumbnails, Exif IFD1 thumbnail, IRB 0x0409/0x040C, MPF gain map and depth images | derived | none | kept and marked `derived-stale` after pixel changes (Q-JPEG-5) |
 | Exif `DateTime` 0x0132, `Software` 0x0131, XMP `xmp:MetadataDate`/`ModifyDate` | volatile | none | preserved from ours (inside OpaqueLeaf segments in the MVP) |
 | C2PA manifest store (APP11 JUMBF, label `c2pa`) | authenticity | COSE claim signature plus `c2pa.hash.data` over the file minus the APP11 exclusion range | policy below |

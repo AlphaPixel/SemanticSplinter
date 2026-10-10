@@ -54,6 +54,15 @@
     },
     "csv": {
       "description": "CSV/TSV format module"
+    },
+    "jpeg": {
+      "description": "JPEG format module (DCT-domain merge)",
+      "dependencies": [
+        {
+          "name": "libjpeg-turbo",
+          "default-features": false
+        }
+      ]
     }
   }
 }
