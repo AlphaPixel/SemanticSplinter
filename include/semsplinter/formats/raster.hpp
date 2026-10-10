@@ -57,8 +57,9 @@ Hash128 hash_cells(const Raster&);
 Hash128 hash_cells(const Raster&, std::span<const std::uint64_t> cells);
 
 // Changed regions of b against a (equal shapes), 8-connected, with same-side cells closer than `gap`
-// joined (png.md §5).
-std::vector<GridRegion> diff_regions(const Raster& a, const Raster& b, const CellCompare&, unsigned gap = 0);
+// joined (png.md §5). The working memory is charged to `budget` when given.
+std::vector<GridRegion> diff_regions(const Raster& a, const Raster& b, const CellCompare&, unsigned gap = 0,
+                                     Limits* budget = nullptr);
 
 // pixels, bbox, depth (8 or 16), max_delta and mean_delta per channel on that depth's scale, alpha_changed,
 // delta_e00_max/mean (sRGB, D65).

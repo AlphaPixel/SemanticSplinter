@@ -1007,8 +1007,9 @@ MergeResult ZipFormat::merge(const Document& base_d, const Document& ours_d, con
         bytes = std::move(w.out);
     }
     // Validation (containers.md §8): the result is read back by the same reader.
-    r.document = load_doc(ByteSource::from_memory(std::move(bytes), o.src.name()), mo.ctx.budget,
-                          mo.ctx.format_options);
+    Limits budget = mo.ctx.budget.fresh(); // the result is a new document (#51)
+    r.document =
+        load_doc(ByteSource::from_memory(std::move(bytes), o.src.name()), budget, mo.ctx.format_options);
     return std::move(r);
 }
 

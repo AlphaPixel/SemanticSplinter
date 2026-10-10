@@ -301,7 +301,9 @@ private:
         auto src = ByteSource::from_file(resolve(name), rq_.limits);
         const Hash128 h = hash128(src.bytes());
         header(name);
-        auto td = f->load(src, lo);
+        Limits target_budget = rq_.limits.fresh(); // per document (SPEC §9, #51)
+        Context target_ctx{reg_, target_budget, 0, rq_.format_options};
+        auto td = f->load(src, {target_ctx, {}});
         // Already applied (GNU's reversed-patch check, -N): every unit holds its after value.
         auto applied = [&] {
             return std::all_of(s.units.begin(), s.units.end(),

@@ -403,14 +403,16 @@ std::unique_ptr<PngDoc> load_doc(ByteSource src, Limits& budget, const Opts& opt
     return doc;
 }
 
-// Equal-storage views of up to three rasters (16-bit if any is).
+// Equal-storage views of up to three rasters (16-bit if any is). Widened copies are charged to `budget`.
 class Views {
 public:
-    explicit Views(std::initializer_list<const Raster*> in) {
+    explicit Views(std::initializer_list<const Raster*> in, Limits* budget = nullptr) {
         bool wide = std::any_of(in.begin(), in.end(), [](const Raster* r) { return r->wide; });
         std::size_t k = 0;
         for (auto* r : in) {
             if (wide && !r->wide) {
+                if (budget)
+                    budget->charge(r->cells() * 8);
                 own_[k] = r->widened();
                 ptr_[k] = &*own_[k];
             } else {
@@ -535,12 +537,12 @@ void meta_changes(const PngDoc& a, const PngDoc& b, const Raster& ra, const Rast
         }
 }
 
-ChangeSet diff_docs(const PngDoc& a, const PngDoc& b, const Opts& opt) {
+ChangeSet diff_docs(const PngDoc& a, const PngDoc& b, const Opts& opt, Limits& budget) {
     ChangeSet out;
-    Views v{&a.pixels, &b.pixels};
+    Views v({&a.pixels, &b.pixels}, &budget);
     meta_changes(a, b, v[0], v[1], Side::theirs, opt, out);
     if (a.width == b.width && a.height == b.height)
-        for (auto& r : raster::diff_regions(v[0], v[1], opt.cmp, opt.gap))
+        for (auto& r : raster::diff_regions(v[0], v[1], opt.cmp, opt.gap, &budget))
             out.push_back(region_change(v[0], v[1], r, Side::theirs));
     sort_canonical(out);
     return out;
@@ -1090,7 +1092,7 @@ public:
     }
 
     ChangeSet diff(const Document& a, const Document& b, const DiffOptions& o) const override {
-        return diff_docs(doc(a), doc(b), options(o.ctx.format_options));
+        return diff_docs(doc(a), doc(b), options(o.ctx.format_options), o.ctx.budget);
     }
 
     MergeResult merge(const Document& base, const Document& ours, const Document& theirs,
@@ -1135,7 +1137,8 @@ public:
         const Opts opt = options(o.ctx.format_options);
         std::vector<Warning> warnings;
         auto bytes = implant_units(doc(t), units, opt, warnings);
-        auto d = load_doc(ByteSource::from_memory(std::move(bytes), doc(t).src.name()), o.ctx.budget, opt);
+        Limits budget = o.ctx.budget.fresh(); // a new document (#51)
+        auto d = load_doc(ByteSource::from_memory(std::move(bytes), doc(t).src.name()), budget, opt);
         d->warnings.insert(d->warnings.end(), warnings.begin(), warnings.end());
         return d;
     }
@@ -1143,11 +1146,12 @@ public:
     std::vector<std::byte> visual(const Document& a, const Document& b, const DiffOptions& o) const override {
         auto& pa = doc(a);
         auto& pb = doc(b);
-        Views v{&pa.pixels, &pb.pixels};
+        Views v({&pa.pixels, &pb.pixels}, &o.ctx.budget);
         if (pa.width != pb.width || pa.height != pb.height)
             return write_visual(raster::heatmap(v[1], v[1], {})); // reshaped: b alone
         const Opts opt = options(o.ctx.format_options);
-        return write_visual(raster::heatmap(v[0], v[1], raster::diff_regions(v[0], v[1], opt.cmp, opt.gap)));
+        return write_visual(
+            raster::heatmap(v[0], v[1], raster::diff_regions(v[0], v[1], opt.cmp, opt.gap, &o.ctx.budget)));
     }
 
     nlohmann::ordered_json inspect(const Document& d) const override {
@@ -1214,7 +1218,8 @@ MergeResult PngFormat::merge(const Document& base_d, const Document& ours_d, con
             w.message = std::string(name) + ": " + w.message;
             res.warnings.push_back(std::move(w));
         }
-    Views v{&b.pixels, &o.pixels, &t.pixels};
+    Limits& budget = mo.ctx.budget;
+    Views v({&b.pixels, &o.pixels, &t.pixels}, &budget);
     const std::array<const PngDoc*, 3> docs{&b, &o, &t};
     auto R = [&](Side s) -> const Raster& { return v[static_cast<std::size_t>(s)]; };
     auto& co = res.changes_ours;
@@ -1262,7 +1267,7 @@ MergeResult PngFormat::merge(const Document& base_d, const Document& ours_d, con
         reshaped = o_reshaped ? Side::ours : Side::theirs;
         painter = o_reshaped ? Side::theirs : Side::ours;
         auto s = pure_reshape(R(Side::base), R(reshaped));
-        painted = raster::diff_regions(R(Side::base), R(painter), opt.cmp, opt.gap);
+        painted = raster::diff_regions(R(Side::base), R(painter), opt.cmp, opt.gap, &budget);
         if (s && !painted.empty()) {
             mode = Mode::shifted, shift = *s;
             auto& cs = painter == Side::ours ? co : ct;
@@ -1293,7 +1298,7 @@ MergeResult PngFormat::merge(const Document& base_d, const Document& ours_d, con
     if (mode == Mode::grid) {
         gr = grid_merge(sb, so, st,
                         [&](Side x, Side y, std::uint64_t i) { return opt.cmp.same(R(x), R(y), i); },
-                        {opt.gap, opt.guard});
+                        {opt.gap, opt.guard, &budget});
         if (gr.whole) {
             mode = Mode::whole, whole = gr.whole;
             for (auto* cs : {&co, &ct})
@@ -1470,6 +1475,7 @@ MergeResult PngFormat::merge(const Document& base_d, const Document& ours_d, con
     plan.enc = enc;
     if (mode == Mode::grid) {
         const Raster& any = R(Side::base);
+        budget.charge(any.cells() * any.cell_bytes());
         plan.pixels = Raster(any.width, any.height, any.wide);
         const auto cb = any.cell_bytes();
         for (std::uint64_t i = 0; i < any.cells(); ++i)
@@ -1496,11 +1502,10 @@ MergeResult PngFormat::merge(const Document& base_d, const Document& ours_d, con
     KeyList expected;
     auto bytes = write_plan(plan, opt, res.warnings, expected);
     // Validation (png.md §8): the written file must load to the merged document.
-    Limits budget = mo.ctx.budget;
-    budget.memory_used = 0;
+    Limits out_budget = budget.fresh(); // the result is a new document (#51)
     std::unique_ptr<PngDoc> out;
     try {
-        out = load_doc(ByteSource::from_memory(std::move(bytes), "merged.png"), budget, {});
+        out = load_doc(ByteSource::from_memory(std::move(bytes), "merged.png"), out_budget, {});
     } catch (const Error& e) {
         throw Error(ErrorCategory::internal,
                     std::string("PNG writer produced an unreadable file: ") + e.what());

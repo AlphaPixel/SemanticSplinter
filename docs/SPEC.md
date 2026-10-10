@@ -584,6 +584,9 @@ Extended codes are never used in Git modes.
 | Container recursion depth | 8 | `--max-depth` |
 | XML: entity expansion | disabled (no DTD entities); external entities are never loaded | `--xml-internal-entities` allows *internal* general entities only, under expat's amplification limits. The SVG dialect has a default bounded exception for Illustrator exports (svg.md §10, Q-SVG-2) |
 
+- Memory and ZIP-size budgets are per document: each input, each result (or patched target) has its own,
+  shared by every recursion level inside it (D-47), and the diff or merge step has one more for its working
+  memory (raster grid state, decoded container members). So a merge of three inputs near the limit succeeds.
 - Parsers are fuzzed (libFuzzer/AFL harness per format in CI; see PLAN.md).
 - Output: write to a sibling temp file, validate, flush, then rename. On failure, the temp file is removed and the target is untouched.
 - No network access and no external processes. The only exceptions are the opt-in `--diff-program` for text diffs (diff3 compatibility), the opt-in `--sign-command` external signer (§12.5), and `git config --get` in `git-diff` mode to read `trustExitCode` (D-16; skipped when `--trust-exit-code` is given or `git` is not on PATH).

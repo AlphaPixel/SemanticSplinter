@@ -176,3 +176,23 @@ TEST_CASE("tar: dump") {
                       "entry b.txt  file  6  mode=0644  owner=0/0\n"
                       "=== b.txt (text)\nhello\n");
 }
+
+// #51: each input and the result have their own --max-zip-size budget, so three archives that each fit
+// merge although their decoded total does not.
+TEST_CASE("tar: merge budgets are per document") {
+    std::string big;
+    for (int k = 0; k < 4000; ++k)
+        big += "line " + std::to_string(k) + "\n";
+    auto with = [&](std::string_view a) { return Entries{entry("a.txt", a), entry("big.txt", big)}; };
+    auto input = [](std::vector<std::byte> b) { return Input{ByteSource::from_memory(b, "x.tgz"), "x.tgz"}; };
+    MergeRequest rq;
+    rq.base = input(tar::build(with("1\n2\n3\n"), tar::Wrapper::gzip));
+    rq.ours = input(tar::build(with("O\n2\n3\n"), tar::Wrapper::gzip));
+    rq.theirs = input(tar::build(with("1\n2\nT\n"), tar::Wrapper::gzip));
+    rq.limits.max_zip_total = tar::build(with("1\n2\n3\n")).size() * 3 / 2;
+    const auto reg = Registry::with_builtin_formats();
+    auto out = merge(reg, rq);
+    CHECK(out.conflicts == 0);
+    Fx fx;
+    CHECK(fx.members(out.bytes)["a.txt"] == "O\n2\nT\n");
+}
