@@ -203,6 +203,10 @@ The operand order is **mine, old, yours**, the same as GNU `diff3`, RCS `merge`,
 
 Writing binary merged output to a terminal is refused (exit 2) unless `-o` is given or stdout is redirected.
 
+When the three inputs detect as different formats (a `.json` side holding conflict markers is text), they merge
+as text if every input is text underneath, with `warning: inputs detect as different formats (json, text, json);
+comparing as text` on stderr; otherwise they merge as binary (SPEC §11). Diff and the Git drivers do the same.
+
 ---
 
 ## 4. merge personality (RCS `merge` / `git merge-file`)

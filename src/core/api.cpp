@@ -2,6 +2,7 @@
 #include <semsplinter/error.hpp>
 #include <semsplinter/io.hpp>
 #include <semsplinter/semsplinter.hpp>
+#include <semsplinter/text.hpp>
 
 #include <algorithm>
 #include <cstdio>
@@ -38,23 +39,36 @@ std::unique_ptr<Document> load(const Registry& reg, const Format& f, const Input
 } // namespace
 
 const Format& detect_format(const Registry& reg, std::initializer_list<const Input*> in,
-                            const std::string& format, bool force_text) {
+                            const std::string& format, bool force_text, std::string* note) {
     if (force_text)
         return by_name(reg, "text");
     const Format* first = nullptr;
-    bool mixed = false;
+    bool binary = false, mixed = false, text = true;
+    std::string names;
     for (auto* i : in) {
         const Format& f = reg.detect(i->source.bytes(), i->path, format);
-        mixed |= f.info().name == "binary" || (first && first != &f);
+        binary |= f.info().name == "binary";
+        mixed |= first && first != &f;
+        text &= !looks_binary(i->source.bytes());
+        names += (names.empty() ? "" : ", ") + std::string(f.info().name);
         first = first ? first : &f;
     }
-    return mixed ? by_name(reg, "binary") : *first;
+    if (binary || !mixed)
+        return binary ? by_name(reg, "binary") : *first;
+    if (!text)
+        return by_name(reg, "binary");
+    // Text underneath (json beside a side whose conflict markers broke parsing): a text merge beats bytes
+    // (#41).
+    if (note)
+        *note = "inputs detect as different formats (" + names + "); comparing as text";
+    return by_name(reg, "text");
 }
 
 DiffResult diff(const Registry& reg, const DiffRequest& rq) {
     Limits budget = rq.limits;
     Context ctx{reg, budget, 0, rq.format_options};
-    const Format& f = detect_format(reg, {&rq.a, &rq.b}, rq.format, rq.force_text);
+    std::string note;
+    const Format& f = detect_format(reg, {&rq.a, &rq.b}, rq.format, rq.force_text, &note);
     if (rq.visual && plain(f))
         throw Error(ErrorCategory::unsupported, "--visual: no visual diff for text or binary files");
     auto da = load(reg, f, rq.a, rq.limits, rq.format_options, rq.text_load);
@@ -69,6 +83,8 @@ DiffResult diff(const Registry& reg, const DiffRequest& rq) {
     auto *ma = f.envelope(*da), *mb = f.envelope(*db);
     if (ma && mb)
         churn = attribute_churn(rq.a.source.bytes(), *ma, rq.b.source.bytes(), *mb);
+    if (!note.empty())
+        r.warnings.push_back({"", {"formats-mixed", "", note}});
     auto ia = f.inspect(*da), ib = f.inspect(*db);
     for (auto [j, path] : {std::pair{&ia, &rq.a.path}, std::pair{&ib, &rq.b.path}})
         if (j->contains("warnings"))
@@ -125,7 +141,8 @@ DiffResult diff(const Registry& reg, const DiffRequest& rq) {
 MergeOutcome merge(const Registry& reg, const MergeRequest& rq) {
     Limits budget = rq.limits;
     Context ctx{reg, budget, 0, rq.format_options};
-    const Format& f = detect_format(reg, {&rq.base, &rq.ours, &rq.theirs}, rq.format, rq.force_text);
+    std::string note;
+    const Format& f = detect_format(reg, {&rq.base, &rq.ours, &rq.theirs}, rq.format, rq.force_text, &note);
     if (rq.text_only && f.info().name != "text")
         throw Error(ErrorCategory::unsupported, "Cannot merge binary files: " + rq.ours.path);
     if (rq.visual && plain(f))
@@ -175,6 +192,8 @@ MergeOutcome merge(const Registry& reg, const MergeRequest& rq) {
     rep.changes_theirs = r.changes_theirs;
     rep.auto_merged = r.auto_merged;
     rep.conflicts = r.conflicts;
+    if (!note.empty())
+        r.warnings.insert(r.warnings.begin(), {"formats-mixed", "", note});
     rep.warnings = r.warnings;
     auto *mo_ours = f.envelope(*dob), *mo_out = f.envelope(*r.document);
     if (mo_ours && mo_out)

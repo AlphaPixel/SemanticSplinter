@@ -25,9 +25,11 @@ struct Input {
     std::string path; // shown in reports and messages; its extension also guides detection
 };
 
-// The format all inputs share (SPEC §11). Inputs of different formats, or any binary one, give "binary".
+// The format all inputs share (SPEC §11). Any binary input gives "binary". Inputs of different formats give
+// "text" when every one is text underneath (no NUL bytes), with a warning in *note; otherwise "binary".
 const Format& detect_format(const Registry&, std::initializer_list<const Input*>,
-                            const std::string& format = {}, bool force_text = false);
+                            const std::string& format = {}, bool force_text = false,
+                            std::string* note = nullptr);
 
 struct DiffRequest {
     Input a, b;
@@ -44,7 +46,7 @@ struct DiffRequest {
 };
 
 struct DiffResult {
-    std::string format;              // "binary" when the two sides are of different formats
+    std::string format;              // "text" or "binary" when the two sides are of different formats
     bool differs = false;            // exit status 1
     std::string text;                // the rendering, when requested
     std::vector<std::string> errors; // render diagnostics: the diff fails (exit 2) after printing

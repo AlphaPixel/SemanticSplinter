@@ -126,6 +126,40 @@ TEST_CASE("api: merge writes the output, the conflicts report, and counts confli
     fs::remove_all(dir);
 }
 
+// #41: a .json side whose conflict markers break parsing detects as text; the merge falls back to text.
+TEST_CASE("api: inputs of different text-like formats merge and diff as text, with a warning") {
+    const auto reg = Registry::with_builtin_formats();
+    MergeRequest rq;
+    rq.base = in("{\n  \"a\": 1,\n  \"x\": 0,\n  \"b\": 2\n}\n", "base.json");
+    rq.ours = in("{\n<<<<<<< HEAD\n  \"a\": 3,\n=======\n  \"a\": 4,\n>>>>>>> other\n  \"x\": 0,\n"
+                 "  \"b\": 2\n}\n",
+                 "ours.json");
+    rq.theirs = in("{\n  \"a\": 1,\n  \"x\": 0,\n  \"b\": 5\n}\n", "theirs.json");
+    auto m = semsplinter::merge(reg, rq);
+    CHECK(m.format == "text");
+    CHECK(m.conflicts == 0);
+    CHECK(str(m.bytes) == "{\n<<<<<<< HEAD\n  \"a\": 3,\n=======\n  \"a\": 4,\n>>>>>>> other\n  \"x\": 0,\n"
+                          "  \"b\": 5\n}\n");
+    REQUIRE_FALSE(m.warnings.empty());
+    CHECK(m.warnings[0].code == "formats-mixed");
+    CHECK(m.warnings[0].message.find("json, text, json") != std::string::npos);
+    CHECK(m.report.warnings == m.warnings);
+
+    DiffRequest d;
+    d.a = rq.base, d.b = rq.ours;
+    auto r = semsplinter::diff(reg, d);
+    CHECK(r.format == "text");
+    CHECK(r.differs);
+    REQUIRE_FALSE(r.warnings.empty());
+    CHECK(r.warnings[0].second.code == "formats-mixed");
+
+    // A side that is binary underneath still makes the whole merge binary, without the warning.
+    rq.theirs = in(std::string("{\0}", 3), "theirs.json");
+    auto b = semsplinter::merge(reg, rq);
+    CHECK(b.format == "binary");
+    CHECK(b.warnings.empty());
+}
+
 TEST_CASE("api: diff renders through the format's comparison") {
     const auto reg = Registry::with_builtin_formats();
     DiffRequest rq;
