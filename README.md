@@ -16,7 +16,8 @@ with the diff, diff3, merge, and merge-file personalities, PNG (region diff, thr
 merge, heatmaps, `inspect --layout`), the library API, the Git drivers (`git-setup`, `git-diff`,
 `git-merge`, Git LFS), and patches (`--binary`, `splinter -P`). On text, `splinter` reproduces GNU diff 3.12, GNU diff3, and
 `git merge-file` byte for byte on the golden corpus in `tests/golden/`. The other structured formats come in
-later phases.
+later phases. Phase 6 adds generic XML: diff and merge by element identity, attribute, and text, with untouched
+bytes written back verbatim.
 
 ## Why
 
@@ -57,6 +58,7 @@ splinter old.png new.png                     # diff: changed regions, metrics, a
 splinter -u old.png new.png                  # unified diff over canonical dump lines
 splinter --json=report.json a.png b.png      # machine-readable report
 splinter -m mine.png base.png theirs.png     # three-way merge, as diff3 -m
+splinter -m a.csproj base.csproj b.csproj    # XML: elements, attributes, and text merge by identity
 splinter merge-file cur.txt base.txt other.txt   # as git merge-file
 splinter dump photo.png                      # canonical text dump (Git textconv)
 splinter inspect --layout photo.png          # structure, checksums, and byte layout

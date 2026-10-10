@@ -134,6 +134,7 @@ FILES: FILE1 FILE2 | DIR1 DIR2 | DIR FILE | FILE DIR | --from-file=F FILE... | -
 | `--exit-codes=posix\|extended` | SPEC §8 |
 | `--diff-algorithm=myers\|minimal\|patience\|histogram` | text: sequence algorithm (default myers, as GNU) |
 | `--png-mode=auto\|rgba`, `--alpha-zero-equal`, `--png-ignore-chunks=LIST`, `--png-color-dependency=conflict\|warn` (merge) | PNG options (png.md §4, §6.2), declared by the module (D-51) |
+| `--xml-ws=formatting\|significant`, `--xml-ignore-comments`, `--xml-ignore-pis`, `--xml-strict-prefixes`, `--xml-strict-cdata`, `--dump-attr-lines` | XML options (xml.md §4, §5), declared by the module (D-51) |
 | `--verbose`, `--quiet` | diagnostics on stderr |
 
 Names were checked against GNU diff's long options using the four-character rule in §1.2.
