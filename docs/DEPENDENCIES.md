@@ -20,6 +20,9 @@ permissive (MIT, BSD, Apache-2.0, Zlib, public domain); copyleft libraries are o
 | xxhash | 0.8.4 | BSD-2-Clause | core | XXH3-128 content hashes and change/conflict ids | D-8: speed; no adversarial collision requirement |
 | zlib | 1.3.2#2 | Zlib | core | IDAT, zTXt, iCCP, iTXt inflate and deflate; parameter inference; ZIP deflate members; gzip | png.md §7.3: byte identity is pinned to this port (Q-PNG-4) |
 | zstd | 1.5.7 | BSD-3-Clause OR GPL-2.0-only (BSD chosen) | core | patch payloads (D-7), ZIP method 93, `.tar.zst` | containers.md §9; the zstd module of D-7 |
+| giflib | 6.1.3 | MIT | `gif` | GIF LZW decode (`DGifSlurp`, de-interlaced) | raster-misc.md §9, Q-RAST-4: decoder only; our own block parser and LZW writer keep output byte-stable |
+| tiff (libtiff) | 4.7.2 (`default-features: false`, feature `zip`) | libtiff (BSD-like) | `tiff` | TIFF strip and tile decode (LZW, Deflate, PackBits, predictors) | raster-misc.md §9: hardened decoder; JPEG, LZMA, ZSTD, WebP and LERC codecs left out to stay light, so such pages are opaque units. Strips are encoded by our own LZW/PackBits and zlib, byte identity pinned to the `zlib` port |
+| libwebp | 1.6.0#3 (`default-features: false`) | BSD-3-Clause | `webp` | VP8/VP8L decode, lossless re-encode (`method=6, quality=100, exact=1`, Q-RAST-5) | raster-misc.md §9; `libwebpmux` and SIMD are not built (our own RIFF writer). Lossless re-encode bytes are pinned to this port and feature set; on macOS x64 the port forces `simd`, which may change them |
 
 **Vendored (not a port):** `src/formats/sqlite/cksumvfs.c` from SQLite 3.53.4 `ext/misc/cksumvfs.c`, public domain
 (blessing), unmodified. Used for its page checksum function (Q-SQLITE-7). Update it together with the `sqlite3` port.

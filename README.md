@@ -51,8 +51,8 @@ feature). [docs/formats/README.md](docs/formats/README.md) lists the v1 formats 
 
 ## Usage
 
-Working today, for text, unknown binaries, PNG, JPEG (whole-MCU merge in the DCT domain), ZIP/TAR archives, XML,
-SVG/SVGZ, JSON, CSV/TSV, SQLite, PDF, and simple meshes (OBJ/MTL, PLY, STL):
+Working today, for text, unknown binaries, PNG, JPEG (whole-MCU merge in the DCT domain), BMP, TGA, QOI, GIF, TIFF,
+WebP, ZIP/TAR archives, XML, SVG/SVGZ, JSON, CSV/TSV, SQLite, PDF, and simple meshes (OBJ/MTL, PLY, STL):
 
 ```bash
 splinter old.png new.png                     # diff: changed regions, metrics, and metadata
@@ -89,9 +89,11 @@ annotations, and form values onto the side that changed page content, written as
 every byte (and earlier signatures) of that file.
 SVG builds on XML: `style` properties, `class` tokens, and path subpaths merge separately, editor view state (zoom,
 window) is ignored, deleting what the other side newly references conflicts, and `.svgz` is unpacked and repacked
-only when the content changed. Patches (`--binary`) cover text and PNG so far.
+only when the content changed. BMP, TGA, QOI, GIF, TIFF, and WebP merge pixels region by region and their metadata
+per key; animated GIF/WebP and multi-page TIFF merge frame by frame, unchanged frames and TIFF strips keep their
+bytes, and lossy WebP frames merge only whole. Patches (`--binary`) cover text and PNG so far.
 
-Planned: the `--md` Markdown report, JSON patches (`--binary --json`), and the other formats in the v1 scope.
+Planned: the `--md` Markdown report and JSON patches (`--binary --json`).
 
 Personality selection follows the program name (`splinter-diff`, `splinter-merge`, ...), then a subcommand
 (`splinter merge ...`), then a mode flag (`-m`, `-3`, `-P`). Plain `splinter` is `diff`.

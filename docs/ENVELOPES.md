@@ -37,20 +37,20 @@ Legend: **L** = layer stack (outermost → content). **F** = framing. **I** = in
 - **F:** **absolute** offsets everywhere: IFD offsets, `StripOffsets`/`TileOffsets` with their byte counts, out-of-line tag values (more than 4 bytes, or 8 in BigTIFF), SubIFDs, EXIF/GPS IFD pointers, and `NextIFD`. Word alignment applies. BigTIFF uses 8-byte variants.
 - **I:** none. DNG has `NewRawImageDigest` (MD5, integrity) *(verify)*. **A:** C2PA embeddings are possible *(verify)*, and follow the JPEG rule.
 - **D/V:** reduced-resolution IFDs and previews are derived. `DateTime` and `Software` are volatile.
-- **Watch:** private tags with offsets that splinter does not understand (MakerNotes, Photoshop tag 37724) silently break when data moves. Keep their data at the same absolute offset when possible (stable layout), and otherwise warn `opaque-offsets-moved`.
+- **Watch:** private tags with offsets that splinter does not understand (MakerNotes, Photoshop tag 37724) silently break when data moves. Keep their data at the same absolute offset when possible (stable layout: rewritten IFDs and changed strips are appended, ours' bytes stay), and otherwise warn `opaque-offsets-moved`. libtiff's strip chopping must be off (`c` open mode) so its strips are the file's strips.
 
 ### GIF
 - **L:** blocks → image data sub-blocks → LZW → palette indices.
 - **F:** sub-block lengths (≤ 255) with a zero terminator, packed-field sizes, and the logical screen.
-- **I/A:** none. **Watch:** LZW re-encode is deterministic in our own writer (Q-RAST-4).
+- **I/A:** none. **Watch:** LZW re-encode is deterministic in our own writer (Q-RAST-4). The GCE transparent index is encoding: transparent pixels carry no color, so they are canonical (0,0,0,0).
 
 ### WebP
 - **L:** RIFF → chunks (VP8/VP8L/VP8X/ALPH/ANIM/ANMF/ICCP/EXIF/XMP) → VP8L bitstream or VP8 → pixels. `ALPH` is optionally VP8L-compressed.
 - **F:** RIFF size, chunk sizes, pad byte to even length, and VP8X canvas size and flags (flags are derived from which chunks are present).
-- **I:** none. **A:** a C2PA chunk is possible *(verify)*, and follows the JPEG rule. **Advisory:** writers get the RIFF pad and size wrong in the wild, so a mismatch warns rather than failing (Q-RAST-9). **Watch:** the VP8X feature flags must match the chunks present after a merge.
+- **I:** none. **A:** a C2PA chunk is possible *(verify)*, and follows the JPEG rule. **Advisory:** writers get the RIFF pad and size wrong in the wild, so a mismatch warns rather than failing (Q-RAST-9). **Watch:** the VP8X feature flags must match the chunks present after a merge. A final chunk may lack its pad byte (tolerated, added on write).
 
 ### BMP / TGA / QOI
-- **F:** BMP `bfSize`, `bfOffBits`, `biSizeImage` (may be 0), and row padding to 4 bytes. TGA ID length, color-map spec, and the optional extension and developer areas with offsets in the footer. QOI's end marker.
+- **F:** BMP `bfSize`, `bfOffBits`, `biSizeImage` (may be 0), and row padding to 4 bytes. TGA ID length, color-map spec, and the optional extension and developer areas with offsets in the footer (the optional scan-line table is not rewritten). QOI's end marker. **D:** the TGA postage stamp (`derived-stale`).
 - **I:** none. TGA footer signature is a constant. **L:** BMP RLE4/RLE8, TGA RLE, and QOI ops. **Advisory:** BMP `bfSize` and `biSizeImage` are often wrong in the wild, so a mismatch warns rather than failing (Q-RAST-9).
 
 ### SVG / SVGZ

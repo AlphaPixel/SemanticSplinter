@@ -97,6 +97,43 @@
           "default-features": false
         }
       ]
+    },
+    "bmp": {
+      "description": "BMP format module (own codec)"
+    },
+    "tga": {
+      "description": "TGA format module (own codec)"
+    },
+    "qoi": {
+      "description": "QOI format module (own codec)"
+    },
+    "gif": {
+      "description": "GIF format module (giflib decode, own LZW writer)",
+      "dependencies": [
+        "giflib"
+      ]
+    },
+    "tiff": {
+      "description": "TIFF format module (libtiff decode; own strip encoders)",
+      "dependencies": [
+        {
+          "name": "tiff",
+          "default-features": false,
+          "features": [
+            "zip"
+          ]
+        },
+        "zlib"
+      ]
+    },
+    "webp": {
+      "description": "WebP format module (libwebp)",
+      "dependencies": [
+        {
+          "name": "libwebp",
+          "default-features": false
+        }
+      ]
     }
   }
 }
