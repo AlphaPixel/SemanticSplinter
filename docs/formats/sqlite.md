@@ -2,6 +2,7 @@
 
 **Tier:** T2 · **Module:** `semantic-splinter-sqlite` · **vcpkg feature:** `sqlite` · **Depends on modules:** `text` (dump diff), `binary` (BLOB fallback)
 **Extensions / magic:** `.db`, `.sqlite`, `.sqlite3`, `.db3`, `.gpkg` (GeoPackage), `.mbtiles`; magic `"SQLite format 3\0"` (16 bytes at offset 0). Companion files `-wal`, `-shm`, `-journal` are detected and refused as standalone inputs.
+**Status (v1 = MVP, #13):** schema diff (KeyedMerge on `(type, name)` over normalized SQL), row diff keyed by declared primary key (composite, `WITHOUT ROWID`) or rowid (`identity-rowid` warning), cell diff and three-way merge per column (`both-modified`, `modify-delete`, `add-add`), header fields (`user_version`, `application_id` merged; a `page_size`/`encoding` change taken from theirs is an `unsupported` conflict that keeps ours), add-add of SQLite-allocated row ids (rowid or `INTEGER PRIMARY KEY`) renumbered after `max(all sides)` (`auto: renumbered`, SPEC §2.3) unless a foreign key points at the table, tables whose schema one side changed (or added, or dropped) taken whole from that side, FTS5/R*Tree tables merged as one unit (their shadow tables copied whole from the winning side), triggers dropped and recreated around the merged DML (Q-SQLITE-5), `constraint` conflicts that keep ours' row, `sqlite_sequence` as `max(ours, theirs, result)`, `derived-stale` for `sqlite_stat1`, `foreign-key` warnings from `PRAGMA foreign_key_check`, `integrity_check` on the result, dump/textconv (§5), WAL sidecar refusal, WAL-mode files kept in WAL mode, cksumvfs checksums kept valid (vendored `src/formats/sqlite/cksumvfs.c`, Q-SQLITE-7), envelope map and `inspect`. An untouched database, or a merge in which one side is unchanged, writes that side's bytes unchanged. Deviations: inputs and the output are opened with `sqlite3_deserialize` on a private in-memory copy, not `immutable=1` files, so container members and Git temp files need no file and nothing is created beside them; the output is that in-memory copy of ours, so untouched pages still keep ours' bytes; cksumvfs's checksum function is applied to the pages that differ from ours instead of registering the VFS (an in-memory database has no VFS to shim, and registration would change the process-wide default VFS); rowid addresses are `rows/rowid:N`; key segments escape `~`, `/`, `,` as `~0`, `~1`, `~3`; the writer is SQLite itself, without the Emitter (§7.1). Not yet (v2 or later): ALTER/12-step rebuild for row edits on a table whose schema the other side changed (a conflict on the table today), FK `dependency` conflicts, `--key`, `--renumber-theirs` with FK rewriting, `--ignore-table`, `--analyze`, `--vacuum`, `--wal=checkpoint`, `--detect-renames`, `--dump-max-rows`, `--conflict-table`, visible-row diff of virtual tables (the dump shows a content hash), generated columns in the dump, BLOB recursion, patch payloads, the session changeset export, streaming (rows are loaded into memory, charged to `--max-memory`), and fuzz targets.
 
 ## 1. Why it matters
 
@@ -170,11 +171,14 @@ the SQLite version through the vcpkg baseline and record `sqlite_version()` in t
 **Layer stack:** `file → pages (page size from the header) → page 1 header (100 bytes) + B-tree pages (page header, cell pointer array, cells, overflow chains, optional reserved bytes at each page end) + freelist trunk/leaf pages → records (varint header, serial types) → rows and schema`.
 
 **Writer delegation (SPEC §12.4).** SQLite writes the file; splinter never emits a page byte itself and the
-Emitter is not used. Verification on load is SQLite's (`PRAGMA quick_check`, §10); splinter only reads the header.
+Emitter is not used. Verification on load is SQLite's (`PRAGMA quick_check`, §10); splinter only reads the header,
+plus the cksumvfs checksums when byte 20 is 8. The only bytes splinter sets are bytes 18/19 (put back to ours' WAL
+mode after the in-memory write) and the cksumvfs checksums of changed pages.
 
 | Field (header offset) | Class | Verify on load | On write |
 |---|---|---|---|
-| page size (16, u16 BE, 1 = 65536), write/read version (18, 19: 1 legacy, 2 WAL) | framing | SQLite | delegated; kept from ours |
+| magic (0..16) | framing | exact match | kept from ours |
+| page size (16, u16 BE, 1 = 65536), write/read version (18, 19: 1 legacy, 2 WAL) | framing | SQLite | delegated; kept from ours (18/19 restored after the in-memory write, which needs 1) |
 | reserved bytes per page (20) | framing | 8 suggests cksumvfs (below) | delegated |
 | file change counter (24), `version-valid-for` (92), SQLITE_VERSION_NUMBER (96) | volatile | none | delegated |
 | in-header database size in pages (28) | framing | valid only when (24) equals (92); else SQLite uses the file size | delegated |
@@ -182,7 +186,7 @@ Emitter is not used. Verification on load is SQLite's (`PRAGMA quick_check`, §1
 | schema cookie (40), schema format (44) | framing | SQLite | delegated (bumped by schema changes) |
 | text encoding (56), user_version (60), application_id (68, `GPKG` for GeoPackage) | content | none | KeyedMerge (section 3); written with PRAGMAs |
 | B-tree page headers, cell pointers, overflow pointers, varint record headers | framing, encoding | SQLite | delegated |
-| cksumvfs 8-byte per-page checksum in the reserved bytes | integrity | only with cksumvfs registered: SQLite reports `SQLITE_IOERR_DATA` on mismatch | maintained by cksumvfs when registered for the output (Q-SQLITE-7) |
+| cksumvfs 8-byte per-page checksum in the reserved bytes | integrity | when (20) is 8: page 1 decides whether the file uses cksumvfs; other mismatching pages are listed by `inspect` | recomputed with cksumvfs's function on every page that differs from ours, when ours uses cksumvfs (Q-SQLITE-7) |
 | `-wal` header (32 bytes: magic `0x377f0682`/`0x377f0683` selecting checksum byte order, salts, header checksum) and frame headers (24 bytes: page number, commit size, salts, cumulative checksum) | framing, integrity | not read: a `-wal` next to an input is refused or checkpointed (section 10) | never written; the output is checkpointed and has no WAL |
 
 **Raw copy:** the output starts as a byte copy of ours, so pages that SQLite never touches keep their bytes. `--vacuum` gives up that property for determinism.

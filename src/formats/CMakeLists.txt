@@ -91,6 +91,19 @@ if(SEMSPLINTER_FORMAT_SVG)
     list(APPEND formats svg)
 endif()
 
+if(SEMSPLINTER_FORMAT_SQLITE)
+    enable_language(C)
+    find_package(unofficial-sqlite3 CONFIG REQUIRED)
+    # Vendored cksumvfs.c (public domain, SQLite 3.53.4 ext/misc), built without our warning flags.
+    add_library(semantic-splinter-cksumvfs OBJECT sqlite/cksum.c)
+    set_property(TARGET semantic-splinter-cksumvfs PROPERTY COMPILE_OPTIONS "")
+    target_link_libraries(semantic-splinter-cksumvfs PRIVATE unofficial::sqlite3::sqlite3)
+    add_library(semantic-splinter-sqlite STATIC sqlite/sqlite.cpp $<TARGET_OBJECTS:semantic-splinter-cksumvfs>)
+    add_library(SemanticSplinter::sqlite ALIAS semantic-splinter-sqlite)
+    target_link_libraries(semantic-splinter-sqlite PUBLIC SemanticSplinter::core PRIVATE unofficial::sqlite3::sqlite3)
+    list(APPEND formats sqlite)
+endif()
+
 # Registry::with_builtin_formats() over every enabled module, in registration order (SPEC §2.3, §11).
 set(includes "")
 set(calls "")

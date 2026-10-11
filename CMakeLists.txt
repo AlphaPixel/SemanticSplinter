@@ -9,6 +9,7 @@ option(SEMSPLINTER_FORMAT_XML "XML format module (expat)" ON)
 option(SEMSPLINTER_FORMAT_CSV "CSV/TSV format module (no dependencies)" ON)
 option(SEMSPLINTER_FORMAT_JPEG "JPEG format module (libjpeg-turbo)" ON)
 option(SEMSPLINTER_FORMAT_SVG "SVG format module (needs XML; zlib for .svgz)" ON)
+option(SEMSPLINTER_FORMAT_SQLITE "SQLite format module (sqlite3)" ON)
 
 # An ON option enables the vcpkg manifest feature it names (SPEC §2.3). Must run before project().
 macro(semsplinter_vcpkg_feature option feature)
@@ -25,6 +26,7 @@ semsplinter_vcpkg_feature(SEMSPLINTER_FORMAT_XML xml)
 semsplinter_vcpkg_feature(SEMSPLINTER_FORMAT_CSV csv)
 semsplinter_vcpkg_feature(SEMSPLINTER_FORMAT_JPEG jpeg)
 semsplinter_vcpkg_feature(SEMSPLINTER_FORMAT_SVG svg)
+semsplinter_vcpkg_feature(SEMSPLINTER_FORMAT_SQLITE sqlite)
 
 project(SemanticSplinter VERSION 0.1.0 DESCRIPTION "Format-aware diff, merge, and patch" LANGUAGES CXX)
 

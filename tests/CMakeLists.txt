@@ -37,6 +37,11 @@ endif()
 if(SEMSPLINTER_FORMAT_SVG)
     target_sources(semsplinter-tests PRIVATE formats/test_svg.cpp)
 endif()
+if(SEMSPLINTER_FORMAT_SQLITE)
+    find_package(unofficial-sqlite3 CONFIG REQUIRED)
+    target_sources(semsplinter-tests PRIVATE formats/test_sqlite.cpp)
+    target_link_libraries(semsplinter-tests PRIVATE unofficial::sqlite3::sqlite3) # fixtures built through the API
+endif()
 target_link_libraries(semsplinter-tests PRIVATE splinter-cli Catch2::Catch2WithMain)
 target_compile_definitions(semsplinter-tests PRIVATE SEMSPLINTER_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
     SPLINTER_EXE="$<TARGET_FILE:splinter>") # the driver the [git] tests configure
