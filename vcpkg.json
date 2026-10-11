@@ -85,6 +85,9 @@
           ]
         }
       ]
+    },
+    "mesh": {
+      "description": "OBJ/MTL, PLY, and STL mesh module"
     }
   }
 }

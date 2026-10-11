@@ -126,7 +126,7 @@ FILES: FILE1 FILE2 | DIR1 DIR2 | DIR FILE | FILE DIR | --from-file=F FILE... | -
 | `--visual=FILE` | write the format's visual diff (heatmap PNG, waveform PNG, contact sheet, …) |
 | `--dump` | print the canonical dump of a single file (textconv) |
 | `--semantic` / `--raw` | `--raw` diffs the format's raw structure (chunks, parts, XML) instead of the semantic model |
-| `--tolerance=SPEC` | numeric tolerance for grid units (`2`, `0.5%`, `ulp:4`, `de:1.0`), recorded in the report |
+| `--tolerance=SPEC` | numeric tolerance for grid units (`2`, `0.5%`, `ulp:4`, `de:1.0`), recorded in the report. Meshes: a distance in model units for positions and other numbers (default 0) |
 | `--gap=N` | region-grouping gap for grids |
 | `--annotate` | add per-hunk metric comments (`# …`) to text renderings of structured formats (Q-TEXT-9) |
 | `--ignore=CLASS[,…]` | ignore change classes: `metadata`, `timestamps`, `encoding`, `derived`, … (per format) |

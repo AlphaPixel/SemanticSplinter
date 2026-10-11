@@ -81,7 +81,8 @@ Legend: **L** = layer stack (outermost → content). **F** = framing. **I** = in
 
 ### OBJ / PLY / STL
 - **F:** PLY header element counts, list-length prefixes, and binary layout. The binary STL triangle count. **OBJ positive face indices are absolute pool indices**, so growing an earlier pool shifts every later index (framing churn).
-- **D/V:** STL facet normals are derived (Q-MESH-4). The 80-byte binary STL header is volatile. The u16 attribute word is content when a tool uses it for color.
+- **D/V:** STL facet normals are derived (Q-MESH-4), in ASCII STL too. The 80-byte binary STL header is volatile. The u16 attribute word is content when a tool uses it for color (any facet non-zero), else framing.
+- **L:** number spelling, whitespace, and `\` line continuations in OBJ/MTL/ASCII PLY/ASCII STL are encoding (compared as floats, kept byte-exact). MTL has no envelope fields.
 - **I/A:** none.
 
 ### JSON / XML / CSV / text

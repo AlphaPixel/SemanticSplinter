@@ -104,6 +104,16 @@ if(SEMSPLINTER_FORMAT_SQLITE)
     list(APPEND formats sqlite)
 endif()
 
+if(SEMSPLINTER_FORMAT_MESH)
+    # geomcore: geometry metrics helper (no format, no external dependencies; Q-MESH-3).
+    add_library(semantic-splinter-geomcore STATIC geomcore/geomcore.cpp)
+    target_link_libraries(semantic-splinter-geomcore PUBLIC SemanticSplinter::core)
+    add_library(semantic-splinter-mesh STATIC mesh/mesh.cpp)
+    add_library(SemanticSplinter::mesh ALIAS semantic-splinter-mesh)
+    target_link_libraries(semantic-splinter-mesh PUBLIC SemanticSplinter::core PRIVATE semantic-splinter-geomcore)
+    list(APPEND formats mesh)
+endif()
+
 # Registry::with_builtin_formats() over every enabled module, in registration order (SPEC §2.3, §11).
 set(includes "")
 set(calls "")

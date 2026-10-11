@@ -3,7 +3,27 @@
 **Tier:** T3 · **Module:** `semantic-splinter-mesh` · **vcpkg feature:** `mesh` · **Depends on modules:** `text`, `binary`
 **Extensions / magic:** `.obj` (text; lines starting `v `, `f `, `o `, `g `, `mtllib`), `.mtl` (`newmtl`), `.ply`
 (first line `ply`, second `format ascii|binary_little_endian|binary_big_endian 1.0`), `.stl` (binary: 80-byte header +
-uint32 triangle count, file size must equal `84 + 50·n`; ASCII: `solid` … `endsolid`).
+uint32 triangle count, file size must equal `84 + 50·n`; ASCII: `solid` … `endsolid`). Probe confidence: PLY magic 100;
+binary STL whose size equation holds within the 64 KiB head 90; ASCII STL (`solid` plus `facet`/`endsolid`) 80; OBJ
+(three `v` lines with faces or groups) or MTL (`newmtl`) 60; the extension alone 60.
+**Status (Step 13, v1 = MVP, #15):** done: one `mesh` format with own readers for OBJ (`\` continuations, negative
+indices, `o`/`g` units with `~k` repeats, object-local vs shared-pool classification), MTL, PLY (ASCII, binary LE/BE,
+every scalar type, lists; counts bounded by the file size before allocation), and STL (ASCII, binary, size-equation
+probe, exact welding of the triangle soup); `geomcore` (bbox, area, signed volume, boundary/non-manifold edges, uniform-grid
+Hausdorff/RMS with the Q-MESH-2 exact/sampled split, displacement regions); diff with metrics per OBJ object and per
+file (`/geometry`), numbers compared as floats within `--tolerance`, comments as `kind: comment`, ASCII/binary and
+endianness as `kind: encoding`; dump (per-object summary with position and topology hashes); OBJ object KeyedMerge with
+positive face indices shifted and `--conflict=mark` (`o name.splinter_theirs`); MTL KeyedMerge per material and per
+statement; PLY, STL, and shared-pool OBJ as one OpaqueLeaf (warning `shared-pool`); writer on the Emitter (raw spans
+plus rewritten face lines); EnvelopeMap for binary STL and PLY. Deviations: whole-file geometry is addressed
+`/geometry` for STL and PLY (not `/solid` or `/elements/vertex`); ASCII/binary storage changes use `kind: encoding`
+(the core's non-differing kind) instead of `storage`, which is kept for conversions between formats; STL normals are
+not compared at all in the diff (always derived, never `kind: derived`); OBJ objects are compared whole (no separate
+`/usemtl` unit); PLY merges whole-file (the MVP row lists only its diff); Hausdorff samples are a fixed R2 sequence, not
+seeded by the content hash (equally reproducible); no OBJ EnvelopeMap yet (face-index digits would be framing).
+Not yet (v2 or later): vertex GridMerge for OBJ/PLY, PLY element KeyedMerge and comment SequenceMerge, statement merge
+in shared-pool OBJ, `--dump-data`, `--max-geom-tris` (fixed at 5M), SVG/PLY heatmap visuals, patch payloads, `--align`,
+the tinyobjloader/happly CI oracles, and fuzz targets.
 
 This document also specifies **`geomcore`** (`src/formats/geomcore/`), a helper static library with no format registration, built with `mesh` and kept free of mesh-format types so other geometry formats can reuse it.
 
@@ -41,7 +61,8 @@ when different people changed different objects.
 | PLY | element | element name | `/elements/vertex` | KeyedMerge |
 | PLY | element rows | row index | `/elements/vertex/rows#range=s,n` | GridMerge `[rows][props]` when counts equal and topology unchanged |
 | PLY | header comments/obj_info | content | `/header/comments` | SequenceMerge |
-| STL | solid | single | `/solid` | OpaqueLeaf (diff only metrics) |
+| STL | solid | single | `/geometry` (name `/solid/name`, header `/header`, color words `/solid/attributes`) | OpaqueLeaf (diff only metrics) |
+| PLY, STL, OBJ↔other | whole geometry | single | `/geometry`; `/storage` for the encoding | OpaqueLeaf (MVP) |
 
 **The vertex renumbering problem (OBJ).** Faces reference global pools, so "object granularity" is only real if
 the file's layout is **object-local**: each object's `v/vt/vn` lines precede its faces and its faces reference only
@@ -127,6 +148,10 @@ optional PLY output with per-vertex displacement as a color heatmap (viewable in
 | OBJ positive face indices (`f 12/7/12`) | framing (absolute index into a global pool) | `1 ≤ i ≤ pool size at that line` | rewritten through the pool-offset table (§3); negative indices are relative and never change |
 | PLY `element <name> <count>` | framing | body row count matches (ASCII lines or binary bytes consumed); declared size checked against file size before allocation | `varfield(decimal, count_of(element rows))` |
 | PLY list length prefix (`property list uchar int`) | framing | prefix fits in its declared type; row stays in body | `field(ctype, endian, count_of(list))`; a count that overflows `uchar` is trouble, the header type is never widened silently |
+| OBJ/MTL/ASCII PLY/ASCII STL number spelling, whitespace, `\` continuations | encoding | parses as a number | untouched lines byte-exact; compared as floats (§4) |
+| ASCII PLY list length token | framing | non-negative integer, row stays in body | kept with its row (rows are not rewritten in the MVP) |
+| ASCII STL `facet normal` | derived | parses as three numbers | ours' text (STL is written whole) |
+| MTL | none | — | spans copied raw; MTL has no envelope fields |
 | PLY `format` line | encoding | one of the three encodings, version `1.0` | kept from ours; rows are re-encoded in that encoding |
 | PLY `comment` / `obj_info` | content | none | merged (§6) |
 | binary STL u32 triangle count | framing | `84 + 50·n == file size` (this is also the binary/ASCII probe) | `field(u32, LE, count_of(facets))` |
