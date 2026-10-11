@@ -70,6 +70,21 @@
         "expat",
         "zlib"
       ]
+    },
+    "sqlite": {
+      "description": "SQLite format module",
+      "dependencies": [
+        {
+          "name": "sqlite3",
+          "default-features": false,
+          "features": [
+            "fts5",
+            "json1",
+            "rtree",
+            "session"
+          ]
+        }
+      ]
     }
   }
 }

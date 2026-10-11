@@ -15,6 +15,10 @@ permissive (MIT, BSD, Apache-2.0, Zlib, public domain); copyleft libraries are o
 | libjpeg-turbo | 3.2.0#1 (`default-features: false`) | BSD-3-Clause AND IJG | `jpeg` | JPEG coefficient read/write (`jpeg_read_coefficients`, `jpeg_write_coefficients`), pixel decode for metrics and visuals; pulls libspng and zlib as port dependencies | jpeg.md §9: the only permissive library with coefficient access; no recompression |
 | libpng | 1.6.58 | libpng-2.0 | `png` | PNG pixel decode (unfilter, Adam7, bit unpacking) | png.md §9: hardened and fuzzed; own chunk layer around it |
 | nlohmann-json | 3.12.0#2 | MIT | core | JSON reports (`ordered_json`), `--resolve` files | Plan Phase 1: ordered output for deterministic reports |
+| sqlite3 | 3.53.4#1 (`default-features: false`; features `fts5`, `json1`, `rtree`, `session`) | blessing (public domain) | `sqlite` | All database reads and writes (`sqlite3_deserialize` copies, schema and row queries, the merge writer) | sqlite.md §9: the reference implementation; the features let databases with FTS5, R*Tree, and JSON open; `session` is for Q-SQLITE-1 |
 | xxhash | 0.8.4 | BSD-2-Clause | core | XXH3-128 content hashes and change/conflict ids | D-8: speed; no adversarial collision requirement |
 | zlib | 1.3.2#2 | Zlib | core | IDAT, zTXt, iCCP, iTXt inflate and deflate; parameter inference; ZIP deflate members; gzip | png.md §7.3: byte identity is pinned to this port (Q-PNG-4) |
 | zstd | 1.5.7 | BSD-3-Clause OR GPL-2.0-only (BSD chosen) | core | patch payloads (D-7), ZIP method 93, `.tar.zst` | containers.md §9; the zstd module of D-7 |
+
+**Vendored (not a port):** `src/formats/sqlite/cksumvfs.c` from SQLite 3.53.4 `ext/misc/cksumvfs.c`, public domain
+(blessing), unmodified. Used for its page checksum function (Q-SQLITE-7). Update it together with the `sqlite3` port.

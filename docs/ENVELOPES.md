@@ -92,8 +92,8 @@ Legend: **L** = layer stack (outermost → content). **F** = framing. **I** = in
 
 ### SQLite
 - **F:** header page size, **file change counter**, in-header database size in pages, freelist trunk and count, **schema cookie**, `version-valid-for`, B-tree page headers, cell pointers, and overflow chains.
-- **I:** none by default. Optional `cksumvfs` adds 8-byte per-page checksums, which go stale unless the output connection registers that VFS (Q-SQLITE-7). The **WAL** has frame checksums and salts, and its magic (`0x377f0682` or `0x377f0683`) selects the checksum byte order. SQLCipher's per-page HMAC is opaque (D-41).
-- **Writer delegation:** SQLite writes the file (SPEC §12.4), so splinter never touches framing. Page-level byte churn is expected and is attributed as `framing`/`encoding`. **V:** file change counter and `version-valid-for`.
+- **I:** none by default. Optional `cksumvfs` adds 8-byte per-page checksums, which go stale unless the writer recomputes them on the pages it changed (Q-SQLITE-7). The **WAL** has frame checksums and salts, and its magic (`0x377f0682` or `0x377f0683`) selects the checksum byte order. SQLCipher's per-page HMAC is opaque (D-41).
+- **Writer delegation:** SQLite writes the file (SPEC §12.4), so splinter never touches framing, except header bytes 18/19 (WAL mode, restored from ours). Page-level byte churn is expected and is attributed as `framing`/`encoding`. **V:** file change counter and `version-valid-for`.
 
 ## Generic
 
