@@ -3,6 +3,23 @@
 **Tier:** T3 · **Module:** `semantic-splinter-pdf` · **vcpkg feature:** `pdf` (structure, text, metadata, annotations, forms) and `pdf-render` (PDFium rendering and high-quality text extraction) · **Depends on modules:** `xml` (XMP), `png` (visual output and region grouping); registry recursion for attachments
 **Extensions / magic:** `.pdf`, `.ai` (when PDF-compatible). Magic: `%PDF-` within the first 1024 bytes (the spec
 allows leading garbage), version `1.0`–`1.7` or `2.0`. Confidence 95 at offset 0, 70 when found later.
+**Status (Step 12, v1 = MVP + incremental writer + annotation/form merge with carrier logic, D-46):** done: qpdf
+load (permission-only encryption looked through, password-encrypted files an opaque `/encrypted` unit); basic text
+extractor (ToUnicode `bfchar`/`bfrange`, WinAnsi, `TJ` spacing, form XObjects); page fingerprints with font and
+XObject names normalized; page alignment (LCS over fingerprints, then text similarity ≥ 0.5, moves of identical
+pages); diff layers `meta` (Info, XMP through the xml module, noise hidden unless `--pdf-show-noise`), `pages`, `text`,
+`annots`, `forms` (`--pdf-layers`); dump, inspect, EnvelopeMap; carrier choice, with conflict `/pages` when both sides
+change page content; KeyedMerge of Info keys, XMP (xml module merge, noise conflicts dropped), annotations (anchor
+check, replies re-linked, popups copied, `/AP` dropped on modified ones), field values (qpdf appearance generation,
+`/NeedAppearances` for PDF 1.x), carrier-wins `/Outlines`, `/Names`, `/PageLabels`; incremental writer on the
+Emitter (classic table or xref stream, 10-digit offsets, `/Prev`, deterministic `/ID[1]`), with byte-identical output
+when nothing changes; `--layout=compact` through QPDFWriter; signatures reported `no-crypto`, `auto`/`strip`/`keep`,
+conflict `signature`, DocMDP `certification-violated`.
+Not yet: `#rect=` boxes on text changes, NFC, `--pdf-dehyphenate`; `--conflict=mark` notes,
+`--pdf-transfer-annots=similar`, patch payloads; incremental writing of encrypted carriers (v1 rewrites them through
+qpdf); new object streams (Q-PDF-8); FieldMDP and UR3 reporting; `--pdf-touch-moddate`; the `outline`, `attachments`,
+`objects`, and `revisions` layers and `--pdf-text-flow` (Later row); `pdf-render`, `visual`, and page-content merge
+(post-v1, D-46).
 
 ## 1. Why it matters
 
@@ -198,21 +215,23 @@ Page content patches use `pdf-content/1` (the graphics objects of a page as cont
 | Field | Class | Verify on load | Regenerate on write |
 |---|---|---|---|
 | Classic xref entry `oooooooooo ggggg n\r\n` (20 bytes, 10-digit offset) | framing (absolute) | offset points at `N G obj`; qpdf repairs and splinter warns `framing-inconsistent` | `offset_of(obj_g)` as fixed-width decimal, in the appended section only |
-| xref stream `/W`, `/Index`, `/Size`, binary rows | framing | same as above | `/W` widths chosen to fit the largest offset; a fix-point when the xref stream's own offset grows a width (SPEC §12.4) |
+| xref stream `/W`, `/Index`, `/Size`, binary rows | framing | same as above | `/W [1 w 2]`: `w` = 4 unless the output may pass 4 GiB, then 8, chosen before layout (no fix-point needed); uncompressed rows; the stream holds its own entry |
 | `startxref` value, trailer `/Prev`, `/Size`, `/XRefStm` (hybrid files) | framing (absolute) | each `/Prev` lands on an xref | `offset_of(xref_g)`; `/Prev` = carrier's last `startxref`; `/Size` = max object number + 1 |
 | Stream `/Length` (direct or indirect) | framing | matches the bytes up to `endstream`; mismatch repaired by qpdf with a warning | direct decimal `/Length` is variable width (fix-point); writer prefers a direct value |
-| Object stream `/N`, `/First`, header pairs `objnum offset` | framing (relative to `/First`) | consistent | new objects are written as plain indirect objects in the appended section with a new xref stream; a new object stream only above 100 small objects (Q-PDF-8) |
+| Object stream `/N`, `/First`, header pairs `objnum offset` | framing (relative to `/First`) | consistent | new and changed objects (including ones that lived in an object stream) are written as plain indirect objects in the appended section; v1 never writes a new object stream (Q-PDF-8's 100-object threshold is deferred) |
 | Linearization dict `/L`, `/H`, `/O`, `/E`, `/N`, `/T`, hint stream | derived (index) | checked only for the report | not updated; an incremental update makes the file non-linearized in effect (§7) |
-| Flate/LZW/RunLength/ASCII filters, predictors | encoding | decoded within limits | untouched streams raw; changed streams `encode(flate)` with the original `/DecodeParms` and a zlib level inferred from the zlib header FLEVEL plus trial; LZW and ASCII85 kept only if the source used them on that stream |
-| `/ID [permanent changing]` | identity (`/ID[0]`) and volatile (`/ID[1]`) | none | `/ID[0]` kept from the carrier (required: the encryption key derivation uses it), `/ID[1]` = deterministic hash (§7) |
+| Flate/LZW/RunLength/ASCII filters, predictors | encoding | decoded within limits | untouched streams raw, also inside changed objects (`/Length` rewritten as a direct value). v1 changes stream data only for XMP (written unfiltered, as PDF/A requires) and qpdf-generated appearance streams (unfiltered), so no stream is re-encoded; `encode(flate)` with inferred parameters comes with page-content merge |
+| `/ID [permanent changing]` | identity (`/ID[0]`) and volatile (`/ID[1]`) | none | `/ID[0]` kept from the carrier (required: the encryption key derivation uses it), `/ID[1]` = XXH3 of the appended objects and the carrier's tail (§7); an `/ID` is not added when the carrier has none |
 | `/Info /ModDate`, `/Producer`, XMP `xmp:ModifyDate`, `xmp:MetadataDate`, `xmpMM:InstanceID` | volatile | none | ours unless `--pdf-touch-moddate` |
 | Appearance streams `/AP`, page `/Thumb`, `/NeedAppearances` | derived | none | Q-PDF-7 |
-| Encryption dictionary `/Encrypt` (`/O`, `/U`, `/OE`, `/UE`, `/Perms`), per-object keys from object number and generation | encryption (keyed by password) | permission-only (empty user password): file key derived and looked through; otherwise `encrypted` OpaqueLeaf (D-41) | re-encrypted with the carrier's keys, which requires object numbers to stay stable: one more reason for incremental updates |
-| Signature field `/V` → sig dict: `/ByteRange [0 a b c]`, `/Contents <hex CMS>`, `/SubFilter`, `/M`, `/Reference` (DocMDP/FieldMDP) | authenticity | verified (below) | policy (below) |
+| Encryption dictionary `/Encrypt` (`/O`, `/U`, `/OE`, `/UE`, `/Perms`), per-object keys from object number and generation | encryption (keyed by password) | permission-only (empty user password): file key derived and looked through; otherwise `encrypted` OpaqueLeaf (D-41) | re-encrypted with the carrier's keys, which requires object numbers to stay stable. v1: an encrypted carrier is written as a full QPDFWriter rewrite with preserved encryption (`layout-rewritten`), so under `auto` a signed encrypted carrier is conflict `signature` |
+| Signature field `/V` → sig dict: `/ByteRange [0 a b c]`, `/Contents <hex CMS>`, `/SubFilter`, `/M`, `/Reference` (DocMDP/FieldMDP) | authenticity | verified (below); v1 without `crypto`: `no-crypto` | policy (below) |
 | `/Perms /DocMDP` (certification), `/Perms /UR3` (usage rights) | authenticity (permissions) | evaluated against the changes in later revisions | reported, see below |
 | DSS (`/DSS` with `/Certs`, `/OCSPs`, `/CRLs`, `/VRI`), document timestamps (`/Type /DocTimeStamp`, `ETSI.RFC3161`) | authenticity (validation material) | carried | kept; never rebuilt |
 
-**Raw copy and layout stability.** The default `--layout=stable` writes an incremental update (§7): every byte of the carrier, including all earlier revisions, signatures, and linearization, is copied verbatim, and the appended section holds only changed and new objects, a new xref, and a trailer. Untouched streams inside changed objects are never re-encoded, because a changed dictionary is written with its original stream bytes when the decoded data is unchanged (`raw`, with `/Length` copied). `--layout=compact` (formerly `--pdf-rewrite`) rewrites through `QPDFWriter`, renumbers objects, and recompresses streams.
+**Raw copy and layout stability.** The default `--layout=stable` writes an incremental update (§7): every byte of the carrier, including all earlier revisions, signatures, and linearization, is copied verbatim, and the appended section holds only changed and new objects, a new xref, and a trailer. Untouched streams inside changed objects are never re-encoded, because a changed dictionary is written with its original stream bytes when the decoded data is unchanged (`raw`, with `/Length` copied). `--layout=compact` (formerly `--pdf-rewrite`) rewrites through `QPDFWriter`, renumbers objects, and recompresses streams. An incremental update is impossible, and the file is rewritten as with `compact` (warning `layout-rewritten`), when the carrier is encrypted (v1) or qpdf had to repair its xref (`framing-inconsistent`): `/Prev` would point at a broken section.
+
+**EnvelopeMap.** One unit per revision (`/revisions/N`, split at each `%%EOF`): `N G obj … endobj` bodies are `content`, everything else (header, xref sections, trailers, `startxref`, whitespace) is `framing`. An incremental merge then shows exactly the appended section as churn. Per-object semantic units (`/pages/p:3`, …) are a later refinement.
 
 **Signatures and the keyed boundary.** `/ByteRange` covers the whole file as it was at signing time except the `/Contents` hex string (including its angle brackets). The digest over those ranges is unkeyed, but it is embedded as the `messageDigest` signed attribute inside the CMS `SignedData` in `/Contents` (`adbe.pkcs7.detached`, `ETSI.CAdES.detached`), so the keyed boundary is the CMS signature value. On load, with the `crypto` feature, each signature is reported `valid`, `invalid`, or `unverifiable`, plus `chain-not-evaluated`, and whether it covers the whole file or only an earlier revision (`signature-not-covering-changes`).
 
@@ -239,7 +258,7 @@ marked *assumed*.
 
 | Library | vcpkg port | License | Maintenance | Verdict |
 |---|---|---|---|---|
-| **qpdf** | `qpdf` 12.4.2 | Apache-2.0 AND MIT | active (push 2026-09) | **Use** (core of `pdf`): parsing, xref repair, object model, decrypt/encrypt, content stream tokenizer, form appearance generation. Pulls `libjpeg-turbo` and `zlib`; crypto: native provider (verified: the vcpkg portfile sets `REQUIRE_CRYPTO_NATIVE=ON`), so permission-only decryption (D-41) needs no OpenSSL; never enable the `openssl`/`gnutls` features. Apache-2.0 requires shipping NOTICE text. |
+| **qpdf** | `qpdf` 12.4.0 (at the pinned baseline) | Apache-2.0 AND MIT | active (push 2026-09) | **Use** (core of `pdf`): parsing, xref repair, object model, decrypt/encrypt, content stream tokenizer, form appearance generation. Pulls `libjpeg-turbo` and `zlib`; crypto: native provider (verified: the vcpkg portfile sets `REQUIRE_CRYPTO_NATIVE=ON`), so permission-only decryption (D-41) needs no OpenSSL; never enable the `openssl`/`gnutls` features. Apache-2.0 requires shipping NOTICE text. |
 | **PDFium** | **none** (verified: no port in vcpkg master) | BSD-3-Clause, with third-party parts under FreeType (FTL), libjpeg-turbo, OpenJPEG (BSD-2), lcms2 (MIT), zlib, Abseil (Apache-2.0) (*assumed from Chromium licensing*) | very active (Chromium) | **Use, optional** (`pdf-render`): rendering and text with layout. Build via a vcpkg **overlay port**. `bblanchon/pdfium-binaries` (latest release `chromium/8086`, 2026-10-05, verified) ships **shared libraries only** and states it will not add static builds; its build script supports static builds with `-s`. Plan: overlay port that builds static PDFium with that script in CI and caches it as a binary artifact; on Windows the single-file release either includes static PDFium or ships without `pdf-render`. |
 | MuPDF | `libmupdf` 1.26.10 | AGPL-3.0-only (or commercial from Artifex) | active | **Reject.** AGPL would apply to the whole statically linked binary. |
 | Poppler | `poppler` 26.4.0 | GPL-2.0-or-later | active | **Reject.** GPL for the whole binary. |

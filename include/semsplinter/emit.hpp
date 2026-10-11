@@ -53,7 +53,8 @@ Seg raw(const ByteSource&, std::uint64_t offset, std::uint64_t length); // verba
 Seg group(GroupId, std::vector<Seg>);                                   // addressable region
 Seg align(unsigned boundary, std::byte fill = std::byte{0});            // pad to an absolute boundary
 Seg field(unsigned width, Endian, Expr);                                // fixed-width number
-Seg varfield(VarEncoding, Expr);                                        // variable-width number
+Seg varfield(VarEncoding, Expr); // variable-width number; set .width first for a zero-padded minimum
+                                 // (PDF's 10-digit xref offsets)
 
 // Lays out to a fixed point (at most 16 iterations; variable widths only grow), then evaluates fields,
 // checksums innermost first; a checksum field inside its own group is zero while it is summed.

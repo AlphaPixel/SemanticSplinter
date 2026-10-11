@@ -114,6 +114,22 @@ if(SEMSPLINTER_FORMAT_MESH)
     list(APPEND formats mesh)
 endif()
 
+if(SEMSPLINTER_FORMAT_PDF)
+    if(NOT SEMSPLINTER_FORMAT_XML)
+        message(FATAL_ERROR "SEMSPLINTER_FORMAT_PDF needs SEMSPLINTER_FORMAT_XML (XMP metadata)")
+    endif()
+    find_package(qpdf CONFIG REQUIRED)
+    find_package(ZLIB REQUIRED)
+    find_package(JPEG REQUIRED)
+    # qpdf's exported target names zlib and libjpeg as bare library names (zs/zsd, jpeg) that the linker
+    # cannot find on its own; point them at the found packages.
+    set_property(TARGET qpdf::libqpdf PROPERTY INTERFACE_LINK_LIBRARIES ZLIB::ZLIB JPEG::JPEG)
+    add_library(semantic-splinter-pdf STATIC pdf/pdf.cpp pdf/text.cpp)
+    add_library(SemanticSplinter::pdf ALIAS semantic-splinter-pdf)
+    target_link_libraries(semantic-splinter-pdf PUBLIC SemanticSplinter::core PRIVATE SemanticSplinter::xml qpdf::libqpdf)
+    list(APPEND formats pdf)
+endif()
+
 # Registry::with_builtin_formats() over every enabled module, in registration order (SPEC §2.3, §11).
 set(includes "")
 set(calls "")

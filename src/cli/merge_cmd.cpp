@@ -143,6 +143,10 @@ bool apply_merge_option(Config& c, const ParsedOpt& o, const Registry& reg, Cons
         c.common.format_options["signatures"] = v; // containers.md §6.3
         return true;
     case o_layout:
+        if (v != "stable" && v != "compact")
+            throw UsageError("invalid layout '" + v + "'");
+        c.common.format_options["layout"] = v; // pdf.md §7: incremental update or full rewrite
+        return true;
     case o_sign_command:
     case o_mac_key:
     case o_verify_key:

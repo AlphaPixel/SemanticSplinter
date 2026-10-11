@@ -138,6 +138,7 @@ FILES: FILE1 FILE2 | DIR1 DIR2 | DIR FILE | FILE DIR | --from-file=F FILE... | -
 | `--xml-ws=formatting\|significant`, `--xml-ignore-comments`, `--xml-ignore-pis`, `--xml-strict-prefixes`, `--xml-strict-cdata`, `--dump-attr-lines` | XML options (xml.md §4, §5), declared by the module (D-51) |
 | `--csv-key=COL[,COL]`, `--csv-header=auto\|yes\|no` | CSV options (csv.md §3, §2): key columns by name or 1-based index; header detection override |
 | `--svg-show-editor-state`, `--svg-id-collision=rename\|conflict` (merge), `--svg-path-merge=subpaths\|none` (merge) | SVG options (svg.md §3.3, §4, §6), declared by the module (D-51) |
+| `--pdf-layers=meta,pages,text,annots,forms`, `--pdf-show-noise` | PDF options (pdf.md §5, §4): diff layers (default all five); report `/ModDate`, `/Producer`, `/CreationDate`, and XMP dates and instance ids |
 | `--verbose`, `--quiet` | diagnostics on stderr |
 
 Names were checked against GNU diff's long options using the four-character rule in §1.2.
@@ -194,8 +195,8 @@ The operand order is **mine, old, yours**, the same as GNU `diff3`, RCS `merge`,
 | `--resolve=FILE` | per-conflict resolutions by conflict ID | |
 | `--conflicts=FILE` | write conflict report JSON | |
 | `--integrity=…`, `--show=…`, `--lenient`, `--verify-key=FILE` | as in diff (SPEC §12) | |
-| `--layout=stable\|compact` | keep payload offsets and bytes stable (default) or rewrite canonically (SPEC §12.4) | |
-| `--signatures=auto\|keep\|strip\|resign` | signature policy for the output (SPEC §12.5). ZIP (containers.md §6.3): `auto` and `strip` remove JAR/APK v1 signature files, the APK Signing Block, and `.signature.p7s` when the content changes; `resign` exits 3 until `--sign-command` lands | |
+| `--layout=stable\|compact` | keep payload offsets and bytes stable (default) or rewrite canonically (SPEC §12.4). PDF (pdf.md §7): `stable` appends an incremental update to the carrier, `compact` rewrites through qpdf and strips signatures under `auto` | |
+| `--signatures=auto\|keep\|strip\|resign` | signature policy for the output (SPEC §12.5). ZIP (containers.md §6.3): `auto` and `strip` remove JAR/APK v1 signature files, the APK Signing Block, and `.signature.p7s` when the content changes; `resign` exits 3 until `--sign-command` lands. PDF (pdf.md §7.1): `auto` keeps earlier signatures through the incremental update (`signature-not-covering-changes`), `strip` removes signature values, `keep` keeps them through a `compact` rewrite (`signature-invalidated`) | |
 | `--sign-key=FILE`, `--sign-cert=FILE`, `--sign-pass-file=FILE` | signing material for `resign`. A private key is required. Post-v1 (D-36): v1 exits 2 | |
 | `--sign-command=CMD` | external signer run on the validated output before the final rename. `%f` is the file | |
 | `--mac-key=FILE` | key for formats protected by a keyed MAC. Never bundled, never guessed | |

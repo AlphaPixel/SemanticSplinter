@@ -11,6 +11,7 @@ option(SEMSPLINTER_FORMAT_JPEG "JPEG format module (libjpeg-turbo)" ON)
 option(SEMSPLINTER_FORMAT_SVG "SVG format module (needs XML; zlib for .svgz)" ON)
 option(SEMSPLINTER_FORMAT_SQLITE "SQLite format module (sqlite3)" ON)
 option(SEMSPLINTER_FORMAT_MESH "OBJ/MTL, PLY, STL mesh module (no dependencies)" ON)
+option(SEMSPLINTER_FORMAT_PDF "PDF format module (qpdf)" ON)
 
 # An ON option enables the vcpkg manifest feature it names (SPEC §2.3). Must run before project().
 macro(semsplinter_vcpkg_feature option feature)
@@ -29,6 +30,7 @@ semsplinter_vcpkg_feature(SEMSPLINTER_FORMAT_JPEG jpeg)
 semsplinter_vcpkg_feature(SEMSPLINTER_FORMAT_SVG svg)
 semsplinter_vcpkg_feature(SEMSPLINTER_FORMAT_SQLITE sqlite)
 semsplinter_vcpkg_feature(SEMSPLINTER_FORMAT_MESH mesh)
+semsplinter_vcpkg_feature(SEMSPLINTER_FORMAT_PDF pdf)
 
 project(SemanticSplinter VERSION 0.1.0 DESCRIPTION "Format-aware diff, merge, and patch" LANGUAGES CXX)
 
