@@ -116,7 +116,7 @@ struct Layout {
 
     void collect(const Seg& s) {
         if (s.kind == Seg::Kind::varfield)
-            width.emplace(&s, 1);
+            width.emplace(&s, std::max(1u, s.width)); // a preset width is the zero-padded minimum
         if (s.kind == Seg::Kind::group && !groups.emplace(s.id, Span{}).second)
             fail("duplicate group " + std::to_string(s.id));
         for (auto& c : s.children)

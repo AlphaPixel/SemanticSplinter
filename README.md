@@ -52,7 +52,7 @@ feature). [docs/formats/README.md](docs/formats/README.md) lists the v1 formats 
 ## Usage
 
 Working today, for text, unknown binaries, PNG, JPEG (whole-MCU merge in the DCT domain), ZIP/TAR archives, XML,
-SVG/SVGZ, JSON, CSV/TSV, SQLite, and simple meshes (OBJ/MTL, PLY, STL):
+SVG/SVGZ, JSON, CSV/TSV, SQLite, PDF, and simple meshes (OBJ/MTL, PLY, STL):
 
 ```bash
 splinter old.png new.png                     # diff: changed regions, metrics, and metadata
@@ -84,6 +84,9 @@ SQLite-allocated id are renumbered instead of conflicting.
 Meshes diff by geometry (counts, bounding box, area, volume, Hausdorff distance, displaced-vertex regions), with
 numbers compared as floats (`--tolerance`) and ASCII/binary STL or PLY seen as the same mesh. OBJ objects merge by
 name, with later face indices renumbered; MTL materials merge per statement; PLY and STL merge as one unit.
+PDF diffs report metadata, aligned pages, page text, annotations, and form values; merges combine metadata,
+annotations, and form values onto the side that changed page content, written as an incremental update that keeps
+every byte (and earlier signatures) of that file.
 Patches (`--binary`) cover text and PNG so far.
 comments, and number spelling survive outside the changed values. SVG builds on XML: `style` properties, `class`
 tokens, and path subpaths merge separately, editor view state (zoom, window) is ignored, deleting what the other side

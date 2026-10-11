@@ -88,6 +88,15 @@
     },
     "mesh": {
       "description": "OBJ/MTL, PLY, and STL mesh module"
+    },
+    "pdf": {
+      "description": "PDF format module (structure, text, metadata, annotations, forms; no rendering)",
+      "dependencies": [
+        {
+          "name": "qpdf",
+          "default-features": false
+        }
+      ]
     }
   }
 }
