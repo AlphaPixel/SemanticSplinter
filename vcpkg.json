@@ -63,6 +63,13 @@
           "default-features": false
         }
       ]
+    },
+    "svg": {
+      "description": "SVG format module (on the XML module; zlib for .svgz)",
+      "dependencies": [
+        "expat",
+        "zlib"
+      ]
     }
   }
 }

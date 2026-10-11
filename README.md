@@ -52,7 +52,7 @@ feature). [docs/formats/README.md](docs/formats/README.md) lists the v1 formats 
 ## Usage
 
 Working today, for text, unknown binaries, PNG, JPEG (whole-MCU merge in the DCT domain), ZIP/TAR archives, XML,
-JSON, and CSV/TSV:
+SVG/SVGZ, JSON, and CSV/TSV:
 
 ```bash
 splinter old.png new.png                     # diff: changed regions, metrics, and metadata
@@ -61,6 +61,7 @@ splinter --json=report.json a.png b.png      # machine-readable report
 splinter -m mine.png base.png theirs.png     # three-way merge, as diff3 -m
 splinter -m mine.zip base.zip theirs.zip     # members merged by path, each by its own format
 splinter -m a.csproj base.csproj b.csproj    # XML: elements, attributes, and text merge by identity
+splinter -m a.svg base.svg b.svg             # SVG: styles, classes, subpaths; colliding new ids renumbered
 splinter merge-file cur.txt base.txt other.txt   # as git merge-file
 splinter dump photo.png                      # canonical text dump (Git textconv)
 splinter inspect --layout photo.png          # structure, checksums, and byte layout
@@ -77,6 +78,9 @@ comments, and number spelling survive outside the changed values. CSV/TSV rows m
 `--csv-key`) or by position, cell by cell, so a column added on one side merges with row edits on the other;
 untouched records are copied verbatim and output keeps ours' dialect (delimiter, quoting, BOM, line ends).
 Patches (`--binary`) cover text and PNG so far.
+comments, and number spelling survive outside the changed values. SVG builds on XML: `style` properties, `class`
+tokens, and path subpaths merge separately, editor view state (zoom, window) is ignored, deleting what the other side
+newly references conflicts, and `.svgz` is unpacked and repacked only when the content changed. Patches (`--binary`) cover text and PNG so far.
 
 Planned: the `--md` Markdown report, JSON patches (`--binary --json`), and the other formats in the v1 scope.
 

@@ -13,6 +13,7 @@
 #include <array>
 #include <cstring>
 #include <deque>
+#include <iterator>
 #include <map>
 #include <memory>
 #include <optional>
@@ -217,6 +218,15 @@ bool all_ws(std::string_view s) {
     return s.find_first_not_of(" \t\r\n") == std::string_view::npos;
 }
 
+// Only internal general entities, and only those the dialect accepts (xml.md §8, svg.md §10).
+bool entity_ok(const Dialect& dia, const char* name, int is_param, const char* value, int len,
+               const char* system, const char* notation, std::pair<std::size_t, std::size_t>& seen) {
+    if (is_param || !value || system || notation)
+        return false;
+    seen.first += 1, seen.second += static_cast<std::size_t>(len);
+    return dia.accept_entity(name, {value, static_cast<std::size_t>(len)}, seen.first, seen.second);
+}
+
 // ---- Loading (xml.md §2, §8): expat events into the span tree ----
 
 class Loader {
@@ -265,12 +275,14 @@ public:
                 guard(u, [](Loader& l) { l.doctype_start(); });
             },
             [](void* u) { guard(u, [](Loader& l) { l.doctype_end(); }); });
-        XML_SetEntityDeclHandler(p_, [](void* u, const XML_Char* name, int, const XML_Char*, int,
-                                        const XML_Char*, const XML_Char*, const XML_Char*, const XML_Char*) {
-            guard(u, [&](Loader&) {
-                throw Error(ErrorCategory::invalid_input,
-                            "xml-entity-declared: the DOCTYPE declares entity '" + std::string(name) +
-                                "'; entities are disabled (SPEC §9)");
+        XML_SetEntityDeclHandler(p_, [](void* u, const XML_Char* name, int is_param, const XML_Char* value,
+                                        int len, const XML_Char*, const XML_Char* system, const XML_Char*,
+                                        const XML_Char* notation) {
+            guard(u, [&](Loader& l) {
+                if (!entity_ok(l.dia_, name, is_param, value, len, system, notation, l.entities_))
+                    throw Error(ErrorCategory::invalid_input,
+                                "xml-entity-declared: the DOCTYPE declares entity '" + std::string(name) +
+                                    "'; entities are disabled (SPEC §9)");
             });
         });
         XML_SetSkippedEntityHandler(p_, [](void* u, const XML_Char* name, int is_param) {
@@ -579,17 +591,19 @@ private:
         h.add(n.kind == Kind::document ? "doc" : "e").add(n.name.uri).add(n.name.local);
         if (opt_.strict_prefixes)
             h.add(n.name.prefix);
-        std::vector<const Attr*> as;
+        std::vector<std::pair<const Attr*, std::string>> as;
         for (auto& a : n.attrs)
-            if (!a.ns_decl || opt_.strict_prefixes)
-                as.push_back(&a);
-        std::sort(as.begin(), as.end(), [](const Attr* x, const Attr* y) {
-            return std::tie(x->ns_decl, x->name.uri, x->name.local) <
-                   std::tie(y->ns_decl, y->name.uri, y->name.local);
+            if (a.ns_decl && opt_.strict_prefixes)
+                as.emplace_back(&a, a.value);
+            else if (auto v = a.ns_decl ? std::nullopt : dia_.normalize(n, a))
+                as.emplace_back(&a, std::move(*v));
+        std::sort(as.begin(), as.end(), [](auto& x, auto& y) {
+            return std::tie(x.first->ns_decl, x.first->name.uri, x.first->name.local) <
+                   std::tie(y.first->ns_decl, y.first->name.uri, y.first->name.local);
         });
         h.add(std::uint64_t{as.size()});
-        for (auto* a : as) {
-            h.add(a->name.uri).add(a->name.local).add(a->value);
+        for (auto& [a, v] : as) {
+            h.add(a->name.uri).add(a->name.local).add(v);
             if (opt_.strict_prefixes)
                 h.add(a->name.prefix);
         }
@@ -631,6 +645,7 @@ private:
     std::uint32_t cdata_ = 0, doctype_off_ = 0;
     bool in_cdata_ = false, in_doctype_ = false;
     Span decl_;
+    std::pair<std::size_t, std::size_t> entities_{0, 0}; // count and bytes accepted so far
 };
 
 std::unique_ptr<Doc> load_doc(ByteSource src, const Dialect& dia, const Opts& opt, Limits& budget) {
@@ -932,26 +947,47 @@ struct Differ {
     const Dialect& dia;
     const Opts& opt;
     Stats* stats = nullptr;
+    bool show_volatile = false; // report volatile attributes (kind "editor-state"), as merges do
 
     void attrs(const Doc& A, std::uint32_t a, const Doc& B, std::uint32_t b, const std::string& path,
                Side side, ChangeSet& out, double conf = 1.0) const {
-        std::map<std::string, std::pair<const Attr*, const Attr*>> m;
-        for (auto& x : A.nodes[a].attrs)
-            if (!x.ns_decl || opt.strict_prefixes)
-                m[attr_key(x)].first = &x;
-        for (auto& y : B.nodes[b].attrs)
-            if (!y.ns_decl || opt.strict_prefixes)
-                m[attr_key(y)].second = &y;
+        struct V {
+            const Attr* a = nullptr;
+            std::string v; // comparison form
+            bool vol = false;
+        };
+        std::map<std::string, std::pair<V, V>> m;
+        auto put = [&](const Node& n, bool second) {
+            for (auto& x : n.attrs) {
+                if (x.ns_decl && !opt.strict_prefixes)
+                    continue;
+                V v{&x, x.value, false};
+                if (!x.ns_decl) {
+                    auto nv = dia.normalize(n, x);
+                    if (!nv && !show_volatile)
+                        continue;
+                    v.vol = !nv;
+                    if (nv)
+                        v.v = std::move(*nv);
+                }
+                (second ? m[attr_key(x)].second : m[attr_key(x)].first) = std::move(v);
+            }
+        };
+        put(A.nodes[a], false);
+        put(B.nodes[b], true);
         for (auto& [k, xy] : m) {
-            auto [x, y] = xy;
-            if (x && y && x->value == y->value && (!opt.strict_prefixes || x->qname == y->qname))
+            const Attr *x = xy.first.a, *y = xy.second.a;
+            if (x && y && xy.first.v == xy.second.v && (!opt.strict_prefixes || x->qname == y->qname))
                 continue;
             const Attr* any = x ? x : y;
             auto c = make_change(side,
                                  !x   ? Op::insert
                                  : !y ? Op::erase
                                       : Op::update,
-                                 {path + "/@" + any->qname}, any->ns_decl ? "namespace" : "attribute");
+                                 {path + "/@" + any->qname},
+                                 any->ns_decl                    ? "namespace"
+                                 : xy.first.vol || xy.second.vol ? "editor-state"
+                                                                 : "attribute");
             if (x)
                 c.before = value_of(x->value, hash128(x->value));
             if (y)
@@ -1069,13 +1105,156 @@ struct Differ {
     }
 };
 
+// ---- Typed values, ids, and references (xml.md §3.2, §6.1) ----
+
+std::vector<std::string> tokens(std::string_view s) {
+    std::vector<std::string> v;
+    std::istringstream is{std::string(s)};
+    for (std::string w; is >> w;)
+        v.push_back(w);
+    return v;
+}
+
+std::string trim(std::string_view s) {
+    auto b = s.find_first_not_of(" \t\r\n");
+    return b == std::string_view::npos ? std::string()
+                                       : std::string(s.substr(b, s.find_last_not_of(" \t\r\n") - b + 1));
+}
+
+// `prop:value;...` as (property, value) pairs; a repeated property keeps its last value (CSS).
+std::vector<std::pair<std::string, std::string>> style_props(std::string_view s) {
+    std::vector<std::pair<std::string, std::string>> v;
+    for (std::size_t at = 0; at <= s.size();) {
+        auto end = std::min(s.find(';', at), s.size());
+        auto decl = s.substr(at, end - at);
+        if (auto colon = decl.find(':'); colon != std::string_view::npos) {
+            std::string k = trim(decl.substr(0, colon)), val = trim(decl.substr(colon + 1));
+            auto f = std::find_if(v.begin(), v.end(), [&](auto& p) { return p.first == k; });
+            if (f != v.end())
+                f->second = std::move(val);
+            else if (!k.empty())
+                v.emplace_back(std::move(k), std::move(val));
+        }
+        at = end + 1;
+    }
+    return v;
+}
+
+// Whitespace-preserving word tokens merged three-way; nullopt on overlapping edits (xml.md §6.5).
+std::optional<std::string> merge_words(const std::string& b, const std::string& o, const std::string& t) {
+    auto split = [](const std::string& s) {
+        std::vector<std::string> v;
+        auto space = [](char c) { return c == ' ' || c == '\t' || c == '\r' || c == '\n'; };
+        for (std::size_t i = 0; i < s.size();) {
+            const bool ws = space(s[i]);
+            auto j = i;
+            while (j < s.size() && space(s[j]) == ws)
+                ++j;
+            v.push_back(s.substr(i, j - i));
+            i = j;
+        }
+        return v;
+    };
+    auto items = [](const std::vector<std::string>& v) {
+        std::vector<SeqItem> r;
+        for (auto& w : v)
+            r.push_back({hash128(w), std::nullopt});
+        return r;
+    };
+    const auto vb = split(b), vo = split(o), vt = split(t);
+    std::string out;
+    for (auto& c : sequence_merge(items(vb), items(vo), items(vt))) {
+        if (c.kind == SeqKind::conflict)
+            return std::nullopt;
+        const bool th = c.kind == SeqKind::theirs;
+        for (auto i : th ? c.theirs : c.ours)
+            out += th ? vt[i] : vo[i];
+    }
+    return out;
+}
+
+// Calls f(value) for every id (AttrKind::id) in the subtree of node n.
+template <class F> void each_id(const Doc& d, std::uint32_t n, const Dialect& dia, F&& f) {
+    std::vector<std::uint32_t> todo{n};
+    while (!todo.empty()) {
+        const Node& x = d.nodes[todo.back()];
+        todo.pop_back();
+        if (x.kind != Kind::element)
+            continue;
+        for (auto& a : x.attrs)
+            if (!a.ns_decl && dia.attr_kind(x, a) == AttrKind::id)
+                f(a.value);
+        todo.insert(todo.end(), x.children.begin(), x.children.end());
+    }
+}
+
+// Each id with its first element, in document order of the nodes; `dups` collects ids used again.
+std::map<std::string, std::uint32_t, std::less<>> id_nodes(const Doc& d, const Dialect& dia,
+                                                           std::set<std::string>* dups = nullptr) {
+    std::map<std::string, std::uint32_t, std::less<>> m;
+    for (std::uint32_t k = 0; k < d.nodes.size(); ++k)
+        if (d.nodes[k].kind == Kind::element)
+            for (auto& a : d.nodes[k].attrs)
+                if (!a.ns_decl && dia.attr_kind(d.nodes[k], a) == AttrKind::id &&
+                    !m.emplace(a.value, k).second && dups)
+                    dups->insert(a.value);
+    return m;
+}
+
+// How often each id is referenced.
+std::map<std::string, std::size_t> referenced(const Doc& d, const Dialect& dia) {
+    std::map<std::string, std::size_t> r;
+    for (auto& n : d.nodes)
+        if (n.kind == Kind::element)
+            for (auto& a : n.attrs)
+                if (!a.ns_decl)
+                    dia.rewrite_ids(n, a, [&](std::string_view id) {
+                        ++r[std::string(id)];
+                        return std::string(id);
+                    });
+    return r;
+}
+
+std::set<std::string> keys(const std::map<std::string, std::uint32_t, std::less<>>& m) {
+    std::set<std::string> s;
+    for (auto& [k, v] : m)
+        s.insert(k);
+    return s;
+}
+
+// Theirs with renamed ids and the references to them rewritten (SPEC §2.3), reloaded.
+std::unique_ptr<Doc> renamed_ids(const Doc& t, const Dialect& dia,
+                                 const std::map<std::string, std::string, std::less<>>& to, const Opts& opt,
+                                 Limits& budget) {
+    auto f = [&](std::string_view id) {
+        auto it = to.find(id);
+        return it == to.end() ? std::string(id) : it->second;
+    };
+    std::vector<Splice> sp;
+    for (auto& n : t.nodes)
+        if (n.kind == Kind::element)
+            for (auto& a : n.attrs) {
+                if (a.ns_decl)
+                    continue;
+                auto v = dia.attr_kind(n, a) == AttrKind::id ? f(a.value) : dia.rewrite_ids(n, a, f);
+                if (v != a.value)
+                    sp.push_back(
+                        {a.raw.off, a.raw.end(),
+                         encode(a.qname + "=" + a.quote + escape_attr(v, a.quote) + a.quote, t.enc)});
+            }
+    auto bytes = apply_splices(t.bytes({0, static_cast<std::uint32_t>(t.src.size())}), std::move(sp));
+    auto* p = reinterpret_cast<const std::byte*>(bytes.data());
+    return load_doc(ByteSource::from_memory({p, p + bytes.size()}, t.src.name()), dia, opt, budget);
+}
+
 // ---- Merge (xml.md §6) ----
 
 struct PlanEl;
 struct Ref {
     Side side = Side::ours;
     std::uint32_t n = 0;
-    const PlanEl* plan = nullptr; // a merged element; null: the source node verbatim
+    const PlanEl* plan = nullptr;      // a merged element; null: the source node verbatim
+    const std::string* text = nullptr; // a word-merged text node (UTF-8) written in place of n
 };
 struct Slot {
     std::vector<Ref> ours, theirs, base; // without a conflict, `ours` is the content
@@ -1085,6 +1264,7 @@ struct AttrRow {
     std::array<int, 3> at{-1, -1, -1}; // attribute index per side (base, ours, theirs)
     std::optional<Side> take;
     int conflict = -1;
+    std::optional<Attr> merged; // a value merged by type (Dialect::merge_attr), spelled like ours'
 };
 // A merged element: ours' tags and whitespace, merged attributes, and merged children.
 struct PlanEl {
@@ -1110,6 +1290,10 @@ struct Merger {
     };
     std::vector<Pending> pend;
     std::deque<PlanEl> plans; // stable addresses
+    // Per side (base, ours, theirs): the ids in use, and the ids referenced that base did not reference.
+    std::array<std::set<std::string>, 3> ids, new_refs;
+    std::deque<std::string> texts;                          // word-merged text, stable addresses
+    std::vector<std::pair<std::string, std::string>> notes; // (address, auto rule) set while merging
 
     // An element both sides changed, to merge into `p` (a work list; nesting reaches 512, xml.md §8).
     struct Task {
@@ -1138,26 +1322,53 @@ struct Merger {
 
         // Attributes and namespace declarations: KeyedMerge (xml.md §6.1, §6.2).
         using KV = std::pair<std::string, std::string>;
-        auto items = [](const Node& n) {
+        auto items = [&](const Node& n) { // comparison forms; volatile values as written
             std::vector<KV> v;
-            for (auto& a : n.attrs)
-                v.emplace_back(attr_key(a), a.value);
+            for (auto& a : n.attrs) {
+                auto nv = a.ns_decl ? std::nullopt : dia.normalize(n, a);
+                v.emplace_back(attr_key(a), nv ? std::move(*nv) : a.value);
+            }
             return v;
         };
+        auto by_key = [](const Node& n, const std::string& key) -> const Attr* {
+            for (auto& a : n.attrs)
+                if (attr_key(a) == key)
+                    return &a;
+            return nullptr;
+        };
+        std::map<std::string, std::string> typed; // values merged by type, by key
+        auto recurse = [&](const std::string& key, const std::string*, const std::string&,
+                           const std::string&) {
+            if (key[0] != 'a')
+                return false;
+            auto v = dia.merge_attr(no, by_key(nb, key), *by_key(no, key), *by_key(nt, key));
+            if (v)
+                typed[key] = std::move(*v);
+            return v.has_value();
+        };
         const auto ib = items(nb), io = items(no), it = items(nt);
-        for (auto& row : keyed_merge<std::string, std::string>(ib, io, it)) {
+        for (auto& row : keyed_merge<std::string, std::string>(ib, io, it, {}, recurse)) {
             AttrRow r;
             for (auto [k, idx] : {std::pair{0, row.base}, std::pair{1, row.ours}, std::pair{2, row.theirs}})
                 if (idx)
                     r.at[static_cast<std::size_t>(k)] = static_cast<int>(*idx);
             r.take = row.outcome.take;
+            if (row.outcome.rule == MergeRule::recursed) {
+                r.merged = no.attrs[*row.ours];
+                r.merged->value = typed.at(row.key);
+            }
             if (row.outcome.rule == MergeRule::conflict) {
+                const Node& owner = row.ours ? no : row.base ? nb : nt;
                 const Attr& a = row.ours   ? no.attrs[*row.ours]
                                 : row.base ? nb.attrs[*row.base]
                                            : nt.attrs[*row.theirs];
                 const std::string ap = path + "/@" + a.qname;
-                pend.push_back({{ap}, {ap}, {ap}, row.outcome.reason});
-                r.conflict = static_cast<int>(pend.size() - 1);
+                if (!a.ns_decl && !dia.normalize(owner, a)) { // volatile: ours wins (svg.md §4, Q-SVG-7)
+                    notes.emplace_back(ap, "editor-state");
+                } else {
+                    pend.push_back({{ap}, {ap}, {ap}, row.outcome.reason});
+                    r.conflict = static_cast<int>(pend.size() - 1);
+                }
             }
             p.attrs.push_back(r);
         }
@@ -1189,16 +1400,28 @@ struct Merger {
             if (pt.x2y[i] != npos)
                 st[pt.x2y[i]].id = id;
         }
-        std::set<std::size_t> recursed, low;
-        std::map<std::size_t, const PlanEl*> merged; // by ours index
+        std::set<std::size_t> recursed, low, derived;
+        std::map<std::size_t, const PlanEl*> merged;     // by ours index
+        std::map<std::size_t, const std::string*> words; // by ours index
         SeqMergeOptions sopt;
         sopt.insertion_order_insignificant = dia.unordered(no);
         sopt.recurse = [&](std::optional<std::size_t> bi, std::size_t oi, std::size_t ti) {
+            if (bi && kb.at(*bi).kind == Kind::text && ko.at(oi).kind == Kind::text &&
+                kt.at(ti).kind == Kind::text && dia.text_mode(no) == TextMode::words) {
+                auto m = merge_words(kb.at(*bi).text, ko.at(oi).text, kt.at(ti).text);
+                if (m)
+                    words[oi] = &texts.emplace_back(std::move(*m));
+                return m.has_value();
+            }
             if (!bi || kb.at(*bi).kind != Kind::element || ko.at(oi).kind != Kind::element ||
                 kt.at(ti).kind != Kind::element)
                 return false;
             if (std::min(po.conf[*bi], pt.conf[*bi]) < 0.8) { // xml.md §3.1: no two-sided auto-merge
                 low.insert(*bi);
+                return false;
+            }
+            if (dia.is_derived(ko.at(oi)) || dia.is_derived(kt.at(ti))) { // xml.md §3.2
+                derived.insert(*bi);
                 return false;
             }
             PlanEl* child = &plans.emplace_back();
@@ -1214,8 +1437,29 @@ struct Merger {
                 r.push_back({s, k.n[i], nullptr});
             return r;
         };
+        // A side that drops ids the other side newly references: conflict `dependency` (xml.md §3.2).
+        auto drops_referenced = [&](const SeqChunk& c, std::size_t side) {
+            const auto& wanted = new_refs[3 - side];
+            bool hit = false;
+            if (!wanted.empty())
+                for (auto i : c.base)
+                    each_id(*d[0], kb.n[i], dia,
+                            [&](const std::string& id) { hit |= !ids[side].count(id) && wanted.count(id); });
+            return hit;
+        };
         for (auto& c : sequence_merge(sb, so, st, sopt)) {
             Slot s;
+            if ((c.kind == SeqKind::ours && drops_referenced(c, 1)) ||
+                (c.kind == SeqKind::theirs && drops_referenced(c, 2)))
+                c.kind = SeqKind::conflict, c.reason = "dependency";
+            // Both inserted where order is free, but with one id: different elements, not two (add-add).
+            if (c.kind == SeqKind::both_inserted &&
+                std::any_of(c.ours.begin(), c.ours.end(), [&](std::size_t i) {
+                    return !ko.key[i].empty() &&
+                           std::any_of(c.theirs.begin(), c.theirs.end(),
+                                       [&](std::size_t j) { return kt.key[j] == ko.key[i]; });
+                }))
+                c.kind = SeqKind::conflict, c.reason = "add-add";
             switch (c.kind) {
             case SeqKind::stable:
             case SeqKind::ours:
@@ -1223,6 +1467,19 @@ struct Merger {
                 s.ours = refs(Side::ours, ko, c.ours);
                 break;
             case SeqKind::theirs:
+                // Ours' element with volatile attributes changed (equal to base only by comparison): merged
+                // attribute by attribute, so ours' values survive theirs' edit (svg.md §4).
+                // ponytail: only the element's own attributes are checked, not its descendants'.
+                if (c.base.size() == 1 && c.ours.size() == 1 && c.theirs.size() == 1 &&
+                    ko.at(c.ours[0]).kind == Kind::element &&
+                    std::any_of(
+                        ko.at(c.ours[0]).attrs.begin(), ko.at(c.ours[0]).attrs.end(),
+                        [&](const Attr& a) { return !a.ns_decl && !dia.normalize(ko.at(c.ours[0]), a); }) &&
+                    d[1]->bytes(ko.at(c.ours[0]).start_tag) != d[0]->bytes(kb.at(c.base[0]).start_tag) &&
+                    sopt.recurse(c.base[0], c.ours[0], c.theirs[0])) {
+                    s.ours = {Ref{Side::ours, ko.n[c.ours[0]], merged.at(c.ours[0])}};
+                    break;
+                }
                 s.ours = refs(Side::theirs, kt, c.theirs);
                 break;
             case SeqKind::both_inserted:
@@ -1231,16 +1488,20 @@ struct Merger {
                     s.ours.push_back(r);
                 break;
             case SeqKind::recursed:
-                s.ours = {Ref{Side::ours, ko.n[c.ours[0]], merged.at(c.ours[0])}};
+                if (auto w = words.find(c.ours[0]); w != words.end())
+                    s.ours = {Ref{Side::ours, ko.n[c.ours[0]], nullptr, w->second}};
+                else
+                    s.ours = {Ref{Side::ours, ko.n[c.ours[0]], merged.at(c.ours[0])}};
                 break;
             case SeqKind::conflict: {
                 s.ours = refs(Side::ours, ko, c.ours);
                 s.theirs = refs(Side::theirs, kt, c.theirs);
                 s.base = refs(Side::base, kb, c.base);
                 Pending pd;
-                pd.reason = c.base.size() == 1 && low.count(c.base[0])      ? "low-confidence-match"
-                            : c.base.empty() && c.reason == "both-modified" ? "add-add"
-                                                                            : c.reason;
+                pd.reason = c.base.size() == 1 && low.count(c.base[0])       ? "low-confidence-match"
+                            : c.base.size() == 1 && derived.count(c.base[0]) ? "dependency"
+                            : c.base.empty() && c.reason == "both-modified"  ? "add-add"
+                                                                             : c.reason;
                 for (auto i : c.base)
                     pd.po.push_back(path + "/" + kb.step[i]);
                 pd.pt = pd.po;
@@ -1309,6 +1570,10 @@ private:
         Prep pr;
         auto& as = pr.as;
         for (auto& r : p.attrs) {
+            if (r.merged) { // not ours' bytes: re-spelled like ours' attribute
+                as.emplace_back(Side::theirs, &*r.merged);
+                continue;
+            }
             auto take = r.take;
             if (r.conflict >= 0) {
                 auto& choice = cs_[static_cast<std::size_t>(r.conflict)].resolved_as;
@@ -1356,7 +1621,7 @@ private:
         std::string kids;
         bool any = false;
         for (auto& slot : p.kids)
-            any |= emit(slot, pr.sc, kids);
+            any |= emit(slot, pr.sc, on, kids);
         const bool open = !is_doc && on.end_tag.len == 0 && any; // <a/> that gained children
         std::vector<Splice> sp;
         const auto o0 = on.whole.off;
@@ -1430,21 +1695,23 @@ private:
         return transcode(std::move(bytes), D.enc, out_);
     }
 
-    std::string fragment(const std::vector<Ref>& refs) const {
+    // Theirs' nodes as UTF-8 XML; `sc` given: with the namespace declarations the output scope lacks.
+    std::string fragment(const std::vector<Ref>& refs, const Scope* sc = nullptr) const {
         std::string s;
         for (std::size_t i = 0; i < refs.size(); ++i) {
             const Doc& D = doc(refs[i].side);
             const Node& x = D.nodes[refs[i].n];
             if (i)
                 s += D.utf8(x.lead_ws);
-            s += D.utf8(x.whole);
+            s += sc ? decode(pristine(refs[i].side, refs[i].n, *sc), out_) : D.utf8(x.whole);
         }
         return s;
     }
 
-    // Attribute conflicts under --conflict=mark: a mark before the owning element (xml.md §6).
-    std::string attr_marks(const PlanEl& p, const std::string& ws) const {
-        std::string s;
+    // Attribute conflicts under --conflict=mark: marks around the owning element (xml.md §6).
+    std::pair<std::string, std::string> attr_marks(const PlanEl& p, const std::string& ws,
+                                                   const Scope& sc) const {
+        std::string before, after;
         for (auto& r : p.attrs) {
             if (r.conflict < 0 || cs_[static_cast<std::size_t>(r.conflict)].resolved_as != "mark")
                 continue;
@@ -1457,12 +1724,16 @@ private:
                                        : m_.d[0]->nodes[p.b].attrs[static_cast<std::size_t>(r.at[0])];
                 alt = "@" + a.qname + " (deleted)";
             }
-            s += encode(dia_.mark(cs_[static_cast<std::size_t>(r.conflict)].id, alt).before, out_) + ws;
+            const std::string theirs = fragment({Ref{Side::theirs, p.t}}, &sc);
+            const Mark mk = dia_.mark(cs_[static_cast<std::size_t>(r.conflict)].id, alt,
+                                      {&m_.d[1]->nodes[m_.d[1]->nodes[p.o].parent], theirs});
+            before += encode(mk.before, out_) + ws;
+            after = encode(mk.after, out_) + after;
         }
-        return s;
+        return {before, after};
     }
 
-    bool emit(const Slot& slot, const Scope& sc, std::string& out) {
+    bool emit(const Slot& slot, const Scope& sc, const Node& parent, std::string& out) {
         const Conflict* c = slot.conflict >= 0 ? &cs_[static_cast<std::size_t>(slot.conflict)] : nullptr;
         const std::vector<Ref>* list = &slot.ours;
         if (c && c->resolved_as == "theirs")
@@ -1471,7 +1742,8 @@ private:
             list = &slot.base;
         Mark mk;
         if (c && c->resolved_as == "mark") {
-            mk = dia_.mark(c->id, fragment(slot.theirs));
+            const std::string theirs = fragment(slot.theirs, &sc);
+            mk = dia_.mark(c->id, fragment(slot.theirs), {&parent, theirs});
             mk.before = encode(mk.before, out_), mk.after = encode(mk.after, out_);
             if (list->empty())
                 out += (slot.theirs.empty() ? std::string() : lead(slot.theirs[0])) + mk.before + mk.after;
@@ -1482,10 +1754,14 @@ private:
             out += ws;
             if (i == 0 && !mk.before.empty())
                 out += mk.before + ws;
-            if (r.plan)
-                out += attr_marks(*r.plan, ws) + std::move(done_.at(r.plan));
-            else
+            if (r.text) {
+                out += encode(escape_text(*r.text), out_);
+            } else if (r.plan) {
+                auto [before, after] = attr_marks(*r.plan, ws, sc);
+                out += before + std::move(done_.at(r.plan)) + after;
+            } else {
                 out += pristine(r.side, r.n, sc);
+            }
         }
         if (!list->empty())
             out += mk.after;
@@ -1541,26 +1817,31 @@ std::vector<DumpLine> dump_lines(const Doc& d, const Dialect& dia, const Opts& o
             identify({&kids}, dia, n);
             const bool el = n.kind == Kind::element;
             if (el) {
-                std::vector<const Attr*> ns, as;
+                using AV = std::pair<const Attr*, std::string>; // attribute and its comparison form
+                std::vector<AV> ns, as;
                 for (auto& a : n.attrs)
-                    (a.ns_decl ? ns : as).push_back(&a);
+                    if (a.ns_decl)
+                        ns.emplace_back(&a, a.value);
+                    else if (auto v = dia.normalize(n, a)) // volatile state is not dumped
+                        as.emplace_back(&a, std::move(*v));
                 std::sort(ns.begin(), ns.end(),
-                          [](auto* x, auto* y) { return x->name.local < y->name.local; });
-                std::sort(as.begin(), as.end(), [](auto* x, auto* y) {
-                    return std::tie(x->name.uri, x->name.local) < std::tie(y->name.uri, y->name.local);
+                          [](auto& x, auto& y) { return x.first->name.local < y.first->name.local; });
+                std::sort(as.begin(), as.end(), [](auto& x, auto& y) {
+                    return std::tie(x.first->name.uri, x.first->name.local) <
+                           std::tie(y.first->name.uri, y.first->name.local);
                 });
                 ns.insert(ns.end(), as.begin(), as.end());
                 const std::string close = kids.n.empty() ? "/>" : ">";
                 if (o.attr_lines && !ns.empty()) {
                     out.push_back({ind + "<" + n.qname, it.path});
                     for (std::size_t i = 0; i < ns.size(); ++i)
-                        out.push_back({ind + "    " + ns[i]->qname + "=\"" + escape_attr(ns[i]->value) +
+                        out.push_back({ind + "    " + ns[i].first->qname + "=\"" + escape_attr(ns[i].second) +
                                            "\"" + (i + 1 == ns.size() ? close : ""),
-                                       it.path + "/@" + ns[i]->qname});
+                                       it.path + "/@" + ns[i].first->qname});
                 } else {
                     std::string s = ind + "<" + n.qname;
-                    for (auto* a : ns)
-                        s += " " + a->qname + "=\"" + escape_attr(a->value) + "\"";
+                    for (auto& [a, v] : ns)
+                        s += " " + a->qname + "=\"" + escape_attr(v) + "\"";
                     out.push_back({s + close, it.path});
                 }
                 if (!kids.n.empty())
@@ -1692,7 +1973,9 @@ public:
             XML_Parser p;
             std::optional<Node> root;
             bool entity = false;
-        } st{XML_ParserCreate(nullptr), {}, false};
+            const Dialect* dia;
+            std::pair<std::size_t, std::size_t> seen{0, 0};
+        } st{XML_ParserCreate(nullptr), {}, false, dia_.get()};
         if (!st.p)
             return {0};
         XML_SetUserData(st.p, &st);
@@ -1719,13 +2002,15 @@ public:
                 if (a.ns_decl && a.name.local == prefix)
                     n.name.uri = a.value;
         });
-        XML_SetEntityDeclHandler(st.p,
-                                 [](void* u, const XML_Char*, int, const XML_Char*, int, const XML_Char*,
-                                    const XML_Char*, const XML_Char*, const XML_Char*) {
-                                     auto& s = *static_cast<State*>(u);
-                                     s.entity = true;
-                                     XML_StopParser(s.p, XML_FALSE);
-                                 });
+        XML_SetEntityDeclHandler(st.p, [](void* u, const XML_Char* name, int is_param, const XML_Char* value,
+                                          int len, const XML_Char*, const XML_Char* system, const XML_Char*,
+                                          const XML_Char* notation) {
+            auto& s = *static_cast<State*>(u);
+            if (entity_ok(*s.dia, name, is_param, value, len, system, notation, s.seen))
+                return;
+            s.entity = true;
+            XML_StopParser(s.p, XML_FALSE);
+        });
         auto status = XML_Parse(st.p, reinterpret_cast<const char*>(head.data()),
                                 static_cast<int>(head.size()), XML_FALSE);
         XML_ParserFree(st.p);
@@ -1806,15 +2091,48 @@ private:
 
 MergeResult XmlFormat::merge(const Document& base_d, const Document& ours_d, const Document& theirs_d,
                              const MergeOptions& mo) const {
-    const Doc &b = doc(base_d), &o = doc(ours_d), &t = doc(theirs_d);
+    const Doc &b = doc(base_d), &o = doc(ours_d);
     const Opts opt = options(mo.ctx.format_options);
     MergeResult res;
-    for (auto [d, name] : {std::pair{&b, "base"}, std::pair{&o, "ours"}, std::pair{&t, "theirs"}})
+    for (auto [d, name] : {std::pair{&b, "base"}, std::pair{&o, "ours"}, std::pair{&doc(theirs_d), "theirs"}})
         for (auto w : d->warnings) {
             w.message = std::string(name) + ": " + w.message;
             res.warnings.push_back(std::move(w));
         }
-    Merger m{{&b, &o, &t}, *dia_, opt, Differ{*dia_, opt}, {}, {}, {}, {}};
+    Limits budget = mo.ctx.budget.fresh();
+    // Add-add of one id for different elements: theirs' is renumbered first (SPEC §2.3).
+    std::unique_ptr<Doc> renumbered;
+    std::map<std::string, std::string, std::less<>> renames;
+    {
+        const Doc& t0 = doc(theirs_d);
+        auto ib = id_nodes(b, *dia_), io = id_nodes(o, *dia_), it = id_nodes(t0, *dia_);
+        std::set<std::string> taken;
+        for (auto* m : {&ib, &io, &it})
+            for (auto& [k, v] : *m)
+                taken.insert(k);
+        std::vector<std::pair<std::uint32_t, std::string>> hits; // in theirs' document order
+        for (auto& [id, n] : it)
+            if (!ib.count(id) && io.count(id) && o.nodes[io.at(id)].hash != t0.nodes[n].hash)
+                hits.emplace_back(n, id);
+        std::sort(hits.begin(), hits.end());
+        for (auto& [n, id] : hits) {
+            auto to = dia_->renumber(id, taken);
+            if (!to.empty() && taken.insert(to).second)
+                renames[id] = to;
+        }
+        if (!renames.empty())
+            renumbered = renamed_ids(t0, *dia_, renames, opt, budget);
+    }
+    const Doc& t = renumbered ? *renumbered : doc(theirs_d);
+    Merger m{{&b, &o, &t}, *dia_, opt, Differ{*dia_, opt, nullptr, true}, {}, {}, {}, {}};
+    std::array<std::map<std::string, std::size_t>, 3> refs;
+    for (std::size_t s = 0; s < 3; ++s) {
+        m.ids[s] = keys(id_nodes(*m.d[s], *dia_));
+        refs[s] = referenced(*m.d[s], *dia_);
+        for (auto& [id, n] : refs[s]) // referenced more often than in base: a new reference
+            if (auto f = refs[0].find(id); f == refs[0].end() || f->second < n)
+                m.new_refs[s].insert(id);
+    }
     const PlanEl* root = m.run();
     // The XML declaration comes from ours (xml.md §7).
     for (auto [d, side, cs] : {std::tuple{&o, Side::ours, &m.co}, std::tuple{&t, Side::theirs, &m.ct}})
@@ -1856,17 +2174,31 @@ MergeResult XmlFormat::merge(const Document& base_d, const Document& ours_d, con
             ours_keys.insert(key(c));
         for (auto& c : m.ct)
             theirs_keys.insert(key(c));
+        // Notes the merge decided: editor state kept from ours, renumbered additions of theirs.
+        std::map<std::string, std::string> rule; // change id -> rule
+        for (auto& [at, r] : m.notes)
+            for (auto* cs : {&m.co, &m.ct})
+                for (auto& c : *cs)
+                    if (c.at.path == at)
+                        rule[c.id] = r;
+        for (auto& [from, to] : renames)
+            for (auto& c : m.ct)
+                if (c.op == Op::insert && c.at.path.ends_with("[@id=" + pointer_escape(to) + "]")) {
+                    c.metrics["renumbered_from"] = from;
+                    rule[c.id] = "renumbered";
+                }
         for (auto [cs, other] : {std::pair{&m.co, &theirs_keys}, std::pair{&m.ct, &ours_keys}})
             for (auto& c : *cs)
                 if (!in_conflict.count(c.id) &&
                     !(decl_dropped && c.side == Side::theirs && c.kind == "declaration"))
-                    res.auto_merged.push_back({c.id, other->count(key(c)) ? "identical" : "independent"});
+                    res.auto_merged.push_back({c.id, rule.count(c.id)       ? rule[c.id]
+                                                     : other->count(key(c)) ? "identical"
+                                                                            : "independent"});
     }
     apply_conflict_policy(res.conflicts, mo.conflict, res.warnings);
 
     std::string bytes = Writer(m, res.conflicts, *dia_).write(*root);
     // Validation (xml.md §8): the output must parse.
-    Limits budget = mo.ctx.budget.fresh();
     std::unique_ptr<Doc> out;
     try {
         auto* p = reinterpret_cast<const std::byte*>(bytes.data());
@@ -1882,6 +2214,22 @@ MergeResult XmlFormat::merge(const Document& base_d, const Document& ours_d, con
         res.warnings.push_back(
             {"signature-invalidated", "",
              "the merged document changed under an XML signature; re-sign it (xml.md §7.1)"});
+    // Invariants (xml.md §3.2): ids stay unique, and the merge adds no dangling reference.
+    std::set<std::string> dups, had_dups, dangling;
+    const auto out_ids = id_nodes(*out, *dia_, &dups);
+    for (std::size_t s = 0; s < 3; ++s) {
+        id_nodes(*m.d[s], *dia_, &had_dups);
+        for (auto& [r, n] : refs[s])
+            if (!m.ids[s].count(r))
+                dangling.insert(r);
+    }
+    for (auto& id : dups)
+        if (!had_dups.count(id))
+            res.warnings.push_back({"id-duplicate", "", "the merged document uses id '" + id + "' twice"});
+    for (auto& [r, n] : referenced(*out, *dia_))
+        if (!out_ids.count(r) && !dangling.count(r))
+            res.warnings.push_back(
+                {"dangling-ref", "", "the merged document references missing id '" + r + "'"});
     sort_canonical(m.co), sort_canonical(m.ct);
     res.changes_ours = std::move(m.co);
     res.changes_theirs = std::move(m.ct);
@@ -1911,13 +2259,107 @@ bool Dialect::significant_whitespace(const Node&) const {
 }
 
 // xml.md §6: theirs' alternative in a comment, "--" escaped as "-\-".
-Mark Dialect::mark(std::string_view id, std::string_view theirs) const {
+Mark Dialect::mark(std::string_view id, std::string_view theirs, const MarkSite&) const {
     std::string p(theirs);
     for (std::size_t i; (i = p.find("--")) != std::string::npos;)
         p.replace(i, 2, "-\\-");
     return {"<!-- splinter-conflict " + std::string(id) + " theirs: " + (p.empty() ? "(deleted)" : p) +
                 " -->",
             ""};
+}
+
+bool Dialect::accept_entity(std::string_view, std::string_view, std::size_t, std::size_t) const {
+    return false;
+}
+
+AttrKind Dialect::attr_kind(const Node&, const Attr&) const {
+    return AttrKind::opaque;
+}
+
+TextMode Dialect::text_mode(const Node&) const {
+    return TextMode::opaque;
+}
+
+std::optional<std::string> Dialect::normalize(const Node& el, const Attr& a) const {
+    std::string s;
+    switch (attr_kind(el, a)) {
+    case AttrKind::token_list: {
+        auto v = tokens(a.value);
+        std::sort(v.begin(), v.end());
+        v.erase(std::unique(v.begin(), v.end()), v.end());
+        for (auto& w : v)
+            s += (s.empty() ? "" : " ") + w;
+        return s;
+    }
+    case AttrKind::style_list: {
+        auto v = style_props(a.value);
+        std::sort(v.begin(), v.end());
+        for (auto& [k, val] : v)
+            s += k + ":" + val + ";";
+        return s;
+    }
+    default:
+        return a.value;
+    }
+}
+
+std::optional<std::string> Dialect::merge_attr(const Node& el, const Attr* base, const Attr& ours,
+                                               const Attr& theirs) const {
+    std::string s;
+    switch (attr_kind(el, ours)) {
+    case AttrKind::token_list: { // theirs' removals and additions applied to ours
+        auto tb = base ? tokens(base->value) : std::vector<std::string>{};
+        auto to = tokens(ours.value), tt = tokens(theirs.value);
+        auto has = [](const std::vector<std::string>& v, const std::string& w) {
+            return std::find(v.begin(), v.end(), w) != v.end();
+        };
+        std::vector<std::string> r;
+        for (auto& w : to)
+            if (!has(tb, w) || has(tt, w))
+                r.push_back(w);
+        for (auto& w : tt)
+            if (!has(tb, w) && !has(r, w))
+                r.push_back(w);
+        for (auto& w : r)
+            s += (s.empty() ? "" : " ") + w;
+        return s;
+    }
+    case AttrKind::style_list: {
+        auto pb = base ? style_props(base->value) : std::vector<std::pair<std::string, std::string>>{};
+        auto po = style_props(ours.value), pt = style_props(theirs.value);
+        for (auto& row : keyed_merge<std::string, std::string>(pb, po, pt)) {
+            if (row.outcome.rule == MergeRule::conflict)
+                return std::nullopt;
+            if (!row.outcome.take)
+                continue;
+            auto side = *row.outcome.take;
+            auto& v = side == Side::theirs ? pt[*row.theirs]
+                      : side == Side::ours ? po[*row.ours]
+                                           : pb[*row.base];
+            s += (s.empty() ? "" : ";") + v.first + ":" + v.second;
+        }
+        return s;
+    }
+    default:
+        return std::nullopt;
+    }
+}
+
+bool Dialect::is_derived(const Node&) const {
+    return false;
+}
+
+std::string Dialect::rewrite_ids(const Node&, const Attr& a,
+                                 const std::function<std::string(std::string_view)>&) const {
+    return a.value;
+}
+
+std::string Dialect::renumber(std::string_view, const std::set<std::string>&) const {
+    return {};
+}
+
+std::span<const Node> nodes(const Document& d) {
+    return doc(d).nodes;
 }
 
 std::unique_ptr<Format> make_format() {

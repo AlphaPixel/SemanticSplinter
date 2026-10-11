@@ -2,6 +2,7 @@
 
 **Tier:** T1 · **Module:** `semantic-splinter-svg` · **vcpkg feature:** `svg` (optional `svg-render` for the rasterizer) · **Depends on modules:** `xml`, `png` (visual output), registry recursion for `data:` URI images
 **Extensions / magic:** `.svg`, `.svgz` (gzip). Probe: XML whose root element is `svg` in namespace `http://www.w3.org/2000/svg` (also accept a missing namespace with a lower confidence). `.svgz` is gzip magic `1F 8B` plus `.svgz` logical name.
+**Status (v1, #9):** MVP plus subpath merge, the entity exception, and SVGZ, built as an `xml::Dialect` (hooks `accept_entity`, `attr_kind`, `text_mode`, `normalize`, `merge_attr`, `is_derived`, `rewrite_ids`, `renumber`, and `mark` with its site). Not yet: the lunasvg visual (§5.2), `<style>` CSS rule merge, `data:` image recursion, segment-level path merge, id-rename detection with reference rewriting (§3.2), gradient/`use` cycle checks, patch payloads, and XMLDSig `strip` (a signed SVG only warns `signature-invalidated`, as generic XML). Deviations: addresses are the xml module's (`/svg/g[@id=layer1]/rect[@id=r7]`, `@style` as a whole, no `id:`/`n:` steps); elements without ids pair by the xml module's similarity, not the geometry score or Hungarian assignment of §3.1; add-add ids follow SPEC §2.3: a counter-allocated id (`rect1234`) continues after the highest number in use with its prefix, any other id becomes `<id>-t<n>`, noted `auto: renumbered` (with `renumbered_from` in the change metrics); the dump is the xml module's canonical dump with comparison forms (sorted styles and classes, shortest numbers, absolute path data) and editor state left out; a merged `d` keeps each subpath's source text, only a relative leading `m` becomes absolute, without the `path-reserialized` warning; both sides' additions at one place are both kept, ours first, except under `text`, `tspan`, `textPath`, and `switch`; `--conflict=mark` falls back to the comment mark where a `g` cannot go (no lifting to an ancestor); colors compare `#rgb`, `rgb()` and the 16 HTML names plus `orange` (no full CSS color table); a dependency conflict is placed on the deleted element, so `--conflict=ours` can still leave the other side's new reference dangling (warning `dangling-ref`); `.svgz` deflate level comes from XFL alone (no trial compression).
 
 ## 1. Why it matters
 
@@ -253,14 +254,14 @@ is base64 over Illustrator's private compressed data (OpaqueLeaf, never decoded)
 | Field | Class | Verify on load | Regenerate on write |
 |---|---|---|---|
 | gzip header: ID, CM = 8, FLG, MTIME, XFL, OS, optional FNAME/FCOMMENT/FEXTRA/FHCRC | encoding (MTIME, FNAME: volatile) | magic and CM; FHCRC (CRC-16 of the header) when present | copied from ours' header (MTIME and name preserved from ours, not zeroed); MTIME 0 and no name only for a new file |
-| gzip deflate data | encoding | inflate with the decompressed-size limit | `raw` when the decoded XML bytes equal ours'; else `encode(gzip, params)` with the level inferred from XFL (2 = max, 4 = fastest) and trial compression |
-| gzip trailer CRC-32 (of the uncompressed data) and ISIZE (length mod 2³²) | integrity | checked; mismatch `integrity-mismatch-input` | `crc32(xml)`, `size_of(xml)` |
-| Multi-member gzip | encoding | concatenated members decoded as one stream | written as one member (warned when the input had several) |
+| gzip deflate data | encoding | inflate within `--max-memory` (the decompressed-size limit) | `raw` when the decoded XML bytes equal ours'; else re-deflated (warning `encoding-reencoded`) with the level XFL names (2 = 9, 4 = 1, else zlib's default); trial compression is later |
+| gzip trailer CRC-32 (of the uncompressed data) and ISIZE (length mod 2³²) | integrity | checked, with FHCRC; a mismatch loads, sets `inspect` integrity to `mismatch`, and warns `integrity-mismatch-input` in merges | `crc32(xml)`, `size_of(xml)` |
+| Multi-member gzip | encoding | concatenated members decoded as one stream | written as one member (warning `gzip-members-joined`) |
 | BOM, XML declaration `encoding`, character references, entity use, CDATA vs escaped text | encoding | decodes cleanly | from ours' spans (xml module); new text in ours' encoding |
-| `data:` URI base64 (line wrapping, padding) or percent-encoding | encoding | decodes cleanly | `raw` when the decoded payload is unchanged; else `encode(base64, …)` with ours' MIME type and wrapping width |
-| `i:pgf` and other Illustrator private data | derived (Illustrator's native copy of the document) | none | OpaqueLeaf; stale against merged SVG content (warning, §10) |
-| `d` under an Inkscape path effect (`inkscape:original-d` + `inkscape:path-effect`) | derived | none | never merged independently (§10) |
-| Editor state (§4: `sodipodi:namedview` view attributes, `inkscape:version`, `sodipodi:docname`, export hints, RDF `dc:date`, Illustrator metadata timestamps) | volatile | none | preserved from ours; both-modified resolved per §4 |
+| `data:` URI base64 (line wrapping, padding) or percent-encoding | encoding | not decoded in v1 (the attribute is one opaque value) | v2: `raw` when the decoded payload is unchanged; else `encode(base64, …)` with ours' MIME type and wrapping width |
+| `i:pgf` and other Illustrator private data | derived (Illustrator's native copy of the document) | none | never merged below the element (two-sided changes conflict `dependency`); warning `derived-stale` when both sides changed the document |
+| `d` under an Inkscape path effect (`inkscape:original-d` + `inkscape:path-effect`) | derived | none | the element is never merged attribute by attribute: two-sided changes conflict `dependency` (§10) |
+| Editor state (§4: `sodipodi:namedview` view attributes, `inkscape:version`, `sodipodi:docname`, export hints) | volatile | none | left out of hashes, so an element whose only change is editor state keeps ours'; inside a merged element KeyedMerged, a two-sided change keeps ours, noted `editor-state`. RDF `dc:date` and Illustrator metadata timestamps are element text and still compare as content in v1 |
 
 Plain SVG has no framing (no lengths, counts or offsets) and no integrity fields. The only integrity fields are
 the gzip CRC-32 and ISIZE of `.svgz`.
@@ -271,7 +272,8 @@ a changed one is fully recompressed (deflate gives no partial reuse), which is r
 
 **Signatures under `--signatures=auto`.** SVG has no signature mechanism of its own. A W3C XML Signature
 (`ds:Signature`) inside an SVG is handled like generic XML (ENVELOPES.md): verified when possible (C14N via the xml
-module), and **stripped** with `signature-stripped`, because no SVG consumer rejects an unsigned file. The keyed
+module), and **stripped** with `signature-stripped`, because no SVG consumer rejects an unsigned file. (v1: the xml
+module has no `strip` yet, so the signature is kept with `signature-invalidated`.) The keyed
 boundary is the `ds:SignatureValue` over the canonicalized `ds:SignedInfo`; the `ds:Reference` digests inside
 `SignedInfo` are unkeyed but covered by the signature, so they are not recomputed alone. `--signatures=keep`
 retains it with `signature-invalidated`. Embedded `data:` payloads apply their own format's policy.

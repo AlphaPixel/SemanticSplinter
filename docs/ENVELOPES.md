@@ -54,8 +54,8 @@ Legend: **L** = layer stack (outermost → content). **F** = framing. **I** = in
 - **I:** none. TGA footer signature is a constant. **L:** BMP RLE4/RLE8, TGA RLE, and QOI ops. **Advisory:** BMP `bfSize` and `biSizeImage` are often wrong in the wild, so a mismatch warns rather than failing (Q-RAST-9).
 
 ### SVG / SVGZ
-- **L:** `.svgz` = gzip → XML. `data:` URIs in `href` are base64 (images recurse).
-- **I:** gzip CRC-32 and ISIZE. **V:** gzip mtime and editor metadata. **D:** Illustrator's `i:pgf` private data (a derived, compressed copy of the document). **A:** none standard (XMLDSig is possible, and follows the generic XML rule).
+- **L:** `.svgz` = gzip (one or more members) → XML. `data:` URIs in `href` are base64 (images recurse; not decoded in v1).
+- **I:** gzip CRC-32 and ISIZE, and the optional header CRC-16 (FHCRC). **V:** gzip mtime and name, and editor view state (Inkscape namedview zoom/window/current layer, `inkscape:version`, `sodipodi:docname`, export hints). **D:** Illustrator's `i:pgf` private data (a derived, compressed copy of the document), and `d` under an Inkscape path effect (derived from `inkscape:original-d`). **A:** none standard (XMLDSig is possible, and follows the generic XML rule).
 
 ## Archives and documents
 

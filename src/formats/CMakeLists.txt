@@ -80,6 +80,17 @@ if(SEMSPLINTER_FORMAT_JPEG)
     list(APPEND formats jpeg)
 endif()
 
+if(SEMSPLINTER_FORMAT_SVG)
+    if(NOT SEMSPLINTER_FORMAT_XML)
+        message(FATAL_ERROR "SEMSPLINTER_FORMAT_SVG needs SEMSPLINTER_FORMAT_XML")
+    endif()
+    find_package(ZLIB REQUIRED)
+    add_library(semantic-splinter-svg STATIC svg/svg.cpp)
+    add_library(SemanticSplinter::svg ALIAS semantic-splinter-svg)
+    target_link_libraries(semantic-splinter-svg PUBLIC SemanticSplinter::xml PRIVATE ZLIB::ZLIB)
+    list(APPEND formats svg)
+endif()
+
 # Registry::with_builtin_formats() over every enabled module, in registration order (SPEC §2.3, §11).
 set(includes "")
 set(calls "")

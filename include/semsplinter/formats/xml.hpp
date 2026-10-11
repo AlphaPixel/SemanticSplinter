@@ -9,7 +9,10 @@
 #include <semsplinter/hash.hpp>
 
 #include <cstdint>
+#include <functional>
 #include <memory>
+#include <optional>
+#include <set>
 #include <span>
 #include <string>
 #include <string_view>
@@ -71,6 +74,24 @@ struct Mark {
     std::string before, after;
 };
 
+// Where a conflict is marked.
+struct MarkSite {
+    const Node* parent = nullptr; // ours' node that holds the marked unit (the document node at the top)
+    // Theirs' version as XML, with the namespace declarations it needs: the conflicting children, or the
+    // owning element for an attribute conflict. Empty when theirs deleted it.
+    std::string_view element;
+};
+
+// How the dialect types an attribute value (xml.md §6.1).
+enum class AttrKind : std::uint8_t {
+    opaque,     // one value
+    id,         // the element's document-wide id: dependency checks and add-add renumbering (SPEC §2.3)
+    token_list, // whitespace-separated set (`class`): tokens added and removed independently
+    style_list, // `prop:value;...`: KeyedMerge over properties
+};
+
+enum class TextMode : std::uint8_t { opaque, words }; // words: two-sided text edits merge word by word
+
 // Dialect hooks (xml.md §3.3). The base class is the generic dialect.
 class Dialect {
 public:
@@ -86,12 +107,38 @@ public:
     // Whitespace-only text under `el` is content rather than formatting.
     virtual bool significant_whitespace(const Node& el) const;
     // The marking of a conflict; `theirs` is theirs' alternative as XML text. Default: an XML comment.
-    virtual Mark mark(std::string_view conflict_id, std::string_view theirs) const;
+    virtual Mark mark(std::string_view conflict_id, std::string_view theirs, const MarkSite& site) const;
+    // An internal general entity in the DOCTYPE (xml.md §8); `count` and `bytes` are the totals so far, this
+    // one included. External and parameter entities are always refused. Default: refused (SPEC §9).
+    virtual bool accept_entity(std::string_view name, std::string_view value, std::size_t count,
+                               std::size_t bytes) const;
+    virtual AttrKind attr_kind(const Node& el, const Attr& a) const; // default: opaque
+    virtual TextMode text_mode(const Node& el) const;                // default: opaque
+    // The comparison form of a value (xml.md §4): equal forms are equal values. nullopt marks volatile state
+    // (editor view settings): left out of hashes, diffs, and dumps; a two-sided change keeps ours, noted
+    // `editor-state`. Default: token lists and styles sorted, anything else as is.
+    virtual std::optional<std::string> normalize(const Node& el, const Attr& a) const;
+    // A value both sides changed (base null when both added it), merged by type; nullopt: conflict.
+    // Default: token lists and styles by attr_kind.
+    virtual std::optional<std::string> merge_attr(const Node& el, const Attr* base, const Attr& ours,
+                                                  const Attr& theirs) const;
+    // Content computed from other content: never merged below this element; two-sided changes conflict
+    // (`dependency`). Default: none.
+    virtual bool is_derived(const Node& el) const;
+    // The value with every id it references replaced by `id(old)`. Also how references are found (xml.md
+    // §3.2). Default: no references.
+    virtual std::string rewrite_ids(const Node& el, const Attr& a,
+                                    const std::function<std::string(std::string_view)>& id) const;
+    // Theirs' new id when both sides added different elements with this id (SPEC §2.3); `taken` holds every
+    // id in use. Empty: keep it, so the elements conflict where they meet (the default).
+    virtual std::string renumber(std::string_view id, const std::set<std::string>& taken) const;
 };
 
 // Generic XML.
 std::unique_ptr<Format> make_format();
 // An XML-based format with its own name, extensions, and dialect (for dialect modules such as SVG).
 std::unique_ptr<Format> make_format(FormatInfo info, std::shared_ptr<const Dialect> dialect);
+// The nodes of a document loaded by an XML-based format (nodes[0] is the document node).
+std::span<const Node> nodes(const Document&);
 
 } // namespace semsplinter::xml
