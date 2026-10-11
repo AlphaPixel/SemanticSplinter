@@ -1,6 +1,6 @@
 # Miscellaneous Raster Formats — Implementation Document
 
-**Tier:** T2 (TIFF, GIF, WebP, BMP, TGA, QOI) · **Modules:** `semantic-splinter-tiff`, `-bmp`, `-tga`, `-gif`, `-webp`, `-qoi` · **vcpkg features:** same names · **Depends on modules:** `semantic-splinter-raster` (helper, png.md §3.4); `xml` for XMP (v2)
+**Tier:** T2 (TIFF, GIF, WebP, BMP, TGA, QOI) · **Modules:** `semantic-splinter-tiff`, `-bmp`, `-tga`, `-gif`, `-webp`, `-qoi` · **vcpkg features:** same names · **Depends on modules:** `semantic-splinter-raster` (helper, png.md §3.4); `xml` for XMP (v2) · **Status:** §12.1
 **Extensions / magic:**
 
 | Format | Extensions | Magic |
@@ -178,15 +178,17 @@ before/after as OpaqueLeaf payloads.
 ## 7. Serialization and preservation
 
 - **Passthrough** first (output equals an input → its bytes).
-- **TIFF**: write with libtiff using `TIFFWriteRawStrip`/`TIFFWriteRawTile` for byte-copied cells and
-  encoded writes for re-encoded cells. Unknown tags are re-emitted with their original type and bytes
-  through custom field info (`TIFFMergeFieldInfo`). IFD order and page order follow the merge. Offsets are
-  regenerated, but under `--layout=stable` (default) unchanged strips, tiles and opaque blobs keep their
-  absolute offsets and changed IFDs are rewritten at the end of the file (§7.1); `--layout=compact` relays
-  out the whole file. Classic TIFF is promoted to BigTIFF when > 4 GiB, with warning.
-- **GIF**: own writer (LZW encoder with deterministic code-size and clear-code policy, about 250 lines)
-  or giflib `EGifPutLine` (Q-RAST-4). Unchanged frames re-emit original sub-blocks.
-- **WebP**: libwebpmux to assemble chunks; unchanged chunks and frames re-emitted byte-exact.
+- **TIFF**: own writer on the Emitter through the shared IFD layer (the phase rule: writers are built on the
+  Emitter, so libtiff only decodes and validates). Byte-copied cells are raw segments; re-encoded strips come from
+  our own LZW, PackBits and zlib encoders. Unknown tags are re-emitted with their original type and bytes. IFD
+  order and page order follow the merge. Under `--layout=stable` (default) ours' file is kept whole: unchanged
+  strips, tiles and opaque blobs keep their absolute offsets and changed IFDs and strips are appended (§7.1);
+  `--layout=compact` relays out the whole file (later). Classic TIFF is promoted to BigTIFF when > 4 GiB, with
+  warning (later).
+- **GIF**: own writer (LZW encoder with deterministic code-size and clear-code policy, Q-RAST-4). Unchanged frames
+  re-emit their original table and sub-blocks.
+- **WebP**: own RIFF writer on the Emitter (libwebpmux is not built); unchanged chunks and frames re-emitted
+  byte-exact, re-encoded frames from libwebp's encoder output.
 - **BMP/TGA/QOI**: own writers (about 200 lines each), header version and options from ours.
 - Warnings: `derived-stale` (TIFF reduced-res pages/SubIFDs, TGA postage stamp),
   `layers-dropped` (TIFF 37724), `encoding-promoted`, `lossy-reencode`.
@@ -206,19 +208,26 @@ before/after as OpaqueLeaf payloads.
 | TIFF IFD offsets (header, `NextIFD`, SubIFDs 330, Exif 34665, GPS 34853, Interop 40965): u32, or u64 in BigTIFF, absolute from file start, even (word-aligned) | framing | in bounds, no cycles, no overlap | `field(u32\|u64, order, offset_of(ifd))`, `align(2, 0)` |
 | TIFF out-of-line tag values (> 4 bytes, > 8 in BigTIFF) | framing | in bounds | `offset_of(value)`; in-line when they fit |
 | `StripOffsets`/`TileOffsets` and `StripByteCounts`/`TileByteCounts` (SHORT, LONG or LONG8) | framing | each strip inside the file; count = strips per plane × planes | `offset_of(cell_i)`, `size_of(cell_i)`; type widened SHORT → LONG when a value exceeds 65 535 (fix-point); classic → BigTIFF at 4 GiB (warned) |
-| `Compression`, `Predictor`, `JPEGTables`, `FillOrder`, `RowsPerStrip`/tile size | encoding | supported by libtiff | ours' values; Deflate level by trial against ours' zlib FLEVEL (libtiff `ZIPQuality` is not stored) |
+| `Compression`, `Predictor`, `JPEGTables`, `FillOrder`, `RowsPerStrip`/tile size | encoding | supported by libtiff | ours' values; Deflate level from the first strip's zlib FLEVEL (0→1, 1→5, 2→6, 3→9; libtiff `ZIPQuality` is not stored); predictors only with LZW and Deflate. A tiled or planar page that must be re-encoded is written as contiguous strips (`encoding-promoted`) |
+| GeoTIFF `GeoKeyDirectoryTag` (34735) with `GeoDoubleParams` (34736) and `GeoAsciiParams` (34737) | content (keys `/pages/<i>/geo/<KeyID>`); the directory layout is framing | key locations inside their tags | ours' three tags when the keys are ours', else regenerated in key order |
 | DNG `NewRawImageDigest` (0xC7A7) / `RawImageDigest` (0xC71C), MD5 | integrity | MD5 over the raw image data *(verify exact scope)* | DNG is diff-only (§10): reported, never rewritten |
 | Exif `MakerNote`, Photoshop 37724 and other opaque blobs with internal absolute offsets | framing (unknown) | none | kept at the same absolute offset under `--layout=stable`; if they must move, `opaque-offsets-moved` |
 | TIFF `DateTime` 306, `Software` 305 | volatile | none | preserved from ours |
 | Reduced-resolution IFDs, SubIFD pyramids, COG overviews | derived | none | kept, `derived-stale` |
 | GIF logical screen `GCT size` field (N → 3·2^(N+1) bytes), local table size, LZW minimum code size, sub-block lengths and terminator | framing | table sizes in bounds; sub-block chain terminated | `field(u8, size_of(sub_block))` per ≤ 255-byte block, `bytes(0)` terminator; table size = smallest power of 2 ≥ entries |
-| GIF LZW code stream (clear-code and code-width policy) | encoding | bounded decode | `raw` for unchanged frames, else our LZW writer (Q-RAST-4) |
+| GIF LZW code stream (clear-code and code-width policy) | encoding | bounded decode | `raw` for unchanged frames, else our LZW writer (Q-RAST-4): clear code first, width grows when the next code reaches 2^width, clear when the table is full, clear + end code at the end (the gif.h policy) |
+| GIF Graphic Control Extension (disposal, user input, delay, transparent index) | content (frame keys); transparent index is encoding | block size 4 | keys `/frames/<i>/delay`, `/disposal`, `/user-input`; written when a key or a transparent entry needs it. Transparent pixels are canonical (0,0,0,0): GIF stores no color there |
+| GIF image descriptor left/top, local-table flag and size, interlace flag | content (left/top: key `/rect`), encoding (table, interlace) | rect inside 16 bits | from the source frame; a re-encoded frame uses the global table when its palette fits, else a local one |
 | RIFF size (u32 LE = file size − 8), chunk sizes (u32 LE, exclude header and pad), pad byte | framing | sizes in bounds; RIFF size may be off by the trailing pad in old writers *(verify)* | `field(u32, LE, size_of(riff_body))`, `field(u32, LE, size_of(chunk))`, `align(2, 0)` |
-| WebP `VP8X` flags (ICC, alpha, EXIF, XMP, animation) and canvas width−1/height−1 (u24 LE) | derived | flags match chunks present | from the merged chunk set and canvas |
+| WebP `VP8X` flags (ICC, alpha, EXIF, XMP, animation) and canvas width−1/height−1 (u24 LE) | derived | flags match chunks present | from the merged chunk set and canvas. The canvas is the key `/canvas` only in animations; a still image's canvas is its frame size. `VP8X` is written when a metadata or unknown chunk, an animation, or lossy alpha needs it |
+| WebP `ANIM` background color and loop count | content | size ≥ 6 | keys `/animation/background`, `/animation/loop` |
 | WebP `ANMF` X/2, Y/2, width−1, height−1, duration (u24 LE) | framing (rect is content) | frame inside canvas | from the merged frame model |
 | VP8 frame tag (first-partition size), VP8L header (14-bit width−1/height−1), ALPH header byte | framing / encoding | consistent with frame size | written by libwebp |
 | BMP `bfSize`, `bfOffBits`, `biSizeImage` (may be 0 for BI_RGB), `biClrUsed`, V5 `bV5ProfileData` (offset from the info header) and `bV5ProfileSize`, 4-byte row padding | framing | `bfSize` and `biSizeImage` are advisory and often wrong in the wild: a mismatch is warned `framing-inconsistent` without needing `--lenient` (Q-RAST-9); `bfOffBits` must be in bounds | `size_of(file)`, `offset_of(pixels)`, `size_of(pixels)`, `align(4, 0)` per row |
-| TGA ID length (u8), color-map spec, footer extension and developer-area offsets (u32 LE), extension-area size (495), scan-line table offsets, postage-stamp and color-correction offsets | framing | in bounds | `offset_of(...)`; scan-line table regenerated from the new row offsets |
+| BMP color table (1-8 bpp; order is not semantic in RGBA mode), bitfield masks, `biClrImportant` | encoding | indices inside the table | ours' table order with new colors appended (png.md §7.3); exact indices kept when every contributing side has the same table |
+| BMP `bfReserved1/2`, V5 reserved | content (opaque) | none | from the encoding side |
+| TGA ID length (u8), color-map spec, footer extension and developer-area offsets (u32 LE), extension-area size (495), scan-line table offsets, postage-stamp and color-correction offsets | framing | in bounds | `offset_of(...)`; the scan-line table is not written (offset 0: it is optional and only speeds up random access) |
+| TGA x/y origin (screen position), attribute type | content | none | keys `/tga/origin`, `/tga/ext/attribute`; attribute type is rewritten to 3 (warned) when the merged pixels need alpha the written type would hide |
 | TGA extension date/time stamp, software ID and version | volatile | none | preserved from ours |
 | TGA RLE packets; BMP RLE4/RLE8; QOI op choice | encoding | bounded decode | re-encoded by our writers (packets never cross rows for TGA 2.0) |
 | QOI header and 8-byte end marker `00×7 01` | framing | magic, end marker present | `bytes` |
@@ -228,8 +237,9 @@ There are no integrity fields in TIFF (except DNG digests), GIF, WebP, BMP, TGA 
 **Raw copy and layout stability.** TIFF: under `--layout=stable` (default), unchanged strips and tiles keep their
 absolute offsets and bytes. A metadata-only change rewrites the changed IFD at the end of the file and patches
 the one pointer that referenced it (libtiff's `TIFFRewriteDirectory` does this), so strip data, MakerNotes and
-37724 never move. Changed strips that fit their old slot are rewritten in place; others are appended. `--layout=compact`
-relays out the file canonically. GIF: unchanged frames re-emit their original LZW sub-blocks. WebP: unchanged chunks
+37724 never move. Changed strips are appended (the old ones stay as dead bytes); rewriting them in place when they
+fit is a later optimization. An IFD whose NextIFD must change is rewritten too. `--layout=compact` relays out the
+file canonically (not implemented yet). GIF: unchanged frames re-emit their original LZW sub-blocks. WebP: unchanged chunks
 and frames byte-exact.
 
 **Signatures under `--signatures=auto`.** None in the core formats. C2PA defines embeddings for some of these
@@ -291,6 +301,53 @@ counts vs `--max-memory`, LZW expansion bound.
 | v1.1 | WebP all variants, TIFF multipage, GeoTIFF keys, TIFF lossy tile-granularity merge | M |
 | v2 | Exif/XMP keyed merges, COG overviews regeneration | M |
 | Later | Image sequences diff | L |
+
+### 12.1 Implementation status (Phase 7, step 10)
+
+v1 scope (D-45): MVP + v1.1. One engine (`src/formats/rastermisc/common.cpp`, internal library
+`semantic-splinter-rastermisc`) does diff, merge, passthrough, reload validation, dump, inspect, and visuals for all
+six modules; each module parses, encodes, and maps its envelope.
+
+Done:
+
+- **Shared:** canonical RGBA grid of the raster helper (8- or 16-bit storage); GridMerge per frame with guard band,
+  `adjacent-edits`, tolerance and `--alpha-zero-equal`; frames paired by position when the counts agree, else
+  SequenceMerge of whole frames by identity (frame keys + raster); frame control fields as keys; KeyedMerge of
+  metadata with newest-wins for volatile timestamps; color-dependency conflict (`/icc`, `/bmp/colorspace`,
+  `/qoi/colorspace`, TGA gamma and attribute type); exact palette indices when every contributing side has the same
+  palette (indexed mode), else re-palettization in ours' table order; heatmap and merge visuals as PNG through a
+  dependency-free writer in the raster helper (`raster_png.hpp`).
+- **Shared TIFF/Exif IFD layer** (`include/semsplinter/formats/ifd.hpp`, in the raster helper, D-28): classic and
+  BigTIFF, both byte orders, pointer-tag sub-IFDs, cycle and bounds checks; an Emitter IFD writer with absolute
+  or header-relative offsets and `keep()` for values that stay in place. JPEG uses it for Exif in v2.
+- **BMP:** every header version (core, info, v2, v3, OS/2 read as info, v4, v5 with embedded or linked profile),
+  1-32 bpp, bitfields, alpha bitfields, RLE4/RLE8; keys `/bmp/ppm`, `/bmp/colorspace`, `/icc`; advisory
+  `bfSize`/`biSizeImage` (`framing-inconsistent`); promotion in bpp, compression and header.
+- **QOI:** reference op choice (byte-identical to qoi.h), 3/4 channels, `/qoi/colorspace` key.
+- **TGA:** color-mapped, truecolor, gray (8, 15, 16, 24, 32 bpp), RLE (packets never cross rows on write), all
+  origins; TGA 2.0 extension fields as keys, postage stamp (`derived-stale`), color-correction table and
+  developer-area entries.
+- **GIF:** own block parser, giflib decode, own LZW writer; still and animated; frame keys `/rect`, `/delay`,
+  `/disposal`, `/user-input`; `/screen/*`, `/animation/loop`, `/comments/<i>`, `/app/<id>`; unchanged frames keep
+  their table and LZW bytes.
+- **TIFF:** single and multi-page (v1.1), strips and tiles, chunky and planar, 1-16-bit gray, RGB and palette with
+  an alpha extra sample, LZW/Deflate/PackBits/none and predictor 2 (decode by libtiff, encode by our own codecs);
+  tag keys `/pages/<i>/tags/0xNNNN` with structural tags excluded; Exif and GPS IFDs as opaque keys (deep-copied
+  from another input, `opaque-offsets-moved` for a MakerNote); GeoTIFF keys (v1.1); stable-layout writer that
+  appends rewritten IFDs and changed strips and keeps unchanged strips at their offsets; `layers-dropped` for 37724;
+  undecodable pages (float, CMYK, YCbCr, JPEG/LZMA/ZSTD/WebP/LERC compression, extra samples) as opaque units
+  merged whole; `--tiff-ignore-tags`.
+- **WebP (v1.1):** own RIFF parser and Emitter writer, libwebp decode; lossless stills merge by pixels and re-encode
+  with Q-RAST-5 settings; lossy stills merge only whole (`encoding-mismatch` when both changed, `--reencode` to
+  merge in pixel space with `lossy-reencode`); animations merge frame by frame, unchanged frames keep their
+  bitstreams; ICC, EXIF, XMP and unknown chunks as keys; advisory RIFF size.
+
+Not yet (deferred, with follow-ups): TIFF lossy tile-granularity merge (v1.1 row: JPEG-compressed pages are opaque
+units, merged whole, because the light libtiff build has no JPEG codec); float/CMYK TIFF in the canonical model
+(the raster helper is RGBA only, Q-RAST-1); `--layout=compact`, in-place strip rewrite and BigTIFF promotion at
+4 GiB; Exif and XMP keyed merges (v2); the GIF/WebP composited-canvas report; the cross-input Q-RAST-8 decision
+(each BMP decides alpha on its own); a GIF merge past 256 colors is refused with an error, not reported as a
+conflict; the TGA scan-line table; patch payloads (`SPPX`); fuzz targets and the CI cross-checks of §8.
 
 ## 13. Open questions
 

@@ -134,6 +134,7 @@ FILES: FILE1 FILE2 | DIR1 DIR2 | DIR FILE | FILE DIR | --from-file=F FILE... | -
 | `--exit-codes=posix\|extended` | SPEC §8 |
 | `--diff-algorithm=myers\|minimal\|patience\|histogram` | text: sequence algorithm (default myers, as GNU) |
 | `--png-mode=auto\|rgba`, `--alpha-zero-equal`, `--png-ignore-chunks=LIST`, `--png-color-dependency=conflict\|warn` (merge) | PNG options (png.md §4, §6.2), declared by the module (D-51) |
+| `--tiff-ignore-tags=LIST` (diff), `--reencode` (merge) | raster-misc options (raster-misc.md §4, §6): hide TIFF tag keys such as `0x0131,0x0132` from the diff; merge lossy WebP frames in pixel space and re-encode them (warning `lossy-reencode`). `--alpha-zero-equal`, `--tolerance`, `--gap` and `--guard` apply to BMP, TGA, QOI, GIF, TIFF and WebP as to PNG |
 | `--zip-lenient`, `--zip-times=ignore\|strict` | ZIP/TAR options (containers.md §2.1, §4): trust the central directory over a disagreeing local header (warning); hide member time changes, or count them as differences (by default they are listed but do not count) |
 | `--xml-ws=formatting\|significant`, `--xml-ignore-comments`, `--xml-ignore-pis`, `--xml-strict-prefixes`, `--xml-strict-cdata`, `--dump-attr-lines` | XML options (xml.md §4, §5), declared by the module (D-51) |
 | `--csv-key=COL[,COL]`, `--csv-header=auto\|yes\|no` | CSV options (csv.md §3, §2): key columns by name or 1-based index; header detection override |

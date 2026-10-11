@@ -12,6 +12,12 @@ option(SEMSPLINTER_FORMAT_SVG "SVG format module (needs XML; zlib for .svgz)" ON
 option(SEMSPLINTER_FORMAT_SQLITE "SQLite format module (sqlite3)" ON)
 option(SEMSPLINTER_FORMAT_MESH "OBJ/MTL, PLY, STL mesh module (no dependencies)" ON)
 option(SEMSPLINTER_FORMAT_PDF "PDF format module (qpdf)" ON)
+option(SEMSPLINTER_FORMAT_BMP "BMP format module (no dependencies)" ON)
+option(SEMSPLINTER_FORMAT_TGA "TGA format module (no dependencies)" ON)
+option(SEMSPLINTER_FORMAT_QOI "QOI format module (no dependencies)" ON)
+option(SEMSPLINTER_FORMAT_GIF "GIF format module (giflib)" ON)
+option(SEMSPLINTER_FORMAT_TIFF "TIFF format module (libtiff, zlib)" ON)
+option(SEMSPLINTER_FORMAT_WEBP "WebP format module (libwebp)" ON)
 
 # An ON option enables the vcpkg manifest feature it names (SPEC §2.3). Must run before project().
 macro(semsplinter_vcpkg_feature option feature)
@@ -31,6 +37,12 @@ semsplinter_vcpkg_feature(SEMSPLINTER_FORMAT_SVG svg)
 semsplinter_vcpkg_feature(SEMSPLINTER_FORMAT_SQLITE sqlite)
 semsplinter_vcpkg_feature(SEMSPLINTER_FORMAT_MESH mesh)
 semsplinter_vcpkg_feature(SEMSPLINTER_FORMAT_PDF pdf)
+semsplinter_vcpkg_feature(SEMSPLINTER_FORMAT_BMP bmp)
+semsplinter_vcpkg_feature(SEMSPLINTER_FORMAT_TGA tga)
+semsplinter_vcpkg_feature(SEMSPLINTER_FORMAT_QOI qoi)
+semsplinter_vcpkg_feature(SEMSPLINTER_FORMAT_GIF gif)
+semsplinter_vcpkg_feature(SEMSPLINTER_FORMAT_TIFF tiff)
+semsplinter_vcpkg_feature(SEMSPLINTER_FORMAT_WEBP webp)
 
 project(SemanticSplinter VERSION 0.1.0 DESCRIPTION "Format-aware diff, merge, and patch" LANGUAGES CXX)
 
