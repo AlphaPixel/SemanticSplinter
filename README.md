@@ -87,10 +87,9 @@ name, with later face indices renumbered; MTL materials merge per statement; PLY
 PDF diffs report metadata, aligned pages, page text, annotations, and form values; merges combine metadata,
 annotations, and form values onto the side that changed page content, written as an incremental update that keeps
 every byte (and earlier signatures) of that file.
-Patches (`--binary`) cover text and PNG so far.
-comments, and number spelling survive outside the changed values. SVG builds on XML: `style` properties, `class`
-tokens, and path subpaths merge separately, editor view state (zoom, window) is ignored, deleting what the other side
-newly references conflicts, and `.svgz` is unpacked and repacked only when the content changed. Patches (`--binary`) cover text and PNG so far.
+SVG builds on XML: `style` properties, `class` tokens, and path subpaths merge separately, editor view state (zoom,
+window) is ignored, deleting what the other side newly references conflicts, and `.svgz` is unpacked and repacked
+only when the content changed. Patches (`--binary`) cover text and PNG so far.
 
 Planned: the `--md` Markdown report, JSON patches (`--binary --json`), and the other formats in the v1 scope.
 
