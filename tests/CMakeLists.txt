@@ -42,6 +42,10 @@ if(SEMSPLINTER_FORMAT_SQLITE)
     target_sources(semsplinter-tests PRIVATE formats/test_sqlite.cpp)
     target_link_libraries(semsplinter-tests PRIVATE unofficial::sqlite3::sqlite3) # fixtures built through the API
 endif()
+if(SEMSPLINTER_FORMAT_MESH)
+    target_sources(semsplinter-tests PRIVATE formats/test_mesh.cpp)
+    target_link_libraries(semsplinter-tests PRIVATE semantic-splinter-geomcore)
+endif()
 target_link_libraries(semsplinter-tests PRIVATE splinter-cli Catch2::Catch2WithMain)
 target_compile_definitions(semsplinter-tests PRIVATE SEMSPLINTER_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
     SPLINTER_EXE="$<TARGET_FILE:splinter>") # the driver the [git] tests configure
