@@ -205,7 +205,8 @@ The operand order is **mine, old, yours**, the same as GNU `diff3`, RCS `merge`,
 | `--conflict-style=merge\|diff3\|zdiff3`, `--marker-size=N`, `--eol=auto\|keep` | text: marker layout, marker length, line-ending handling (text.md §4, §6.2) | |
 | `--binary-merge[=force]` | byte-level merge of unrecognized files (binary.md §6) | |
 
-Writing binary merged output to a terminal is refused (exit 2) unless `-o` is given or stdout is redirected.
+Writing binary merged output (a NUL byte in its first 8 KiB, the GNU rule) to a terminal is refused (exit 2) unless
+`-o` is given or stdout is redirected. Text-like results (text, XML, JSON, CSV, SVG, OBJ) print as text.
 
 When the three inputs detect as different formats (a `.json` side holding conflict markers is text), they merge
 as text if every input is text underneath, with `warning: inputs detect as different formats (json, text, json);
