@@ -4,6 +4,7 @@
 #include <semsplinter/formats/text.hpp>
 #include <semsplinter/report.hpp>
 #include <semsplinter/semsplinter.hpp>
+#include <semsplinter/text.hpp>
 #include <semsplinter/version.hpp>
 
 #include <fstream>
@@ -205,7 +206,7 @@ std::size_t do_merge(Config& c, const std::vector<std::string>& ops, Console& co
         if (!c.quiet && w.code != "mark-unsupported" && w.code != "encoding-reencoded")
             diag(con, "warning: " + w.message + (w.at.empty() ? "" : " (" + w.at + ")"));
     if (!target) {
-        if (m.format != "text" && con.out_is_terminal())
+        if (con.out_is_terminal() && looks_binary(m.bytes)) // XML, JSON, CSV... print like text (GNU rule)
             throw Error(ErrorCategory::invalid_input,
                         "refusing to write a binary merge to a terminal; use -o FILE");
         con.out(std::string_view(reinterpret_cast<const char*>(m.bytes.data()), m.bytes.size()));

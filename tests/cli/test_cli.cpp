@@ -203,6 +203,10 @@ TEST_CASE("cli png: report, merge, sidecar, visual, inspect") {
     auto out = splinter::cli::from_path(s.dir / "out.png");
     CaptureConsole m;
     CHECK(run_cli(m, {"-m", "-o", out, po, pb, pt}) == 0);
+    CaptureConsole tty; // a binary merge result does not
+    tty.terminal = true;
+    CHECK(run_cli(tty, {"-m", po, pb, pt}) == 2);
+    CHECK(tty.out_text.empty());
     CaptureConsole same;
     auto both = ours;
     both.set(30 * 40 - 1, {0, 0, 0xFFFF, 0xFFFF});
@@ -305,6 +309,10 @@ TEST_CASE("cli: json diff and merge") {
     CHECK(run_cli(m, {"-m", "-o", out, ours, base, theirs}) == 0);
     CHECK(s.read(out) ==
           "{\n  \"name\": \"splinter\",\n  \"version\": \"0.2.0\",\n  \"tags\": [\"a\", \"b\"]\n}\n");
+    CaptureConsole tty; // a text-like merge result prints to a terminal (#48)
+    tty.terminal = true;
+    CHECK(run_cli(tty, {"-m", ours, base, theirs}) == 0);
+    CHECK(tty.out_text == s.read(out));
     CaptureConsole x;
     auto report = splinter::cli::from_path(s.dir / "r.json");
     CHECK(run_cli(x, {"-m", "--json=" + report, "-o", out, ours, base, clash}) == 1);
