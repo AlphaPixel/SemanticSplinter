@@ -178,9 +178,10 @@ diff driver (`diff.splinter.command = splinter git-diff`) gives richer output th
 
 ## Building
 
-Requirements: CMake 3.25+, a vcpkg checkout with `VCPKG_ROOT` set (manifest mode, pinned baseline, D-52), and
-a C++20 compiler: MSVC 17.8+ (Visual Studio 2022), GCC 11+, Clang 14+, or AppleClang 15+. Linux and macOS
-also need Ninja.
+**[BUILDING.md](BUILDING.md) has the full steps for Windows, Linux, and macOS.** In short: all dependencies come
+from vcpkg in manifest mode (pinned baseline, D-52), so you need a bootstrapped vcpkg checkout with `VCPKG_ROOT`
+pointing at it, CMake 3.25+, and a C++20 compiler: MSVC 17.8+ (Visual Studio 2022), GCC 11+, Clang 14+, or
+AppleClang 15+. Linux and macOS also need Ninja.
 
 ```bash
 cmake --preset windows-msvc                   # or linux-gcc, linux-clang, macos
