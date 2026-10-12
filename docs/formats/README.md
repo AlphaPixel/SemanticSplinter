@@ -24,21 +24,24 @@ and uses the vocabulary in [../SPEC.md](../SPEC.md) (Address, Change, KeyedMerge
 
 ## Index (v1)
 
-| Doc | Formats | Tier | Diff | Merge | Primary primitive | Notes |
-|---|---|---|---|---|---|---|
-| [text.md](text.md) | plain text, any line-oriented file | T0 | ✔ | ✔ | Sequence | GNU diff/diff3/patch compatibility baseline, reference plugin |
-| [binary.md](binary.md) | any unrecognized file | T0 | ✔ | opt-in | Sequence (bytes) | Fallback. Byte-range report. Merge only with `--binary-merge` |
-| [containers.md](containers.md) | ZIP, TAR(.gz/.zst/.xz/.bz2), JAR/APK/NUPKG | T0 | ✔ | ✔ | Keyed | Recurses into members |
-| [xml.md](xml.md) | generic XML | T0 | ✔ | ✔ | Keyed + Sequence | Basis for SVG and other XML dialects |
-| [json.md](json.md) | JSON, JSON5/JSONC (read) | T0 | ✔ | ✔ | Keyed + Sequence | Order- and format-preserving |
-| [png.md](png.md) | PNG (APNG: default image only) | T1 | ✔ | ✔ | Grid + Keyed | First proof-of-concept |
-| [svg.md](svg.md) | SVG, SVGZ | T1 | ✔ | ✔ | Keyed + Sequence | Entity identity and references |
-| [csv.md](csv.md) | CSV, TSV | T1 | ✔ | ✔ | Keyed rows / Grid | Data tables, localization sheets |
-| [jpeg.md](jpeg.md) | JPEG | T2 | ✔ | ✔* | Grid (MCUs) | *Lossless merge in the DCT domain |
-| [raster-misc.md](raster-misc.md) | TIFF, BMP, TGA, GIF (incl. animated), WebP, QOI | T2 | ✔ | per-format | Grid | Shared raster core |
-| [sqlite.md](sqlite.md) | SQLite databases | T2 | ✔ | ✔ | Keyed (rows by PK) | Writes through SQLite itself |
-| [pdf.md](pdf.md) | PDF | T3 | ✔ | partial | Keyed + Sequence | Structure, text, annotations, forms; no rendering in v1 |
-| [mesh-simple.md](mesh-simple.md) | OBJ/MTL, PLY, STL | T3 | ✔ | partial | Sequence/Grid | Geometry metrics |
+**Status (2026-10-12):** every format below is implemented to its v1 scope (PLAN.md). Each document opens with a
+status line saying what is done and what is not. The Patch column is `splinter --binary` support.
+
+| Doc | Formats | Tier | Diff | Merge | Patch | Primary primitive | Notes |
+|---|---|---|---|---|---|---|---|
+| [text.md](text.md) | plain text, any line-oriented file | T0 | ✔ | ✔ | ✔ | Sequence | GNU diff/diff3/patch compatibility baseline, reference plugin |
+| [binary.md](binary.md) | any unrecognized file | T0 | ✔ | opt-in | — | Sequence (bytes) | Fallback. Byte-range report. Merge only with `--binary-merge` |
+| [containers.md](containers.md) | ZIP, TAR(.gz/.zst/.xz/.bz2), JAR/APK/NUPKG | T0 | ✔ | ✔ | ✔ | Keyed | Recurses into members |
+| [xml.md](xml.md) | generic XML | T0 | ✔ | ✔ | ✔ | Keyed + Sequence | Basis for SVG and other XML dialects |
+| [json.md](json.md) | JSON, JSONC | T0 | ✔ | ✔ | ✔ | Keyed + Sequence | Order- and format-preserving; JSON5 not yet |
+| [png.md](png.md) | PNG (APNG: default image only) | T1 | ✔ | ✔ | ✔ | Grid + Keyed | First proof-of-concept |
+| [svg.md](svg.md) | SVG, SVGZ | T1 | ✔ | ✔ | — | Keyed + Sequence | Entity identity and references |
+| [csv.md](csv.md) | CSV, TSV | T1 | ✔ | ✔ | — | Keyed rows / Grid | Data tables, localization sheets |
+| [jpeg.md](jpeg.md) | JPEG | T2 | ✔ | ✔* | — | Grid (MCUs) | *Lossless merge in the DCT domain |
+| [raster-misc.md](raster-misc.md) | TIFF, BMP, TGA, GIF (incl. animated), WebP, QOI | T2 | ✔ | per-format | — | Grid | Shared raster core |
+| [sqlite.md](sqlite.md) | SQLite databases | T2 | ✔ | ✔ | — | Keyed (rows by PK) | Writes through SQLite itself |
+| [pdf.md](pdf.md) | PDF | T3 | ✔ | partial | — | Keyed + Sequence | Structure, text, annotations, forms; no rendering in v1 |
+| [mesh-simple.md](mesh-simple.md) | OBJ/MTL, PLY, STL | T3 | ✔ | partial | — | Sequence/Grid | Geometry metrics |
 
 ## Recommended order
 

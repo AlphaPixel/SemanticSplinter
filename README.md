@@ -9,16 +9,45 @@ It works standalone and as a Git textconv, external diff driver, and merge drive
   `patch`, and RCS `merge` / `git merge-file`.
 - **License:** MIT ([LICENSE](LICENSE)).
 
-**Status:** specification complete for v1, and all v1 decisions are settled (2026-10-08). Phases 0–7 of
-[docs/PLAN.md](docs/PLAN.md) are done: the build skeleton, the format-neutral core (data model, hashing, I/O,
-merge primitives, conflict policy, envelope map, fix-up Emitter, JSON report), the text and binary formats
-with the diff, diff3, merge, and merge-file personalities, PNG (region diff, three-way pixel and metadata
-merge, heatmaps, `inspect --layout`), the library API, the Git drivers (`git-setup`, `git-diff`,
-`git-merge`, Git LFS), patches (`--binary`, `splinter -P`), ZIP and TAR archives (gzip, zstd, xz, bzip2) with
-recursion into members, generic XML and JSON, and the v1 formats of Phase 7 (CSV/TSV, SVG, JPEG, TIFF, GIF, WebP,
-BMP, TGA, QOI, SQLite, PDF, and simple meshes). On text, `splinter` reproduces GNU diff 3.12, GNU diff3, and
-`git merge-file` byte for byte on the golden corpus in `tests/golden/`. GCC, Clang, and macOS checks of the latest
-formats are pending (#91).
+**Status (2026-10-12): pre-release, feature-complete for the v1 formats, in testing.** Every v1 format diffs
+and merges (Phases 0–7 of [docs/PLAN.md](docs/PLAN.md)), with the Git drivers, patches, and JSON and Markdown
+reports. Phase 8 (hardening and release) is in progress: fuzzing, memory limits, performance budgets, library
+packaging, and binary releases are still open, so build from source for now. On text, `splinter` reproduces
+GNU diff 3.12, GNU diff3, and `git merge-file` byte for byte on the golden corpus in `tests/golden/`.
+
+## For testers
+
+**Get a build.** There are no binary releases yet. Build from source as described in [Building](#building); the
+tool lands in `build/<preset>/src/cli/Release/splinter` (`splinter.exe` on Windows). `splinter --version` prints
+the version; include it in reports.
+
+**Platforms checked.** Windows (MSVC 2022) for everything. Linux (GCC, Clang) and macOS (AppleClang) passed CI for
+everything up to the Phase 7 formats; the newest features (patch payloads for archives, XML and JSON, JSON patches,
+`--md`, `--annotate`) are so far checked on Windows only.
+
+**What to try.** Diff (`splinter a b`, `-u`, `--json`, `--md`), three-way merge (`splinter -m mine base theirs`, or
+through Git with `splinter git-setup`), and patches (`splinter --binary a b > p`, then `splinter -P < p`):
+
+| Format | Diff | Merge | Patch | Main limits today | Doc |
+|---|---|---|---|---|---|
+| Text | ✔ | ✔ | ✔ | Patch mode reads unified diffs and splinter patches only (no context/ed input, #36) | [text](docs/formats/text.md) |
+| Unknown binary | ✔ | opt-in (`--binary-merge`) | — | Byte ranges only | [binary](docs/formats/binary.md) |
+| ZIP, TAR (gz/zst/xz/bz2) | ✔ | ✔ | ✔ | No similarity renames; ZIP prefix and APK Signing Block changes have no patch | [containers](docs/formats/containers.md) |
+| XML | ✔ | ✔ | ✔ | No cross-parent moves; generic dialect only (#42, #43) | [xml](docs/formats/xml.md) |
+| JSON, JSONC | ✔ | ✔ | ✔ | No JSON5 or JSON Lines (#40) | [json](docs/formats/json.md) |
+| CSV, TSV | ✔ | ✔ | — | No column renames (#71) | [csv](docs/formats/csv.md) |
+| SVG, SVGZ | ✔ | ✔ | — | `<style>` CSS rules do not merge separately (#77); no visual diff (#78) | [svg](docs/formats/svg.md) |
+| PNG | ✔ | ✔ | ✔ | APNG merges as one unit; no indexed mode | [png](docs/formats/png.md) |
+| JPEG | ✔ | ✔ (whole MCUs) | — | A re-encoded side wins whole or conflicts (#73) | [jpeg](docs/formats/jpeg.md) |
+| TIFF, GIF, WebP, BMP, TGA, QOI | ✔ | ✔ | — | Lossy WebP frames and JPEG-compressed TIFF tiles merge only whole (#83) | [raster-misc](docs/formats/raster-misc.md) |
+| SQLite | ✔ | ✔ | — | A schema change on one side plus row edits on the other conflicts (#79) | [sqlite](docs/formats/sqlite.md) |
+| PDF | ✔ | metadata, annotations, forms | — | No rendering; page content does not merge (both sides changing pages conflicts) | [pdf](docs/formats/pdf.md) |
+| OBJ/MTL, PLY, STL | ✔ | OBJ objects, MTL; PLY/STL whole | — | Large meshes diff slowly (#82) | [mesh](docs/formats/mesh-simple.md) |
+
+**Reporting a problem.** Open a GitHub issue with the exact command line, the `splinter --version` output, the
+report (`--json=report.json` or `--md=report.md`), the exit status, and, if you can share them, the input
+files. For a Git merge, include the `<file>.splinter-conflicts.json` sidecar. Known gaps and planned work are
+tracked as open issues and in each format document's status line.
 
 ## Why
 
@@ -52,13 +81,14 @@ feature). [docs/formats/README.md](docs/formats/README.md) lists the v1 formats 
 
 ## Usage
 
-Working today, for text, unknown binaries, PNG, JPEG (whole-MCU merge in the DCT domain), BMP, TGA, QOI, GIF, TIFF,
-WebP, ZIP/TAR archives, XML, SVG/SVGZ, JSON, CSV/TSV, SQLite, PDF, and simple meshes (OBJ/MTL, PLY, STL):
+All v1 formats work today (see [For testers](#for-testers) for per-format limits):
 
 ```bash
 splinter old.png new.png                     # diff: changed regions, metrics, and metadata
 splinter -u old.png new.png                  # unified diff over canonical dump lines
 splinter --json=report.json a.png b.png      # machine-readable report
+splinter --md a.png b.png                    # the same report as Markdown
+splinter -u --annotate a.json b.json         # hunks named by address, with metric comments
 splinter -m mine.png base.png theirs.png     # three-way merge, as diff3 -m
 splinter -m mine.zip base.zip theirs.zip     # members merged by path, each by its own format
 splinter -m mine.db base.db theirs.db        # SQLite: rows by primary key, cells merged
@@ -69,6 +99,7 @@ splinter dump photo.png                      # canonical text dump (Git textconv
 splinter inspect --layout photo.png          # structure, checksums, and byte layout
 splinter --binary a.png b.png > logo.patch   # applicable semantic patch
 splinter -P < logo.patch                     # apply it, as patch (also to an edited copy)
+splinter --binary --json a.zip b.zip > p.json # the same as a JSON patch; -P reads both forms
 splinter formats                             # list the built-in formats
 ```
 
@@ -168,10 +199,11 @@ single static `splinter.exe`.
 
 ## Roadmap
 
-| Milestone | Contents |
-|---|---|
-| M1: usable diff tool | Skeleton, core model and merge primitives, text and binary, diff CLI |
-| M2: PNG + Git | PNG proof of concept, Git drivers, patch personality |
-| M3: structured core | ZIP/TAR, XML, JSON, SVG |
-| M4: v1 | CSV, JPEG, other rasters, SQLite, PDF, simple meshes |
-| Post-v1 | PDF rendering, authenticity (`crypto`), runtime plugins |
+| Milestone | Contents | State |
+|---|---|---|
+| M1: usable diff tool | Skeleton, core model and merge primitives, text and binary, diff CLI | done |
+| M2: PNG + Git | PNG proof of concept, Git drivers, patch personality | done |
+| M3: structured core | ZIP/TAR, XML, JSON, SVG | done |
+| M4: v1 formats | CSV, JPEG, other rasters, SQLite, PDF, simple meshes | done |
+| v1 release | Fuzzing, limits, performance budgets, library install, release binaries (PLAN Phase 8) | in progress |
+| Post-v1 | PDF rendering, authenticity (`crypto`), runtime plugins | planned |

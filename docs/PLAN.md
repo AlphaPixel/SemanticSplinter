@@ -1,7 +1,9 @@
 # Semantic Splinter — Implementation Plan
 
-**Status:** Draft v0.1 (2026-10-07). Effort estimates assume one experienced C++ engineer: S ≤ 1 week,
-M ≤ 3 weeks, L ≤ 6 weeks. Phases are sequential where noted. Format work after Phase 6 parallelizes well.
+**Status (2026-10-12):** Phases 0–7 are done: every v1 format is implemented. Phase 8 (v1 hardening and
+release) is in progress. Written as Draft v0.1 (2026-10-07). Effort estimates assume one experienced C++
+engineer: S ≤ 1 week, M ≤ 3 weeks, L ≤ 6 weeks. Phases are sequential where noted. Format work after Phase 6
+parallelizes well.
 
 Guiding rules:
 
@@ -12,7 +14,7 @@ Guiding rules:
 
 ---
 
-## Phase 0: Skeleton (S)
+## Phase 0: Skeleton (S) — done
 
 **Deliverables**
 
@@ -29,7 +31,7 @@ passes on all three operating systems. The Visual Studio "Open Folder" workflow 
 
 ---
 
-## Phase 1: Core model and merge primitives (M)
+## Phase 1: Core model and merge primitives (M) — done
 
 **Deliverables**
 
@@ -53,7 +55,7 @@ policy, and determinism (run twice, compare bytes). Table tests for every KeyedM
 
 ---
 
-## Phase 2: Text and binary formats plus the diff CLI (M)
+## Phase 2: Text and binary formats plus the diff CLI (M) — done
 
 **Deliverables**
 
@@ -74,7 +76,7 @@ controlled) on the corpus. `splinter -m` matches `diff3 -m` on the corpus.
 
 ---
 
-## Phase 3: PNG proof of concept (M)
+## Phase 3: PNG proof of concept (M) — done
 
 See [formats/png.md](formats/png.md).
 
@@ -93,7 +95,7 @@ merge round-trips. Conflicting pixel edits are reported with regions.
 
 ---
 
-## Phase 4: Git integration (S)
+## Phase 4: Git integration (S) — done
 
 - `git-diff` (7/9-argument handling, `/dev/null`, exit 0), `git-merge` (`%O %A %B %L %P`, sidecar conflicts,
   atomic write into `%A`), `git-setup --print|--local|--global`.
@@ -108,7 +110,7 @@ clean merge commits without intervention.
 
 ---
 
-## Phase 5: Patch (S–M)
+## Phase 5: Patch (S–M) — done
 
 - Splinter patch envelope writer (`--binary`) and reader. Payload codec: zstd+base85 (or zlib) **[D-7]**.
 - `patch` personality: identity-based application through `merge()`, fuzz mapping, `-R`, `-N`,
@@ -120,7 +122,7 @@ applies to a third file that differs elsewhere.
 
 ---
 
-## Phase 6: Containers, XML, JSON (M–L)
+## Phase 6: Containers, XML, JSON (M–L) — done
 
 - `zip` (own reader and writer over zlib and zstd **[D-27]**, after the minizip-ng byte-exact spike failed: raw copy of untouched entries, deterministic writer, bomb limits) and `tar`. The OPC layer is post-v1 (D-44).
 - Shared helpers as they become needed: `src/core/text`, `src/formats/common/splice` (SPEC §2.3).
@@ -133,7 +135,10 @@ applies to a third file that differs elsewhere.
 
 ---
 
-## Phase 7+: Formats
+## Phase 7+: Formats — done
+
+**Done 2026-10-11:** steps 7–13 (#9–#15), each with the v1 scope below. Later rows of each format document are
+tracked as issues (#71–#86).
 
 v1 steps follow D-44. Each step implements the format's **v1 scope** from the table below, not only the
 document's MVP row: v1 includes every later row that a decided item depends on **[D-45]**.
@@ -185,14 +190,31 @@ writer is written. The writer is built on the Emitter from that inventory.
 
 ---
 
+## Phase 8: v1 hardening and release (in progress)
+
+Added 2026-10-11, after the formats were done. It turns the cross-cutting tracks above into release work, in
+three waves.
+
+| Wave | Work | Issues | State |
+|---|---|---|---|
+| 1. Correctness and safety | Fuzz target per format `load()`; charge the remaining large allocations to `--max-memory` | #16, #61 | open |
+| 1. Correctness and safety | GCC, Clang, and AppleClang checks of the Phase 7 formats | #91 | done |
+| 2. Documented CLI gaps | Text-like merge results to a terminal; `--md` report; `@@ ADDRESS` hunk headers and `--annotate` (PNG, JSON, CSV); JSON patches, patch-mode reports, `--exact`; patch payloads for ZIP/TAR, XML, JSON | #48, #32, #33, #35, #44 | done (Windows-verified) |
+| 3. Release | Performance budget benchmarks; library install and export; packaging and GitHub releases (with the qpdf NOTICE); fixture corpus repository | #18, #31, #19, #17 | open |
+
+Not in Phase 8: the later rows of the format documents (#39–#50, #64, #71–#86) and the post-v1 items (#20, #21,
+#22, #29). CI (#96) runs Windows, GCC, and Clang on pull requests and macOS on `main` and manual runs.
+
+---
+
 ## Milestones
 
-| Milestone | Contents | Cumulative effort |
-|---|---|---|
-| **M1: Usable diff tool** | Phases 0–2 | ~2 months |
-| **M2: PNG + Git** | Phases 3–5 | ~3.5 months |
-| **M3: Structured core** | Phase 6 + SVG | ~5 months |
-| **M4: v1** | Steps 8–13: CSV, JPEG, other rasters, SQLite, PDF, simple meshes **[D-44]** | ~9 months |
-| **Post-v1** | PDF rendering, authenticity (`crypto`), runtime plugin interface **[D-4]** | — |
+| Milestone | Contents | Cumulative effort | State |
+|---|---|---|---|
+| **M1: Usable diff tool** | Phases 0–2 | ~2 months | done |
+| **M2: PNG + Git** | Phases 3–5 | ~3.5 months | done |
+| **M3: Structured core** | Phase 6 + SVG | ~5 months | done |
+| **M4: v1** | Steps 8–13: CSV, JPEG, other rasters, SQLite, PDF, simple meshes **[D-44]** | ~9 months | done (formats); release is Phase 8 |
+| **Post-v1** | PDF rendering, authenticity (`crypto`), runtime plugin interface **[D-4]** | — | planned |
 
 These estimates are rough and should be re-planned after M2, using measured velocity.

@@ -1,6 +1,6 @@
 # Miscellaneous Raster Formats — Implementation Document
 
-**Tier:** T2 (TIFF, GIF, WebP, BMP, TGA, QOI) · **Modules:** `semantic-splinter-tiff`, `-bmp`, `-tga`, `-gif`, `-webp`, `-qoi` · **vcpkg features:** same names · **Depends on modules:** `semantic-splinter-raster` (helper, png.md §3.4); `xml` for XMP (v2) · **Status:** §12.1
+**Tier:** T2 (TIFF, GIF, WebP, BMP, TGA, QOI) · **Modules:** `semantic-splinter-tiff`, `-bmp`, `-tga`, `-gif`, `-webp`, `-qoi` · **vcpkg features:** same names · **Depends on modules:** `semantic-splinter-raster` (helper, png.md §3.4); `xml` for XMP (v2) · **Status:** v1 (MVP + v1.1 WebP) done in step 10 (#12): diff, merge, dump, inspect for all six formats; no patch payloads yet. Details and what is missing: §12.1
 **Extensions / magic:**
 
 | Format | Extensions | Magic |

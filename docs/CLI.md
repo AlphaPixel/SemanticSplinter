@@ -1,7 +1,10 @@
 # `splinter` Command-Line Specification
 
-**Status:** Draft v0.1. One executable, with five personalities that copy their option syntax from the
-tools users already know:
+**Status (2026-10-12):** implemented for v1 (written as Draft v0.1). Options that are accepted but not built yet
+fail as `unsupported` (exit 2, or 3 with `--exit-codes`), as noted where they are described and in the patch
+personality's **Not yet** list; post-v1 options such as `--sign-key` fail the same way with
+`unsupported (built without crypto)`. One executable, with five personalities that copy their
+option syntax from the tools users already know:
 
 | Personality | Emulates | Default output |
 |---|---|---|

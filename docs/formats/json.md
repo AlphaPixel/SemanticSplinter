@@ -2,6 +2,9 @@
 
 **Tier:** T0 · **Module:** `semantic-splinter-json` · **vcpkg feature:** `json` · **Depends on modules:** `text` (core seqdiff only)
 **Extensions / magic:** `.json`, `.jsonc`, `.json5`, `.geojson`, `.webmanifest`, `.babelrc`, `tsconfig.json`, `package.json`, `composer.json`, `*.code-workspace`. Content probe: after optional UTF-8 BOM and whitespace, first byte is `{` or `[` and the first 64 KiB tokenizes without error (confidence 60), or `{`/`[` followed by `"key":` (confidence 80). A bare scalar document is valid JSON but probes at confidence 10 so `text` wins.
+**Status (v1 = MVP, Phase 6):** done: strict JSON and JSONC diff and merge, span-splice writer, patch payloads (#44),
+and `@@ ADDRESS` hunk headers with `--annotate` metrics (#33). Details and what is missing (JSON5, JSON Lines, key
+rules, similarity pairing): §12.1.
 
 ## 1. Why it matters
 
@@ -300,7 +303,7 @@ members just before the member that overrides them.
 Not yet: JSON5 (`.json5` is not claimed), `--json-key`/`--json-set` rules, `--json-order`, `--json-numeric`,
 `--ignore-order`, `--json-string-lines`, `--dump-full`, exports,
 JSON Lines, conflict comments in JSONC, lockfile handling (Q-JSON-5), `possible-rename`, `pairing-skipped`,
-UTF-16/32 input, and the JSONTestSuite corpus and fuzz targets (Phase 7+ tracks).
+UTF-16/32 input, and the JSONTestSuite corpus and fuzz targets (Phase 8: #16, #17).
 
 Measured (Release, a 10 MB file with a 100 000-record keyed array, on a loaded machine): parse about 0.5 s,
 merge about 8 s, most of it in the core SequenceMerge over the keyed array (identity maps and move detection).

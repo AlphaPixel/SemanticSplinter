@@ -1,8 +1,8 @@
 # Open Decisions
 
-Every unresolved choice made while drafting the specification is listed here with a **provisional**
-answer, which the documents currently assume. None of them is committed. To settle one, change
-**Status** to `Decided`, record who decided it and when, and fix any document that disagrees.
+Every choice made while drafting the specification is listed here. Each started with a **provisional** answer; every
+v1 decision is now decided (see below). To settle or amend one, change **Status**, record who decided it and when,
+and fix any document that disagrees.
 
 Status values: `Provisional`, meaning drafted and assumed but not reviewed; `Decided` (`amended` when the owner changed
 the answer, and the answer column then shows the decided text); `Deferred`, meaning out of v1 scope; `Re-examine`, meaning
