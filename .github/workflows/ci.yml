@@ -1,20 +1,21 @@
 name: ci
 
+# Minutes are limited (#96): push builds run on main only, and macOS (billed 10x) skips pull requests; it runs on
+# main pushes and manual runs.
 on:
   push:
+    branches: [main]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   build:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - { os: windows-2022, preset: windows-msvc }  # VS 2022 generator (D-3)
-          - { os: ubuntu-latest, preset: linux-gcc }
-          - { os: ubuntu-latest, preset: linux-clang }
-          - { os: macos-latest, preset: macos }
-    runs-on: ${{ matrix.os }}
+        preset: ${{ fromJSON(github.event_name == 'pull_request' && '["windows-msvc","linux-gcc","linux-clang"]' || '["windows-msvc","linux-gcc","linux-clang","macos"]') }}
+    # windows-2022: VS 2022 generator (D-3)
+    runs-on: ${{ matrix.preset == 'windows-msvc' && 'windows-2022' || matrix.preset == 'macos' && 'macos-latest' || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
 
