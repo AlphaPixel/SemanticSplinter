@@ -8,6 +8,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <charconv>
 #include <filesystem>
 #include <fstream>
 #include <nlohmann/json.hpp>
@@ -21,6 +22,20 @@ namespace {
 bool have(std::vector<std::string> argv) {
     auto r = run_process(argv);
     return r && r->status == 0;
+}
+
+// "git version 2.43.0" -> 243 (major * 100 + minor); 0 when unknown.
+int git_version() {
+    auto r = run_process({"git", "--version"});
+    const std::string_view prefix = "git version ";
+    if (!r || !r->out.starts_with(prefix))
+        return 0;
+    const char *p = r->out.data() + prefix.size(), *end = r->out.data() + r->out.size();
+    int major = 0, minor = 0;
+    auto [q, e1] = std::from_chars(p, end, major);
+    if (e1 != std::errc{} || q == end || *q != '.' || std::from_chars(q + 1, end, minor).ec != std::errc{})
+        return 0;
+    return major * 100 + minor;
 }
 
 std::vector<std::byte> png_of(const std::vector<std::array<std::uint32_t, 5>>& paint) {
@@ -186,9 +201,11 @@ TEST_CASE("git: the external diff driver", "[git]") {
     CHECK(out.find("diff --git a/notes.txt b/renamed.txt\n") != std::string::npos);
     CHECK(out.find("rename from notes.txt\nrename to renamed.txt\n") != std::string::npos);
     CHECK(out.find("--- a/notes.txt\n+++ b/renamed.txt\n") != std::string::npos);
-    // D-16: untrusted, differences exit 0; trusted (Git 2.46+), git diff --exit-code reports them.
-    CHECK(r.git({"-c", "diff.splinter.trustExitCode=true", "diff", "--ext-diff", "--exit-code", "HEAD~1",
-                 "HEAD", "--", "img.png"}) == 1);
+    // D-16: untrusted, differences exit 0; trusted (Git 2.46+), git diff --exit-code reports them. Older Git
+    // has no trustExitCode and stops at the first non-zero external diff.
+    if (git_version() >= 246)
+        CHECK(r.git({"-c", "diff.splinter.trustExitCode=true", "diff", "--ext-diff", "--exit-code", "HEAD~1",
+                     "HEAD", "--", "img.png"}) == 1);
 }
 
 // #53: a fixed name collided when two suites (worktrees, ctest -j) ran at once.

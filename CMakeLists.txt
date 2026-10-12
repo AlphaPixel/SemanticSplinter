@@ -49,6 +49,7 @@ project(SemanticSplinter VERSION 0.1.0 DESCRIPTION "Format-aware diff, merge, an
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF) # no C++20 modules; scanning needs clang-scan-deps, absent with clang++-N (#117)
 
 if(MSVC)
     add_compile_options(/W4 /permissive- /utf-8)

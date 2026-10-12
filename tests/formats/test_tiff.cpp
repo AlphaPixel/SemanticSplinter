@@ -39,8 +39,9 @@ struct Scratch {
 };
 
 tiff::Encoding::Tag ascii(std::uint16_t tag, std::string_view s) {
-    std::vector<std::byte> v(s.size() + 1);
-    std::memcpy(v.data(), s.data(), s.size());
+    std::vector<std::byte> v(reinterpret_cast<const std::byte*>(s.data()),
+                             reinterpret_cast<const std::byte*>(s.data()) + s.size());
+    v.push_back(std::byte{0}); // NUL-terminated
     return {tag, 2, v.size(), v};
 }
 
