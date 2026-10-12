@@ -1,0 +1,94 @@
+# Building Semantic Splinter
+
+All third-party dependencies (zlib, zstd, xxHash, nlohmann-json, libpng, expat, qpdf, ...) come from
+**[vcpkg](https://vcpkg.io) in manifest mode**. `vcpkg.json` lists them, pinned to one vcpkg commit
+(`builtin-baseline`, D-52), and CMake finds them with `find_package(... CONFIG)` through vcpkg's toolchain file.
+System packages such as Debian's `libxxhash-dev` are not used; several ship no CMake config at all.
+
+So every build needs a bootstrapped vcpkg checkout and the environment variable `VCPKG_ROOT` pointing at it.
+The CMake presets pass `$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake` as the toolchain, and the first configure
+builds the dependencies into `build/<preset>/vcpkg_installed/` (this takes 10–30 minutes once; later builds reuse
+vcpkg's binary cache).
+
+## 1. Tools
+
+| | Windows | Linux (Ubuntu/Debian) | macOS |
+|---|---|---|---|
+| Compiler | Visual Studio 2022 17.8+, "Desktop development with C++" | GCC 11+ or Clang 14+ | AppleClang 15+ (Xcode command line tools) |
+| CMake 3.25+ | included with Visual Studio | `cmake` (Ubuntu 24.04 has 3.28; on 22.04 use Kitware's APT repository or `pip install cmake`) | `brew install cmake` |
+| Ninja | not needed (Visual Studio generator) | `ninja-build` | `brew install ninja` |
+| vcpkg's own needs | Git | `git curl zip unzip tar pkg-config` | `git pkg-config` (`brew install pkg-config`) |
+
+Ubuntu/Debian in one line:
+
+```bash
+sudo apt-get install -y build-essential git cmake ninja-build curl zip unzip tar pkg-config
+sudo apt-get install -y clang      # only for the linux-clang preset
+```
+
+## 2. vcpkg
+
+Clone it **in full** (no `--depth`): the pinned baseline needs vcpkg's port history. Any location works.
+
+Linux and macOS:
+
+```bash
+git clone https://github.com/microsoft/vcpkg ~/vcpkg
+~/vcpkg/bootstrap-vcpkg.sh -disableMetrics
+echo 'export VCPKG_ROOT="$HOME/vcpkg"' >> ~/.bashrc    # or ~/.zshrc; then open a new shell
+```
+
+Windows (PowerShell):
+
+```powershell
+git clone https://github.com/microsoft/vcpkg C:\src\vcpkg
+C:\src\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+[Environment]::SetEnvironmentVariable("VCPKG_ROOT", "C:\src\vcpkg", "User")   # then open a new shell
+```
+
+Visual Studio also ships a vcpkg and its developer prompt sets `VCPKG_ROOT` to it; a standalone clone as above is
+more predictable, so set `VCPKG_ROOT` explicitly.
+
+## 3. Configure, build, test
+
+| Platform | Presets (Debug / Release) |
+|---|---|
+| Windows | `windows-msvc` / `windows-msvc-release` |
+| Linux, GCC | `linux-gcc` / `linux-gcc-release` |
+| Linux, Clang | `linux-clang` / `linux-clang-release` |
+| macOS | `macos` / `macos-release` |
+
+The configure preset has no `-release` suffix (the build directories are multi-config); build and test presets do:
+
+```bash
+cmake --preset linux-gcc                    # configure: builds the vcpkg dependencies the first time
+cmake --build --preset linux-gcc-release    # or linux-gcc for Debug
+ctest --preset linux-gcc-release
+```
+
+The tool lands in `build/<preset>/src/cli/<Debug|Release>/splinter` (`splinter.exe` on Windows). Visual Studio
+2022 can open the folder directly and uses the same presets.
+
+**Without a preset**, a plain configure works too when `VCPKG_ROOT` is set (the vcpkg toolchain is picked up
+automatically): `cmake -S . -B build -G Ninja && cmake --build build`.
+
+**Versioned compilers.** The `linux-clang` preset calls `clang++`. If only a versioned binary exists (for
+example `clang++-19`), override it: `cmake --preset linux-clang -DCMAKE_CXX_COMPILER=clang++-19`. Don't set
+`CC`/`CXX` to that Clang for the whole configure: vcpkg then builds the C libraries with it too, and libwebp fails
+with Clang 19 (#117). The preset builds them with the system C compiler, as CI does.
+
+**Fewer formats.** Every format is a module behind an option and a vcpkg feature, all on by default. Turn off what
+you don't need to skip its dependencies, e.g. `-DSEMSPLINTER_FORMAT_PDF=OFF` (qpdf), and `-DSEMSPLINTER_BUILD_TESTS=OFF`
+(Catch2). Option names are at the top of `CMakeLists.txt`.
+
+## 4. Troubleshooting
+
+| Message | Cause and fix |
+|---|---|
+| `No vcpkg toolchain: this project gets its dependencies from vcpkg ...` | `VCPKG_ROOT` is not set in this shell. Do step 2, open a new shell, delete the build directory, configure again. |
+| `Toolchain file not found: /scripts/buildsystems/vcpkg.cmake` | Same: a preset was used with `VCPKG_ROOT` unset or pointing at the wrong place. |
+| `Could not find a package configuration file provided by "xxHash"` (or zstd, nlohmann_json) | The build directory was first configured without the vcpkg toolchain; CMake reads the toolchain only on the first configure. Delete the build directory and configure again. |
+| `error: ... builtin-baseline ... failed to fetch` or `... is not a commit` | vcpkg was cloned shallow or is too old: `git -C "$VCPKG_ROOT" fetch --unshallow` (or `git pull`), then configure again. |
+| `CMake was unable to find a build program corresponding to "Ninja Multi-Config"` | Install Ninja (step 1). |
+| `building <port>:x64-linux failed` | Look at the log path vcpkg prints. Usually a missing tool from step 1 (`pkg-config`, `zip`, ...). |
+| `clang++: not found` with `linux-clang` | Install `clang`, or pass the versioned compiler as above. |
