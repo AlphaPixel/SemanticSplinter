@@ -50,4 +50,7 @@ nlohmann::ordered_json to_json(const Change&);
 nlohmann::ordered_json to_json(const Conflict&);
 nlohmann::ordered_json to_json(const Report&);
 
+// The report as Markdown (SPEC §7.2, D-22): a summary table, then one section per conflict and changed unit.
+std::string render_markdown(const Report&);
+
 } // namespace semsplinter

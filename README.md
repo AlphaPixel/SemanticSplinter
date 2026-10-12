@@ -94,7 +94,7 @@ only when the content changed. BMP, TGA, QOI, GIF, TIFF, and WebP merge pixels r
 per key; animated GIF/WebP and multi-page TIFF merge frame by frame, unchanged frames and TIFF strips keep their
 bytes, and lossy WebP frames merge only whole. Patches (`--binary`) cover text and PNG so far.
 
-Planned: the `--md` Markdown report and JSON patches (`--binary --json`).
+`--md[=FILE]` renders the report as Markdown. Planned: JSON patches (`--binary --json`).
 
 Personality selection follows the program name (`splinter-diff`, `splinter-merge`, ...), then a subcommand
 (`splinter merge ...`), then a mode flag (`-m`, `-3`, `-P`). Plain `splinter` is `diff`.

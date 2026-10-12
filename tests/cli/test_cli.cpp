@@ -106,6 +106,24 @@ TEST_CASE("cli diff: --json report") {
     CHECK(j["stats"]["format"]["lines_inserted"] == 2);
 }
 
+TEST_CASE("cli diff: --md report") {
+    Scratch s("md");
+    auto a = s.file("a", "1\n2\n"), b = s.file("b", "1\n3|x\n4\n");
+    CaptureConsole c;
+    CHECK(run_cli(c, {"--md", a, b}) == 1);
+    CHECK(c.out_text.starts_with(
+        "# splinter diff report\n\n| Field | Value |\n|---|---|\n| Format | text |\n"));
+    CHECK(c.out_text.find("| Changed units | 1 |\n") != std::string::npos);
+    CHECK(c.out_text.find(": update /lines\\#range=1,2\n") != std::string::npos);
+    CHECK(c.out_text.find("| After | 3\\|x<br>4") != std::string::npos);
+    CHECK(c.out_text.find("1c1,2") == std::string::npos); // the report replaces the text output
+    CaptureConsole both;
+    auto js = splinter::cli::from_path(s.dir / "r.json");
+    CHECK(run_cli(both, {"--md", "--json=" + js, a, b}) == 1);
+    CHECK(both.out_text == c.out_text);
+    CHECK(nlohmann::json::parse(s.read(js))["mode"] == "diff");
+}
+
 TEST_CASE("cli diff: directories, -r, -N, -x, and the dump subcommand") {
     Scratch s("dirs");
     s.file("d1/f", "a\n");
@@ -215,6 +233,25 @@ TEST_CASE("cli png: report, merge, sidecar, visual, inspect") {
     CaptureConsole x;
     CHECK(run_cli(x, {"-m", "-o", out, po, pb, pc}) == 1);
     CHECK(std::filesystem::exists(s.dir / "out.png.splinter-conflicts.png"));
+    // #32: --md on a PNG diff (to a file, keeping the text output) and on a conflicted merge (to stdout).
+    auto mdfile = splinter::cli::from_path(s.dir / "d.md");
+    CaptureConsole dmd;
+    CHECK(run_cli(dmd, {"--md=" + mdfile, pb, po}) == 1);
+    CHECK(dmd.out_text == d.out_text);
+    auto dm = s.read(mdfile);
+    CHECK(dm.starts_with("# splinter diff report\n"));
+    CHECK(dm.find("| pixels\\_changed | 1 |\n") != std::string::npos);
+    CHECK(dm.find("| Churn | bytes\\_changed ") != std::string::npos);
+    CHECK(dm.find(": update /pixels\\#rect=5,0,1,1\n") != std::string::npos);
+    CaptureConsole xmd;
+    CHECK(run_cli(xmd, {"-m", "--md", "-o", out, po, pb, pc}) == 1);
+    CHECK(xmd.out_text.starts_with("# splinter merge report\n"));
+    CHECK(xmd.out_text.find("| Conflicts | 1 |\n") != std::string::npos);
+    CHECK(xmd.out_text.find("\n## Conflicts\n\n### x-") != std::string::npos);
+    CHECK(xmd.out_text.find("| Reason | both-modified |\n") != std::string::npos);
+    CHECK(xmd.out_text.find("\n## Changes (theirs)\n") != std::string::npos);
+    CaptureConsole imd;
+    CHECK(run_cli(imd, {"inspect", "--md", pb}) == 2);
     CaptureConsole term;
     CHECK(run_cli(term, {"-m", "--visual=" + splinter::cli::from_path(s.dir / "v.png"), "-o", out, po, pb,
                          pt}) == 0);

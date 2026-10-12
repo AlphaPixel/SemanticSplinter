@@ -116,10 +116,11 @@ public:
     }
 
     void finish_json() {
-        if (!cfg_.common.json || reports_.empty())
-            return;
-        write_json(c_, cfg_.common.json,
-                   (reports_.size() == 1 ? reports_[0] : nlohmann::ordered_json(reports_)).dump(2));
+        if (cfg_.common.json && !reports_.empty())
+            write_json(c_, cfg_.common.json,
+                       (reports_.size() == 1 ? reports_[0] : nlohmann::ordered_json(reports_)).dump(2));
+        if (cfg_.common.md && !md_.empty())
+            write_json(c_, cfg_.common.md, md_);
     }
 
     int dump(const std::string& path) {
@@ -135,7 +136,7 @@ private:
     }
 
     void out(std::string_view s) {
-        if (!(cfg_.common.json && cfg_.common.json->empty()))
+        if (!(cfg_.common.json && cfg_.common.json->empty()) && !(cfg_.common.md && cfg_.common.md->empty()))
             c_.out(s);
     }
 
@@ -170,7 +171,7 @@ private:
         rq.text_load.strip_trailing_cr = cfg_.strip_cr;
         rq.text_load.bom_is_content = true; // GNU
         rq.text = cfg_.text;
-        rq.report = cfg_.common.json.has_value();
+        rq.report = cfg_.common.json || cfg_.common.md;
         rq.visual = cfg_.visual.has_value();
         rq.patch = cfg_.patch;
         if (!cfg_.brief)
@@ -205,8 +206,10 @@ private:
         }
         if (!status && cfg_.report_identical)
             out("Files " + name(0, a) + " and " + name(1, b) + " are identical\n");
-        if (r.report)
+        if (r.report && cfg_.common.json)
             reports_.push_back(to_json(*r.report));
+        if (r.report && cfg_.common.md)
+            md_ += (md_.empty() ? "" : "\n") + render_markdown(*r.report);
         return status;
     }
 
@@ -295,6 +298,7 @@ private:
     Console& c_;
     const Registry& reg_;
     std::vector<nlohmann::ordered_json> reports_;
+    std::string md_; // the --md reports, one after another
 };
 
 } // namespace
