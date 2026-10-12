@@ -121,6 +121,15 @@ DiffResult diff(const Registry& reg, const DiffRequest& rq) {
             return t && t->find('\n') == std::string::npos ? t : std::nullopt;
         };
         for (auto& c : cmp->changes()) {
+            // A move to another address (a renamed archive member) also empties its source (#44).
+            if (c.op == Op::move && c.from && c.from->path != c.at.path)
+                s.units.push_back({Op::erase,
+                                   *c.from,
+                                   make_change_id(c.side, Op::erase, *c.from),
+                                   {},
+                                   {},
+                                   f.payload(*da, *c.from),
+                                   {}});
             UnitHunk u{c.op, c.at, c.id, one_line(c.before.text), one_line(c.after.text), {}, {}};
             if (c.op != Op::insert)
                 u.before = f.payload(*da, c.at);

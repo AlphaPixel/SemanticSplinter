@@ -111,6 +111,9 @@ public:
 struct UnitValue {
     Address at;
     const std::vector<std::byte>* value = nullptr;
+    // The hunk's operation: an insert at a positional address ("/list/3") makes a new unit there rather
+    // than setting the one the address names now.
+    Op op = Op::update;
 };
 
 class Format {

@@ -1,5 +1,6 @@
 // TAR containers (docs/formats/containers.md): ustar/pax/GNU reader, wrappers, verbatim member copy, merge.
 #include "../../src/formats/container/container.hpp"
+#include "patch_util.hpp"
 
 #include <semsplinter/formats/tar.hpp>
 #include <semsplinter/semsplinter.hpp>
@@ -195,4 +196,39 @@ TEST_CASE("tar: merge budgets are per document") {
     CHECK(out.conflicts == 0);
     Fx fx;
     CHECK(fx.members(out.bytes)["a.txt"] == "O\n2\nT\n");
+}
+
+TEST_CASE("tar: patch payloads round trip (#44)") {
+    const auto w = tar::Wrapper::gzip;
+    const auto a = tar::build(
+        Entries{entry("x.txt", "x\n"), entry("conf.json", "{\"a\": 1, \"b\": 2}"), entry("gone.txt", "g")},
+        w);
+    const auto b = tar::build(Entries{entry("x.txt", "x\n", 1700000999),
+                                      entry("conf.json", "{\"a\": 5, \"b\": 2}"), entry("y.txt", "y\n")},
+                              w);
+    const auto patch = patch_util::make("x.tgz", a, b);
+    CHECK(patch.find("@@ update /entries/x.txt/meta/mtime ") != std::string::npos);
+    CHECK(patch.find("@@ update /entries/conf.json/content/a ") != std::string::npos);
+    Fx fx;
+    auto exact = patch_util::apply("x.tgz", patch, a);
+    CHECK(exact.failed == 0);
+    auto d = fx.load(exact.bytes);
+    auto& ar = fx.archive(d);
+    REQUIRE(ar.entries.size() == 3);
+    CHECK(ar.entries[0].meta[0].second == "1700000999");
+    CHECK(fx.members(exact.bytes) == fx.members(b));
+    // An edited copy: another key of conf.json and a member of its own.
+    const auto t = tar::build(Entries{entry("x.txt", "x\n"), entry("conf.json", "{\"a\": 1, \"b\": 3}"),
+                                      entry("gone.txt", "g"), entry("keep.txt", "k")},
+                              w);
+    auto r = patch_util::apply("x.tgz", patch, t);
+    CHECK(r.messages.find("base-mismatch") != std::string::npos);
+    CHECK(r.failed == 0);
+    auto m = fx.members(r.bytes);
+    CHECK(m.size() == 4);
+    CHECK(m.count("gone.txt") == 0);
+    CHECK(m["y.txt"] == "y\n");
+    CHECK(m["keep.txt"] == "k");
+    CHECK(patch_util::same("conf.json", patch_util::bytes(m["conf.json"]),
+                           patch_util::bytes("{\"a\": 5, \"b\": 3}")));
 }

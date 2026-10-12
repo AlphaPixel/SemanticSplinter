@@ -1,3 +1,5 @@
+#include "patch_util.hpp"
+
 #include <semsplinter/format.hpp>
 
 #include <catch2/catch_test_macros.hpp>
@@ -351,4 +353,37 @@ TEST_CASE("json: merge of a 100k-record keyed array", "[.perf]") {
     CHECK(r.conflicts.empty());
     auto ms = [](auto d) { return std::chrono::duration_cast<std::chrono::milliseconds>(d).count(); };
     WARN(sb.size() << " bytes; load " << ms(t1 - t0) << " ms, merge " << ms(t2 - t1) << " ms");
+}
+
+TEST_CASE("json: patch payloads round trip (#44)") {
+    using patch_util::bytes;
+    const auto a =
+        bytes("{\n  \"name\": \"x\",\n  \"tags\": [\"a\", \"b\"],\n  \"nested\": {\n    \"k\": 1,\n"
+              "    \"gone\": true\n  },\n  \"items\": [{\"id\": 1, \"v\": 1}, {\"id\": 2, \"v\": 2}]\n}\n");
+    const auto b =
+        bytes("{\n  \"name\": \"y\",\n  \"tags\": [\"a\", \"c\", \"b\"],\n  \"nested\": {\n    \"k\": 1\n"
+              "  },\n  \"items\": [{\"id\": 1, \"v\": 10}, {\"id\": 2, \"v\": 2}],\n  \"added\": {\n"
+              "    \"z\": [1, 2]\n  }\n}\n");
+    const auto patch = patch_util::make("x.json", a, b);
+    CHECK(patch.find("@@ update /name ") != std::string::npos);
+    CHECK(patch.find("@@ update /items/id:1/v ") != std::string::npos);
+    // The exact base: byte for byte b.
+    auto exact = patch_util::apply("x.json", patch, a);
+    CHECK(exact.failed == 0);
+    CHECK(exact.bytes == b);
+    // An edited copy whose patched units are untouched: applied by identity, the edit survives.
+    const auto t =
+        bytes("{\n  \"name\": \"x\",\n  \"tags\": [\"a\", \"b\"],\n  \"nested\": {\n    \"k\": 1,\n"
+              "    \"gone\": true\n  },\n  \"items\": [{\"id\": 2, \"v\": 2}, {\"id\": 1, \"v\": 1}],\n"
+              "  \"keep\": 5\n}\n");
+    auto r = patch_util::apply("x.json", patch, t);
+    CHECK(r.messages.find("base-mismatch") != std::string::npos);
+    CHECK(r.failed == 0);
+    CHECK(patch_util::same("x.json", r.bytes,
+                           bytes("{\"name\": \"y\", \"tags\": [\"a\", \"c\", \"b\"], \"nested\": {\"k\": 1},"
+                                 " \"items\": [{\"id\": 2, \"v\": 2}, {\"id\": 1, \"v\": 10}], \"keep\": 5,"
+                                 " \"added\": {\"z\": [1, 2]}}")));
+    // A conflicting edit is a failed hunk.
+    auto c = patch_util::apply("x.json", patch, bytes("{\"name\": \"q\", \"tags\": [\"a\", \"b\"]}"));
+    CHECK(c.failed >= 1);
 }

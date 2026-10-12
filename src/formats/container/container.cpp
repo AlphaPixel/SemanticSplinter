@@ -647,6 +647,167 @@ void dump_members(const Archive& a, std::ostream& os, const DumpOptions& o) {
     }
 }
 
+namespace {
+
+std::optional<std::size_t> index_of(const Archive& a, std::string_view path) {
+    for (std::size_t i = 0; i < a.entries.size(); ++i)
+        if (a.entries[i].path == path)
+            return i;
+    return std::nullopt;
+}
+
+Error not_member(const Address& at) {
+    return Error(ErrorCategory::unsupported, "patch: " + at.to_string() + " is not a member unit");
+}
+
+const Archive& archive(const Document& d) {
+    auto* a = dynamic_cast<const Archive*>(&d);
+    if (!a)
+        throw Error(ErrorCategory::internal, "container: not an archive");
+    return *a;
+}
+
+} // namespace
+
+std::optional<std::vector<std::byte>> payload(const Archive& a, const Address& at) {
+    const auto segs = pointer_split(at.path);
+    if (segs.size() < 2 || segs[0] != "entries")
+        throw not_member(at);
+    const auto i = index_of(a, segs[1]);
+    if (!i)
+        return std::nullopt;
+    Limits l = a.limits.fresh();
+    std::vector<Warning> ignored;
+    if (segs.size() == 2 || segs[2] == "meta") {
+        OutEntry e{{Side::ours, *i}, {}, {}};
+        if (segs.size() > 2)
+            e.content.emplace(); // the record alone
+        return a.write({nullptr, &a, nullptr}, {e}, true, l, ignored);
+    }
+    if (segs[2] != "content")
+        throw not_member(at);
+    const std::string& path = a.entries[*i].path;
+    auto c = a.content(*i, l);
+    const std::string prefix = content_prefix(path);
+    if (at.path.size() > prefix.size() && a.registry) {
+        const Format& f = a.registry->detect(c, path);
+        if (f.info().caps.patch) {
+            Context ctx = child(Context{*a.registry, l, a.depth, a.options});
+            auto d = f.load(source(c, path), {ctx});
+            return f.payload(*d, {at.path.substr(prefix.size()), at.region});
+        }
+    }
+    return std::vector<std::byte>(c.begin(), c.end());
+}
+
+std::vector<std::byte> implant(const Format& self, const Archive& t, std::span<const UnitValue> units,
+                               const LoadOptions& o, std::vector<Warning>& warnings) {
+    struct Member {
+        bool set = false;                              // the member itself: `whole`, or removed
+        const std::vector<std::byte>* whole = nullptr; // a payload archive
+        const std::vector<std::byte>* meta = nullptr;  // a payload archive with the fields below
+        std::vector<std::string> fields;
+        const std::vector<std::byte>* content = nullptr;
+        std::vector<UnitValue> nested;
+        std::size_t aux = 0; // its payload's index in the aux archive
+    };
+    std::map<std::string, Member> members;
+    for (auto& u : units) {
+        const auto segs = pointer_split(u.at.path);
+        if (segs.size() < 2 || segs[0] != "entries")
+            throw not_member(u.at);
+        Member& m = members[segs[1]];
+        const std::string prefix = content_prefix(segs[1]);
+        if (segs.size() == 2)
+            m.set = true, m.whole = u.value;
+        else if (segs[2] == "meta" && segs.size() == 4 && u.value)
+            m.meta = u.value, m.fields.push_back(segs[3]);
+        else if (segs[2] == "content" && u.at.path.size() == prefix.size())
+            m.content = u.value ? u.value : m.content;
+        else if (segs[2] == "content")
+            m.nested.push_back({{u.at.path.substr(prefix.size()), u.at.region}, u.value, u.op});
+        else if (segs[2] != "meta")
+            throw not_member(u.at);
+    }
+
+    // Every payload member in one archive (the base side of the final write).
+    // ponytail: one rewrite per payload, quadratic in the payloads' size; fine for the members a patch adds.
+    Limits& l = o.ctx.budget;
+    std::unique_ptr<Document> aux;
+    std::size_t parts = 0;
+    for (auto& [path, m] : members) {
+        const auto* v = m.set ? m.whole : m.meta;
+        if (!v)
+            continue;
+        Limits pl = l.fresh();
+        Context pc{o.ctx.registry, pl, o.ctx.depth, o.ctx.format_options};
+        auto part = self.load(ByteSource::from_memory(*v, path), {pc});
+        if (archive(*part).entries.size() != 1)
+            throw Error(ErrorCategory::invalid_input,
+                        "patch: the payload of " + entry_address(path) + " is not a one-member archive");
+        m.aux = parts++;
+        if (!aux) {
+            aux = std::move(part);
+            continue;
+        }
+        const Archive& a = archive(*aux);
+        std::vector<OutEntry> es;
+        for (std::size_t k = 0; k < a.entries.size(); ++k)
+            es.push_back({{Side::ours, k}, {}, {}});
+        es.push_back({{Side::theirs, 0}, {}, {}});
+        std::vector<Warning> ignored;
+        auto bytes = a.write({nullptr, &a, &archive(*part)}, es, true, pl, ignored);
+        Limits al = l.fresh();
+        Context ac{o.ctx.registry, al, o.ctx.depth, o.ctx.format_options};
+        aux = self.load(ByteSource::from_memory(std::move(bytes), "payload"), {ac});
+    }
+    const Archive* ax = aux ? &archive(*aux) : nullptr;
+
+    std::vector<OutEntry> out;
+    for (std::size_t i = 0; i < t.entries.size(); ++i) {
+        auto f = members.find(t.entries[i].path);
+        if (f == members.end()) {
+            out.push_back({{Side::ours, i}, {}, {}});
+            continue;
+        }
+        Member& m = f->second;
+        if (m.set) {
+            if (m.whole)
+                out.push_back({{Side::base, m.aux}, {}, {}});
+            m.whole = nullptr; // placed
+            continue;
+        }
+        OutEntry e{{Side::ours, i}, {}, {}};
+        if (m.meta)
+            for (auto& field : m.fields)
+                e.from[field] = {Side::base, m.aux};
+        if (m.content) {
+            e.content = *m.content;
+        } else if (!m.nested.empty()) {
+            const std::string& path = t.entries[i].path;
+            auto c = t.content(i, l);
+            const Format& mf = o.ctx.registry.detect(c, path);
+            if (mf.info().caps.patch) {
+                Context ctx = child(o.ctx);
+                auto d = mf.load(source(c, path), {ctx});
+                auto nd = mf.implant(*d, m.nested, {ctx});
+                VectorSink s;
+                mf.save(*nd, s, {ctx});
+                e.content = std::move(s.data);
+            } else { // the payloads are the member's bytes
+                for (auto& u : m.nested)
+                    if (u.value)
+                        e.content = *u.value;
+            }
+        }
+        out.push_back(std::move(e));
+    }
+    for (auto& [path, m] : members)
+        if (m.set && m.whole)
+            out.push_back({{Side::base, m.aux}, {}, {}});
+    return t.write({ax, &t, nullptr}, out, false, l, warnings);
+}
+
 std::unique_ptr<Comparison> compare(std::unique_ptr<Comparison> inner, bool count_times) {
     return std::make_unique<TimesComparison>(std::move(inner), count_times);
 }

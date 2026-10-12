@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdint>
 #include <cstring>
 #include <deque>
 #include <iterator>
@@ -192,6 +193,7 @@ struct Doc final : Document {
         int standalone = -1;
     } decl;
     std::vector<Warning> warnings;
+    Opts opt; // the options it was loaded with (patch addresses count siblings as the diff did)
 
     std::string_view bytes(Span s) const {
         return {reinterpret_cast<const char*>(src.bytes().data()) + s.off, s.len};
@@ -651,6 +653,7 @@ private:
 std::unique_ptr<Doc> load_doc(ByteSource src, const Dialect& dia, const Opts& opt, Limits& budget) {
     auto d = std::make_unique<Doc>();
     d->src = std::move(src);
+    d->opt = opt;
     Loader(*d, dia, opt, budget).run();
     return d;
 }
@@ -1776,6 +1779,219 @@ private:
     std::map<const PlanEl*, std::string> done_;
 };
 
+// ---- Patch payloads (xml.md §6) ----
+// A node's payload is its source as UTF-8, declaring the prefixes it uses but does not declare; an
+// attribute's is its value; /#decl's is the declaration's pseudo-attributes.
+
+std::vector<std::string> steps_of(std::string_view path) {
+    std::vector<std::string> out;
+    for (char c : path)
+        if (c == '/')
+            out.emplace_back();
+        else if (!out.empty())
+            out.back() += c;
+    return out;
+}
+
+// The child of `parent` at an address step: the step this document gives it, else the same position among
+// same-label siblings (for a target whose ids do not identify the way the patch's sides did).
+std::optional<std::uint32_t> step_into(const Doc& d, const Dialect& dia, std::uint32_t parent,
+                                       std::string_view step) {
+    Kids k = kids_of(d, parent, &d.opt);
+    identify({&k}, dia, d.nodes[parent]);
+    std::map<std::string, std::size_t> count, pos;
+    for (std::size_t i = 0; i < k.n.size(); ++i) {
+        if (k.step[i] == step)
+            return k.n[i];
+        ++count[label(k.at(i))];
+    }
+    for (std::size_t i = 0; i < k.n.size(); ++i) {
+        const auto lab = label(k.at(i));
+        const auto p = ++pos[lab];
+        if (step == lab + "[" + std::to_string(p) + "]" || (step == lab && count[lab] == 1))
+            return k.n[i];
+    }
+    return std::nullopt;
+}
+
+// The node at the first `n` steps below the document.
+std::optional<std::uint32_t> resolve(const Doc& d, const Dialect& dia, const std::vector<std::string>& steps,
+                                     std::size_t n) {
+    std::optional<std::uint32_t> x = 0;
+    for (std::size_t k = 0; k < n && x; ++k)
+        x = step_into(d, dia, *x, steps[k]);
+    return x;
+}
+
+const Attr* attr_named(const Node& n, std::string_view qname) {
+    for (auto& a : n.attrs)
+        if (a.qname == qname)
+            return &a;
+    return nullptr;
+}
+
+std::optional<std::string> unit_payload(const Doc& d, const Dialect& dia, const std::string& path) {
+    if (path == "/#decl")
+        return d.decl.present ? std::optional(decl_text(d)) : std::nullopt;
+    const auto steps = steps_of(path);
+    if (steps.empty())
+        return std::nullopt;
+    const bool attr = steps.back().starts_with('@');
+    const auto x = resolve(d, dia, steps, steps.size() - (attr ? 1 : 0));
+    if (!x)
+        return std::nullopt;
+    const Node& n = d.nodes[*x];
+    if (attr) {
+        const Attr* a = attr_named(n, std::string_view(steps.back()).substr(1));
+        return a ? std::optional(a->value) : std::nullopt;
+    }
+    std::string s = d.utf8(n.whole), extra;
+    if (n.kind == Kind::element)
+        for (auto& [prefix, uri] : n.free_ns)
+            extra += " " + (prefix.empty() ? std::string("xmlns") : "xmlns:" + prefix) + "=\"" +
+                     escape_attr(uri) + "\"";
+    if (!extra.empty())
+        s.insert(d.utf8(n.start_tag).size() - (n.end_tag.len ? 1 : 2), extra);
+    return s;
+}
+
+std::string text_of(const std::vector<std::byte>& v) {
+    return {reinterpret_cast<const char*>(v.data()), v.size()};
+}
+
+// A node payload in the target's encoding, without the declarations the scope at `parent` already makes.
+std::string fragment_for(const Doc& t, const Dialect& dia, const std::vector<std::byte>& v,
+                         std::uint32_t parent) {
+    std::string s = text_of(v);
+    try {
+        Limits l;
+        auto pd = load_doc(ByteSource::from_memory(v, "payload.xml"), dia, t.opt, l);
+        std::map<std::string, std::string> scope;
+        for (std::uint32_t x = parent;; x = t.nodes[x].parent) {
+            for (auto& a : t.nodes[x].attrs)
+                if (a.ns_decl)
+                    scope.try_emplace(a.name.local, a.value);
+            if (x == 0)
+                break;
+        }
+        scope.try_emplace("", ""); // no default namespace
+        std::vector<Splice> sp;
+        for (auto c : pd->nodes[0].children)
+            for (auto& a : pd->nodes[c].attrs)
+                if (auto f = a.ns_decl ? scope.find(a.name.local) : scope.end();
+                    f != scope.end() && f->second == a.value)
+                    sp.push_back({a.lead_ws.off, a.raw.end(), {}});
+        s = apply_splices(s, std::move(sp));
+    } catch (const Error&) { // text, comments, and PIs are not documents: as given
+    }
+    return encode(s, t.enc);
+}
+
+// `t` with the units set, as bytes: splices over its source (xml.md §7). New nodes go at their position
+// among the surviving same-label siblings (the patched side's position), else after them, else last.
+std::string implant_units(const Doc& t, const Dialect& dia, std::span<const UnitValue> units) {
+    auto enc = [&](const std::string& s) { return encode(s, t.enc); };
+    std::vector<Splice> ins, sp; // insertions first: they may share an offset with a replacement
+    struct Add {
+        std::uint32_t parent;
+        std::string label;
+        std::size_t n; // 1-based position among same-label siblings; 0: after them
+        std::string text;
+    };
+    std::vector<Add> adds;
+    std::set<std::uint32_t> erased;
+    for (auto& u : units) {
+        const auto& path = u.at.path;
+        if (path == "/#decl") {
+            if (u.value || t.decl.present)
+                sp.push_back({t.bom, t.decl.present ? t.nodes[0].start_tag.end() : t.bom,
+                              u.value
+                                  ? enc("<?xml " + text_of(*u.value) + "?>" + (t.decl.present ? "" : "\n"))
+                                  : std::string()});
+            continue;
+        }
+        const auto steps = steps_of(path);
+        if (steps.empty())
+            throw Error(ErrorCategory::invalid_input, "patch: the document node cannot be set");
+        // ponytail: a unit whose parent the target lacks is dropped, not reported as a failed hunk.
+        const auto p = resolve(t, dia, steps, steps.size() - 1);
+        if (!p)
+            continue;
+        const Node& pn = t.nodes[*p];
+        const std::string& step = steps.back();
+        if (step.starts_with('@')) {
+            const std::string q = step.substr(1);
+            const Attr* a = attr_named(pn, q);
+            if (a && u.value)
+                sp.push_back({a->raw.off, a->raw.end(),
+                              enc(q + "=" + a->quote + escape_attr(text_of(*u.value), a->quote) + a->quote)});
+            else if (a)
+                sp.push_back({a->lead_ws.off, a->raw.end(), {}});
+            else if (u.value)
+                ins.push_back({pn.attrs_end, pn.attrs_end,
+                               enc(" " + q + "=\"" + escape_attr(text_of(*u.value)) + "\"")});
+            continue;
+        }
+        const auto open = step.find('[');
+        // An insert at a position ("item[3]") is a new node, wherever that position points now.
+        const bool fresh = u.op == Op::insert && open != std::string::npos && step.size() > open + 2 &&
+                           step[open + 1] != '@';
+        if (const auto x = fresh ? std::nullopt : step_into(t, dia, *p, step)) {
+            const Node& n = t.nodes[*x];
+            if (u.value) {
+                sp.push_back({n.whole.off, n.whole.end(), fragment_for(t, dia, *u.value, *p)});
+            } else {
+                sp.push_back({n.lead_ws.off, n.whole.end(), {}});
+                erased.insert(*x);
+            }
+            continue;
+        }
+        if (!u.value)
+            continue;
+        std::size_t n = 0;
+        if (open != std::string::npos && step.size() > open + 2 && step[open + 1] != '@')
+            n = std::strtoull(step.c_str() + open + 1, nullptr, 10);
+        adds.push_back({*p, step.substr(0, open), n, fragment_for(t, dia, *u.value, *p)});
+    }
+    auto key = [](const Add& a) { return std::tuple(a.parent, a.label, a.n ? a.n : SIZE_MAX); };
+    std::stable_sort(adds.begin(), adds.end(), [&](const Add& a, const Add& b) { return key(a) < key(b); });
+    std::map<std::uint32_t, std::string> into; // childless parents that gain children
+    for (std::size_t i = 0, done = 0; i < adds.size(); ++i, ++done) {
+        const Add& a = adds[i];
+        if (i && (a.parent != adds[i - 1].parent || a.label != adds[i - 1].label))
+            done = 0;
+        Kids k = kids_of(t, a.parent, &t.opt);
+        std::vector<std::uint32_t> same;
+        for (std::size_t j = 0; j < k.n.size(); ++j)
+            if (label(k.at(j)) == a.label && !erased.count(k.n[j]))
+                same.push_back(k.n[j]);
+        const std::size_t at = a.n > done ? a.n - 1 - done : SIZE_MAX;
+        if (a.n && at < same.size()) {
+            const Node& s = t.nodes[same[at]];
+            ins.push_back({s.whole.off, s.whole.off, a.text + std::string(t.bytes(s.lead_ws))});
+            continue;
+        }
+        const auto& kids = t.nodes[a.parent].children;
+        if (same.empty() && kids.empty()) {
+            into[a.parent] += a.text;
+            continue;
+        }
+        const Node& l = t.nodes[same.empty() ? kids.back() : same.back()];
+        ins.push_back({l.whole.end(), l.whole.end(), std::string(t.bytes(l.lead_ws)) + a.text});
+    }
+    for (auto& [p, s] : into) {
+        const Node& pn = t.nodes[p];
+        if (pn.kind != Kind::document && pn.end_tag.len == 0) // <a/> that gains children
+            sp.push_back({pn.start_tag.end() - 2 * width(t.enc), pn.start_tag.end(),
+                          enc(">") + s + enc("</" + pn.qname + ">")});
+        else
+            ins.push_back({pn.start_tag.end(), pn.start_tag.end(), s});
+    }
+    ins.insert(ins.end(), sp.begin(), sp.end());
+    const auto all = t.src.bytes();
+    return apply_splices({reinterpret_cast<const char*>(all.data()), all.size()}, std::move(ins));
+}
+
 // ---- Dump (xml.md §5) ----
 
 struct DumpLine {
@@ -1934,7 +2150,7 @@ FormatInfo generic_info() {
         "XML (generic; elements, attributes, text; byte-exact splice writer)",
         {".xml", ".xsd", ".xsl", ".xslt", ".plist", ".xliff", ".xlf", ".tmx", ".resx", ".csproj", ".vcxproj",
          ".props", ".targets", ".config", ".manifest", ".storyboard", ".xib"},
-        {true, true, false, true, false},
+        {true, true, true, true, false},
         {{"xml-ws", OptionSpec::Arg::required, "whitespace-only text: formatting (default) or significant"},
          {"xml-ignore-comments", OptionSpec::Arg::none, "do not compare comments"},
          {"xml-ignore-pis", OptionSpec::Arg::none, "do not compare processing instructions"},
@@ -2047,6 +2263,24 @@ public:
     void dump(const Document& d, std::ostream& os, const DumpOptions& o) const override {
         for (auto& l : dump_lines(doc(d), *dia_, options(o.ctx.format_options)))
             os << l.text << "\n";
+    }
+
+    std::optional<std::vector<std::byte>> payload(const Document& d, const Address& at) const override {
+        auto s = unit_payload(doc(d), *dia_, at.path);
+        if (!s)
+            return std::nullopt;
+        auto b = as_bytes(*s);
+        return std::vector<std::byte>(b.begin(), b.end());
+    }
+
+    std::unique_ptr<Document> implant(const Document& t, std::span<const UnitValue> units,
+                                      const LoadOptions& o) const override {
+        const Doc& d = doc(t);
+        const std::string text = implant_units(d, *dia_, units);
+        auto* p = reinterpret_cast<const std::byte*>(text.data());
+        Limits budget = o.ctx.budget.fresh(); // a new document (#51)
+        return load_doc(ByteSource::from_memory({p, p + text.size()}, d.src.name()), *dia_,
+                        options(o.ctx.format_options), budget);
     }
 
     nlohmann::ordered_json inspect(const Document& d) const override {
