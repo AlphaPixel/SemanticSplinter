@@ -296,6 +296,26 @@ TEST_CASE("csv: dialects across sides") {
                     "id,v\na,3\n") == "\"id\",\"v\"\n\"a\",\"3\"\n\"b\",\"2\"\n");
 }
 
+TEST_CASE("csv: unified hunks name cells and rows") {
+    Fx fx;
+    auto unified = [&](std::string_view a, std::string_view b) {
+        auto da = fx.load(a), db = fx.load(b);
+        DiffOptions o{fx.ctx, {}};
+        RenderRequest r{OutputStyle::unified, {}, {"a", "b"}, {"a", "b"}, {"a", "b"}};
+        r.options.annotate = true;
+        std::string out;
+        fx.csv.compare(*da, *db, o)->render(out, r);
+        return out;
+    };
+    auto keyed =
+        unified("id,name,damage\nsword,Sword,12\nbow,Bow,7\n", "id,name,damage\nsword,Sword,12\nbow,Bow,9\n");
+    CHECK(keyed.find("@@ -2,4 +2,4 @@ /rows/id:bow/damage\n# ~ /rows/id:bow/damage 7 -> 9") !=
+          std::string::npos);
+    // A quoted line break makes two dump lines with one address.
+    auto rows = unified("1,x\n2,\"y\nz\"\n", "1,x\n2,\"y\nw\"\n");
+    CHECK(rows.find(" @@ /rows/1\n") != std::string::npos);
+}
+
 TEST_CASE("csv: key option, dump, and stats") {
     Fx fx;
     CHECK(fx.dump("id,name,damage\nsword,Sword,12\nbow,\"Bow, long\",7\n") ==

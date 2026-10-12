@@ -66,8 +66,8 @@ TEST_CASE("cli diff: GNU messages and exit status") {
     auto a = s.file("a.txt", "1\n2\n3\n"), b = s.file("b.txt", "1\nX\n3\n"),
          a2 = s.file("a2.txt", "1\n2\n3\n");
     CaptureConsole c;
-    CHECK(run_cli(c, {"--label", "A", "--label", "B", "-u", a, b}) == 1);
-    CHECK(c.out_text == "--- A\n+++ B\n@@ -1,3 +1,3 @@\n 1\n-2\n+X\n 3\n");
+    CHECK(run_cli(c, {"--label", "A", "--label", "B", "-u", "--annotate", a, b}) == 1);
+    CHECK(c.out_text == "--- A\n+++ B\n@@ -1,3 +1,3 @@\n 1\n-2\n+X\n 3\n"); // text stays GNU-shaped
     CaptureConsole q;
     CHECK(run_cli(q, {"-q", a, b}) == 1);
     CHECK(q.out_text == "Files " + a + " and " + b + " differ\n");
@@ -330,8 +330,13 @@ TEST_CASE("cli: json diff and merge") {
     CHECK(d.out_text == "~ /version \"0.1.0\" -> \"0.2.0\"\n");
     CaptureConsole u;
     CHECK(run_cli(u, {"-u", "--label", "a", "--label", "b", base, ours}) == 1);
-    CHECK(u.out_text == "--- a\n+++ b\n@@ -1,3 +1,3 @@\n /name = \"splinter\"\n /tags/0 = \"a\"\n"
+    CHECK(u.out_text == "--- a\n+++ b\n@@ -1,3 +1,3 @@ /version\n /name = \"splinter\"\n /tags/0 = \"a\"\n"
                         "-/version = \"0.1.0\"\n+/version = \"0.2.0\"\n");
+    CaptureConsole ua;
+    CHECK(run_cli(ua, {"-u", "--annotate", "--label", "a", "--label", "b", base, ours}) == 1);
+    CHECK(ua.out_text ==
+          "--- a\n+++ b\n@@ -1,3 +1,3 @@ /version\n# ~ /version \"0.1.0\" -> \"0.2.0\"\n"
+          " /name = \"splinter\"\n /tags/0 = \"a\"\n-/version = \"0.1.0\"\n+/version = \"0.2.0\"\n");
     CaptureConsole js;
     CHECK(run_cli(js, {"--json", base, theirs}) == 1);
     auto j = nlohmann::json::parse(js.out_text);

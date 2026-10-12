@@ -75,8 +75,9 @@ double delta_e00_lab(const std::array<double, 3>&, const std::array<double, 3>&)
 std::optional<std::array<std::uint32_t, 2>> find_offset(const Raster& big, const Raster& small);
 
 // "pixels xxh3=... alpha=... colors=N" then one "tile x,y,w,h xxh3=..." line per tile. The tile size
-// starts at 64 and doubles until there are at most 4096 tiles (png.md §5).
-void dump_tiles(const Raster&, std::ostream&);
+// starts at 64 and doubles until there are at most 4096 tiles (png.md §5). With `at`, pushes each line's
+// address: `/pixels`, then `/pixels#rect=x,y,w,h` per tile.
+void dump_tiles(const Raster&, std::ostream&, std::vector<Address>* at = nullptr);
 
 // Diff visual: a's luminance at 35% over a checkerboard, changed cells on a log heat ramp of the max
 // channel delta, region boxes outlined.

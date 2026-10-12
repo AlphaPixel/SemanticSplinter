@@ -1179,7 +1179,9 @@ struct Emitter {
 
 // ---- Dump (json.md §5) ----
 
-void dump_node(const Node& n, std::string& path, std::ostream& os) {
+void dump_node(const Node& n, std::string& path, std::ostream& os, std::vector<Address>* at) {
+    if (at && (!composite(n.kind) || n.kids.empty()))
+        at->push_back({path});
     if (!composite(n.kind)) {
         os << path << " = ";
         if (n.kind == Kind::string && n.text.size() > 120)
@@ -1205,7 +1207,7 @@ void dump_node(const Node& n, std::string& path, std::ostream& os) {
     for (auto& [seg, m] : segs) {
         const auto len = path.size();
         path += "/" + seg;
-        dump_node(*m, path, os);
+        dump_node(*m, path, os, at);
         path.resize(len);
     }
 }
@@ -1340,9 +1342,9 @@ public:
         sink.write(cast(d).src.bytes());
     }
 
-    void dump(const Document& d, std::ostream& os, const DumpOptions&) const override {
+    void dump(const Document& d, std::ostream& os, const DumpOptions& o) const override {
         std::string path;
-        dump_node(cast(d).root(), path, os);
+        dump_node(cast(d).root(), path, os, o.line_at);
     }
 
     nlohmann::ordered_json inspect(const Document& d) const override {

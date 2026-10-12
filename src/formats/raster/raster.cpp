@@ -232,7 +232,7 @@ std::optional<std::array<std::uint32_t, 2>> find_offset(const Raster& big, const
     return std::nullopt;
 }
 
-void dump_tiles(const Raster& r, std::ostream& os) {
+void dump_tiles(const Raster& r, std::ostream& os, std::vector<Address>* at) {
     bool opaque = true, binary = true;
     std::unordered_set<std::uint64_t> colors;
     constexpr std::size_t kMaxColors = 65536;
@@ -250,6 +250,8 @@ void dump_tiles(const Raster& r, std::ostream& os) {
                     : "varies")
        << " colors=" << (colors.size() > kMaxColors ? std::string(">65536") : std::to_string(colors.size()))
        << "\n";
+    if (at)
+        at->push_back({"/pixels"});
     std::uint32_t tile = 64;
     auto count = [&](std::uint64_t t) { return ((r.width + t - 1) / t) * ((r.height + t - 1) / t); };
     while (count(tile) > 4096)
@@ -259,6 +261,8 @@ void dump_tiles(const Raster& r, std::ostream& os) {
             auto w = std::min(tile, r.width - x), h = std::min(tile, r.height - y);
             os << "tile " << x << ',' << y << ',' << w << ',' << h
                << " xxh3=" << hex16(hash_rect(r, x, y, w, h)) << "\n";
+            if (at)
+                at->push_back({"/pixels", Rect{x, y, w, h}});
         }
 }
 

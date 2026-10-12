@@ -421,6 +421,8 @@ git-merge zero/non-zero. `--exit-codes=extended` gives the detailed codes `0`–
 - Headers mimic GNU: `--- a/file<TAB>timestamp` for unified. Timestamps are omitted with `--label`. In
   Git modes there are no timestamps, for determinism.
 - Hunk header for structured formats: `@@ -L,N +L,N @@ ADDRESS`. Line numbers refer to dump lines,
-  and ADDRESS is the unit's address (SPEC §3.1).
-- With `--annotate`, per-hunk metrics follow as `# …` comment lines (e.g. `# 212 px changed, bbox 10,20 32x8, max ΔE00 14.2`). Off by default, so output stays GNU-shaped (Q-TEXT-9).
+  and ADDRESS is the unit's address (SPEC §3.1): the common address of the lines the hunk changes, with
+  their regions joined (`@@ -1,5 +1,5 @@ /pixels#rect=64,0,128,64`). Context-style hunks put it after
+  `***************`. Implemented for PNG, JSON, CSV, XML, and SVG; other formats show plain GNU headers.
+- With `--annotate`, per-hunk metrics follow as `# …` comment lines (e.g. `# 212 px changed, bbox 10,20 32x8, max ΔE00 14.2`), one per change whose address meets the hunk's lines; changes without pixel metrics show their normal-report line (`# ~ /version "0.1.0" -> "0.2.0"`). Off by default, so output stays GNU-shaped and `patch`-applicable (Q-TEXT-9). Annotations need line addresses, so they cover PNG, JSON, and CSV; XML and SVG don't have them yet.
 - `--color` uses GNU diff's palette keys (`sl`, `cx`, `mt`, `ac`, `de`, `ln`) plus `cf` for conflicts.

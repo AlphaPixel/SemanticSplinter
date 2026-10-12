@@ -71,6 +71,81 @@ std::string churn_line(const Churn& ch, const nlohmann::ordered_json& stats) {
     return o + "\n";
 }
 
+// Regions of different kinds count as overlapping.
+bool overlaps(const Region& x, const Region& y) {
+    if (auto *a = std::get_if<Rect>(&x), *b = std::get_if<Rect>(&y); a && b)
+        return a->x < b->x + b->w && b->x < a->x + a->w && a->y < b->y + b->h && b->y < a->y + a->h;
+    if (auto *a = std::get_if<Range>(&x), *b = std::get_if<Range>(&y); a && b)
+        return a->start < b->start + b->length && b->start < a->start + a->length;
+    return true;
+}
+
+// A change belongs to a dump line when either address lies within the other; a change with a region
+// needs a line with an overlapping region.
+bool touches(const Change& c, const Address& line) {
+    if (!path_within(c.at.path, line.path) && !path_within(line.path, c.at.path))
+        return false;
+    return !c.at.region || (line.region && overlaps(*c.at.region, *line.region));
+}
+
+// The hunk's ADDRESS (CLI.md §9): the lines' common path, plus the union of their rect or range regions
+// when every line has that path. Empty when no line has an address.
+std::string common_address(const std::vector<const Address*>& ls) {
+    if (ls.empty())
+        return {};
+    std::string p = ls[0]->path;
+    for (auto* l : ls)
+        while (!path_within(l->path, p)) {
+            auto k = p.rfind('/');
+            p.resize(k == std::string::npos ? 0 : k);
+        }
+    std::optional<Region> r;
+    for (auto* l : ls) {
+        if (l->path != p || (r && l->region && l->region->index() != r->index())) {
+            r.reset();
+            break;
+        }
+        if (!l->region)
+            continue; // the whole unit's summary line, such as PNG's "pixels xxh3=..."
+        if (!r)
+            r = l->region;
+        else if (auto* a = std::get_if<Rect>(&*r)) {
+            const Rect& b = std::get<Rect>(*l->region);
+            auto x1 = std::max(a->x + a->w, b.x + b.w), y1 = std::max(a->y + a->h, b.y + b.h);
+            a->x = std::min(a->x, b.x), a->y = std::min(a->y, b.y), a->w = x1 - a->x, a->h = y1 - a->y;
+        } else if (auto* c = std::get_if<Range>(&*r)) {
+            const Range& d = std::get<Range>(*l->region);
+            auto e = std::max(c->start + c->length, d.start + d.length);
+            c->start = std::min(c->start, d.start), c->length = e - c->start;
+        } else {
+            r.reset();
+            break;
+        }
+    }
+    return p.empty() ? "/" : Address{p, r}.to_string();
+}
+
+// One --annotate comment line (Q-TEXT-9): "# 212 px changed, bbox 10,20 32x8, max ΔE00 14.2" for pixel
+// regions, else the change's normal-report line.
+std::string note_line(const Change& c) {
+    auto& m = c.metrics;
+    auto bbox = m.find("bbox");
+    if (c.kind != "pixels" || !m.contains("pixels") || bbox == m.end() || bbox->size() != 4)
+        return "# " + render_changes({c});
+    auto n = [&](std::size_t i) { return std::to_string((*bbox)[i].get<std::uint64_t>()); };
+    std::string o = "# " + std::to_string(m.at("pixels").get<std::uint64_t>()) + " px changed, bbox " + n(0) +
+                    "," + n(1) + " " + n(2) + "x" + n(3);
+    if (auto de = m.find("delta_e00_max"); de != m.end() && de->is_number()) {
+        char buf[32];
+        std::snprintf(buf, sizeof buf,
+                      ", max \xCE\x94"
+                      "E00 %.1f",
+                      de->get<double>());
+        o += buf;
+    }
+    return o + "\n";
+}
+
 class GenericComparison final : public Comparison {
 public:
     GenericComparison(const Format& f, const Document& a, const Document& b, const DiffOptions& o)
@@ -103,16 +178,50 @@ public:
         const Format* text = o_.ctx.registry.find("text");
         if (!text)
             throw Error(ErrorCategory::internal, "the text format is not registered");
-        auto dump = [&](const Document& d) {
+        std::vector<Address> la, lb; // per dump line, when the format provides them
+        auto dump = [&](const Document& d, std::vector<Address>& at) {
             std::ostringstream os;
-            f_.dump(d, os, {o_.ctx});
+            f_.dump(d, os, {o_.ctx, &at});
             auto s = os.str();
+            if (at.size() != static_cast<std::size_t>(std::count(s.begin(), s.end(), '\n')) +
+                                 (!s.empty() && s.back() != '\n'))
+                at.clear();
             auto* p = reinterpret_cast<const std::byte*>(s.data());
             return text->load(ByteSource::from_memory({p, p + s.size()}), {o_.ctx});
         };
-        auto ta = dump(a_), tb = dump(b_);
+        auto ta = dump(a_, la);
+        auto tb = dump(b_, lb);
         RenderRequest dumps = r;
         dumps.churn = nullptr;
+        // The addressed lines a hunk changes, on both sides.
+        auto lines = [&](const Edit& first, const Edit& last) {
+            std::vector<const Address*> v;
+            auto add = [&](const std::vector<Address>& at, std::size_t s, std::size_t e) {
+                for (auto i = s; i < e && i < at.size(); ++i)
+                    if (!at[i].path.empty())
+                        v.push_back(&at[i]);
+            };
+            for (const Edit* e = &first; e <= &last; ++e) {
+                add(la, e->a0, e->a1);
+                add(lb, e->b0, e->b1);
+            }
+            return v;
+        };
+        const bool addressed = !la.empty() || !lb.empty(); // else the dump diff stays as it was
+        if (addressed && !dumps.options.hunk_address)
+            dumps.options.hunk_address = [&](const Edit& first, const Edit& last) {
+                return common_address(lines(first, last));
+            };
+        if (addressed && dumps.options.annotate)
+            // ponytail: changes x lines per hunk; index changes by path if huge change sets get slow.
+            dumps.options.hunk_note = [&](const Edit& first, const Edit& last) {
+                auto ls = lines(first, last);
+                std::string o;
+                for (auto& c : cs_)
+                    if (std::any_of(ls.begin(), ls.end(), [&](const Address* l) { return touches(c, *l); }))
+                        o += note_line(c);
+                return o;
+            };
         return text->compare(*ta, *tb, o_)->render(out, dumps);
     }
 
