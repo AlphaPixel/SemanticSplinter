@@ -1,8 +1,8 @@
 # SVG — Implementation Document
 
-**Tier:** T1 · **Module:** `semantic-splinter-svg` · **vcpkg feature:** `svg` (optional `svg-render` for the rasterizer) · **Depends on modules:** `xml`, `png` (visual output), registry recursion for `data:` URI images
+**Tier:** T1 · **Module:** `semantic-splinter-svg` · **vcpkg feature:** `svg` (optional `svg-render` for the rasterizer, not yet, #78) · **Depends on modules:** `xml`; later `png` (visual output) and registry recursion for `data:` URI images (#77, #78)
 **Extensions / magic:** `.svg`, `.svgz` (gzip). Probe: XML whose root element is `svg` in namespace `http://www.w3.org/2000/svg` (also accept a missing namespace with a lower confidence). `.svgz` is gzip magic `1F 8B` plus `.svgz` logical name.
-**Status (v1, #9):** MVP plus subpath merge, the entity exception, and SVGZ, built as an `xml::Dialect` (hooks `accept_entity`, `attr_kind`, `text_mode`, `normalize`, `merge_attr`, `is_derived`, `rewrite_ids`, `renumber`, and `mark` with its site). Not yet: the lunasvg visual (§5.2), `<style>` CSS rule merge, `data:` image recursion, segment-level path merge, id-rename detection with reference rewriting (§3.2), gradient/`use` cycle checks, patch payloads, and XMLDSig `strip` (a signed SVG only warns `signature-invalidated`, as generic XML). Deviations: addresses are the xml module's (`/svg/g[@id=layer1]/rect[@id=r7]`, `@style` as a whole, no `id:`/`n:` steps); elements without ids pair by the xml module's similarity, not the geometry score or Hungarian assignment of §3.1; add-add ids follow SPEC §2.3: a counter-allocated id (`rect1234`) continues after the highest number in use with its prefix, any other id becomes `<id>-t<n>`, noted `auto: renumbered` (with `renumbered_from` in the change metrics); the dump is the xml module's canonical dump with comparison forms (sorted styles and classes, shortest numbers, absolute path data) and editor state left out; a merged `d` keeps each subpath's source text, only a relative leading `m` becomes absolute, without the `path-reserialized` warning; both sides' additions at one place are both kept, ours first, except under `text`, `tspan`, `textPath`, and `switch`; `--conflict=mark` falls back to the comment mark where a `g` cannot go (no lifting to an ancestor); colors compare `#rgb`, `rgb()` and the 16 HTML names plus `orange` (no full CSS color table); a dependency conflict is placed on the deleted element, so `--conflict=ours` can still leave the other side's new reference dangling (warning `dangling-ref`); `.svgz` deflate level comes from XFL alone (no trial compression).
+**Status (v1, #9):** MVP plus subpath merge, the entity exception, and SVGZ, built as an `xml::Dialect` (hooks `accept_entity`, `attr_kind`, `text_mode`, `normalize`, `merge_attr`, `is_derived`, `rewrite_ids`, `renumber`, and `mark` with its site). `@@ ADDRESS` hunk headers come from the xml module; `--annotate` needs line addresses in its dump (#101). Not yet: the lunasvg visual (§5.2, #78), `<style>` CSS rule merge, `data:` image recursion, id-rename detection with reference rewriting (§3.2), gradient/`use` cycle checks (#77), patch payloads (`caps.patch` is off, #106), segment-level path merge (`--svg-path-merge=segments` exits 2, 3 with `--exit-codes`), the §3.1 and §5.2 options `--svg-match-threshold` and `--svg-render-max`, `--tolerance` for geometry numbers, and XMLDSig `strip` (a signed SVG only warns `signature-invalidated`, as generic XML). Deviations: addresses are the xml module's (`/svg/g[@id=layer1]/rect[@id=r7]`, `@style` as a whole, no `id:`/`n:` steps); elements without ids pair by the xml module's similarity, not the geometry score or Hungarian assignment of §3.1; add-add ids follow SPEC §2.3: a counter-allocated id (`rect1234`) continues after the highest number in use with its prefix, any other id becomes `<id>-t<n>`, noted `auto: renumbered` (with `renumbered_from` in the change metrics); the dump is the xml module's canonical dump with comparison forms (sorted styles and classes, shortest numbers, absolute path data) and editor state left out; a merged `d` keeps each subpath's source text, only a relative leading `m` becomes absolute, without the `path-reserialized` warning; both sides' additions at one place are both kept, ours first, except under `text`, `tspan`, `textPath`, and `switch`; `--conflict=mark` falls back to the comment mark where a `g` cannot go (no lifting to an ancestor, #77); colors compare `#rgb`, `rgb()` and the 16 HTML names plus `orange` (no full CSS color table); a dependency conflict is placed on the deleted element, so `--conflict=ours` can still leave the other side's new reference dangling (warning `dangling-ref`); `.svgz` deflate level comes from XFL alone (no trial compression, #77).
 
 ## 1. Why it matters
 
@@ -225,7 +225,8 @@ For an element-level conflict (`both-modified` on the element or its subtree, `m
 
 Text payloads: XML fragments for element insert/update (canonical serialization of the subtree), attribute
 values as plain text, path changes as subpath lists. No binary payload except embedded images (delegated).
-Fuzz = matcher threshold when locating the target element.
+Fuzz = matcher threshold when locating the target element. Not implemented yet: the module does not forward the
+xml module's payloads (#106).
 
 ## 7. Serialization and preservation
 
@@ -339,18 +340,18 @@ Estimate: M for MVP merge, S for visual.
 
 ## 12. Phases
 
-| Phase | Scope | Effort |
-|---|---|---|
-| MVP | ID-based identity, structural matching, attribute/style/class merge, z-order SequenceMerge, references and dependency checks, ID rename on collision, editor-state normalization, dump, `--conflict=mark` | M |
-| v2 | Subpath merge, `<style>` CSS rule merge, lunasvg visual diff, `data:` image recursion, entity exception, SVGZ | M |
-| Later | Segment-level path merge, resvg backend, Inkscape path-effect awareness beyond conflict | S-M |
+| Phase | Scope | Effort | State |
+|---|---|---|---|
+| MVP | ID-based identity, structural matching, attribute/style/class merge, z-order SequenceMerge, references and dependency checks, ID rename on collision, editor-state normalization, dump, `--conflict=mark` | M | done, with the deviations in the status line; missing: cycle checks and id-rename detection (#77) |
+| v2 | Subpath merge, `<style>` CSS rule merge, lunasvg visual diff, `data:` image recursion, entity exception, SVGZ | M | partly done: subpath merge, entity exception, SVGZ; missing: CSS merge and `data:` recursion (#77), visual (#78) |
+| Later | Segment-level path merge, resvg backend, Inkscape path-effect awareness beyond conflict | S-M | not started |
 
 ## 13. Open questions
 
-- **Q-SVG-1**: In `--conflict=mark`, should theirs be hidden or visible? **Provisional:** hidden (`display="none"`). **Why:** rendering then equals the default `ours` policy, and editors expose the toggle.
-- **Q-SVG-2**: Allow limited DTD internal entities for Illustrator files despite the global no-DTD rule? **Provisional:** yes, narrow bounded exception in the SVG module only. **Why:** many legacy Illustrator SVGs are otherwise unloadable, and the bounds remove expansion attacks.
-- **Q-SVG-3**: Rename suffix for colliding IDs? **Provisional:** `<id>-t<n>`. **Why:** short, deterministic, still a valid XML name and CSS identifier.
-- **Q-SVG-4**: Default path merge granularity? **Provisional:** subpaths. **Why:** independent shapes inside one path are common; segment merges risk broken tangents.
-- **Q-SVG-5**: Treat presentation attribute and same-name style property as one key? **Provisional:** no. **Why:** different cascade precedence; merging them would change rendering.
-- **Q-SVG-6**: Default rasterizer? **Provisional:** lunasvg via vcpkg. **Why:** MIT, maintained, pure C++; resvg's quality does not justify a Rust toolchain dependency for a visual-only feature.
-- **Q-SVG-7**: Should editor-state both-modified be silent? **Provisional:** auto-resolve ours-wins but report as `auto: editor-state`. **Why:** satisfies "no silent best-effort" without blocking merges on zoom levels.
+- **Q-SVG-1**: In `--conflict=mark`, should theirs be hidden or visible? **Decided:** hidden (`display="none"`). **Why:** rendering then equals the default `ours` policy, and editors expose the toggle.
+- **Q-SVG-2**: Allow limited DTD internal entities for Illustrator files despite the global no-DTD rule? **Decided:** yes, narrow bounded exception in the SVG module only. **Why:** many legacy Illustrator SVGs are otherwise unloadable, and the bounds remove expansion attacks.
+- **Q-SVG-3**: Rename suffix for colliding IDs? **Decided:** `<id>-t<n>`. The code deviates for counter-allocated ids (`rect1234`), which continue after the highest number in use with their prefix (SPEC §2.3, status line); other ids get `<id>-t<n>`. **Why:** short, deterministic, still a valid XML name and CSS identifier.
+- **Q-SVG-4**: Default path merge granularity? **Decided:** subpaths. **Why:** independent shapes inside one path are common; segment merges risk broken tangents.
+- **Q-SVG-5**: Treat presentation attribute and same-name style property as one key? **Decided:** no. **Why:** different cascade precedence; merging them would change rendering.
+- **Q-SVG-6**: Default rasterizer? **Decided:** lunasvg via vcpkg (not built yet, #78). **Why:** MIT, maintained, pure C++; resvg's quality does not justify a Rust toolchain dependency for a visual-only feature.
+- **Q-SVG-7**: Should editor-state both-modified be silent? **Decided:** auto-resolve ours-wins but report as `auto: editor-state`. **Why:** satisfies "no silent best-effort" without blocking merges on zoom levels.

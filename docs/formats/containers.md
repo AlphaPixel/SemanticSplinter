@@ -5,8 +5,10 @@
 **Tier:** T0 · **Module:** `semantic-splinter-zip` (ZIP, JAR/APK/NUPKG, mimetype-first profile) and `semantic-splinter-tar` (TAR family) · **vcpkg feature:** `zip` (deps: `zlib`, `zstd`), `tar` (deps: `zlib`, `zstd`, `liblzma`, `bzip2`); both share the helper `semantic-splinter-container` (member layer and codecs) · **Depends on modules:** core only.
 **Extensions / magic:** ZIP `PK\x03\x04` at 0, or an end-of-central-directory record `PK\x05\x06` found in the last 64 KiB + 22 bytes (covers self-extracting stubs and empty archives `PK\x05\x06` at 0). `.zip .jar .war .ear .apk .aab .nupkg .whl .xpi .vsix .crx` (CRX has a header before the ZIP). TAR: `ustar` at offset 257 (`ustar\0` POSIX or `ustar  \0` GNU), or a valid header checksum in block 0. `.tar .tar.gz .tgz .tar.zst .tzst .tar.xz .txz .tar.bz2`. gzip `1F 8B`, zstd `28 B5 2F FD`, xz `FD 37 7A 58 5A 00`.
 **Status (v1 = MVP + v2 without similarity renames, Phase 6):** done: ZIP and TAR (gzip, zstd, xz, bzip2) diff and
-merge with recursion into members, and patch payloads (§6.5, #44). Details and what is missing (EnvelopeMap,
-`--layout`, some validation options, ZIP prefix and APK Signing Block patches): §12.1.
+merge with recursion into members, and patch payloads (§6.5, #44). Not yet: the EnvelopeMap (#45), `--zip-strict`,
+`--layout`, and other §4/§5/§8 options (#49), ZIP64 promotion and extended-timestamp merge (#50), ZIP prefix and APK
+Signing Block patches (#109), `@@ ADDRESS` hunk headers and `--annotate` (#102), similarity renames
+(`--find-renames`). Details: §12.1.
 
 ## 1. Why it matters
 
@@ -76,7 +78,7 @@ First entry is `mimetype`, method 0 (stored), no extra field, no data descriptor
 
 `<escaped path>` uses RFC 6901 escaping (`~0`, `~1`). The ZIP module uses `/entries/...` (Q-ZIP-7).
 
-**Identity and renames.** Member identity is the path. After KeyedMerge pairs paths, unmatched deletions and additions are paired as renames (`move`) when their uncompressed content hashes (XXH3-128) are equal. Similarity-based rename detection (Git-style, at least 50% similar by the member format's diff) is a v2 option `--find-renames[=N]`. A rename plus a content edit on the other side merges (edit applies at the new path), per SPEC SequenceMerge move rules adapted to keys.
+**Identity and renames.** Member identity is the path. After KeyedMerge pairs paths, unmatched deletions and additions are paired as renames (`move`) when their uncompressed content hashes (XXH3-128) are equal. Similarity-based rename detection (Git-style, at least 50% similar by the member format's diff) is a v2 option `--find-renames[=N]` (not implemented yet). A rename plus a content edit on the other side merges (edit applies at the new path), per SPEC SequenceMerge move rules adapted to keys.
 
 **Duplicates.** ZIP files with duplicate names in the central directory are rejected (parser-differential vector). TAR allows duplicates (later entries overwrite on extraction); identity becomes `path` for the last occurrence and `path#N` for earlier ones, reported as warning `tar-duplicate-path`.
 
@@ -93,9 +95,9 @@ For comparison only, never for output:
 
 | Item | Default | Option |
 |---|---|---|
-| Member order | ignored | `--zip-strict-order` reports reordering |
-| Compression method/level for equal content | ignored (no change) | `--zip-strict` reports method changes |
-| DOS time, extended timestamp, NTFS times | **reported as `meta` changes of kind `metadata`, excluded from "files differ" status** | `--ignore-zip-times` hides them; `--zip-times=strict` counts them as differences |
+| Member order | ignored | `--zip-strict-order` reports reordering (not implemented yet, #49) |
+| Compression method/level for equal content | ignored (no change) | `--zip-strict` reports method changes (not implemented yet, #49, nor in the rows below) |
+| DOS time, extended timestamp, NTFS times | **reported as `meta` changes of kind `metadata`, excluded from "files differ" status** | `--zip-times=ignore` hides them; `--zip-times=strict` counts them as differences |
 | Extra field ordering, presence of 0x5455/0x000A/0x7875/0xD935 padding | ignored | `--zip-strict` |
 | Data descriptor present or not, ZIP64 used when not needed | ignored | `--zip-strict` |
 | Name encoding (CP437 vs UTF-8 flag) | names compared after decoding | none |
@@ -126,9 +128,9 @@ entry assets/media/image1.png  stored  48211  crc=91aa3b05
 <png dump>
 ```
 
-Times are shown only with `--zip-times=strict`. Member dumps are included for members whose format supports `dump()`, bounded by `--max-dump` per member (default 1 MiB of dump text), after which the member shows only its `entry` line. The text renderer's hunk header Address (text.md §5.3) then reads `/entries/assets~1layout.xml/content/...`, which is exactly what the user needs to see.
+Times are shown only with `--zip-times=strict`. Member dumps are included for members whose format supports `dump()`, bounded by `--max-dump` per member (default 1 MiB of dump text; the option is not implemented yet, #49), after which the member shows only its `entry` line. The text renderer's hunk header Address (text.md §5.3) then reads `/entries/assets~1layout.xml/content/...`, which is exactly what the user needs to see (not yet: the container dump has no line addresses, #102).
 
-**Visual output:** delegated to members (`--visual` renders the first changed member that supports it, or all into a directory with `--visual-dir`).
+**Visual output:** delegated to members (`--visual` renders the first changed member that supports it, or all into a directory with `--visual-dir`). Not implemented yet (#49).
 
 **Cost:** central directory parse is O(entries). Hashing compressed bytes is fast I/O. Decompression only for changed members, streaming with limit counters.
 
@@ -149,7 +151,7 @@ Output member order: SPEC KeyedMerge order rule (ours' order, theirs-only member
 
 ### 6.2 Recursion budget
 
-The member merge runs with the remaining depth and memory budget. Exceeding it in a member becomes conflict `limit` for that member (OpaqueLeaf fallback), not a failure of the whole merge, unless `--strict-limits`.
+The member merge runs with the remaining depth and memory budget. Exceeding it in a member becomes conflict `limit` for that member (OpaqueLeaf fallback), not a failure of the whole merge, unless `--strict-limits` (not implemented yet, #49).
 
 ### 6.3 Signatures (JAR/APK/NuGet/VSIX)
 
@@ -168,7 +170,7 @@ The container has nothing to mark; it delegates to members (text members get mar
 
 Per member: add (full raw member: local header fields + compressed bytes, so it can be raw-copied on apply), remove (path + content hash), rename (from, to, hash), metadata (field before/after), content (nested payload of the member format). Base verification uses the member's content hash.
 
-**Implemented (#44):** a member's payload is an archive of the same format (bare: no prefix, comment, or outer compression) holding that member alone, raw-copied on apply; a `/meta/` unit's is the same with empty content, its fields taken from that record; `/content` is the member's bytes; a nested address is the member format's own payload when that format has patches, else the member's bytes. A rename is two units, `erase` at the old path and `move` at the new one (the diff writes the extra unit for any move with a `from` elsewhere). Base verification is the envelope's whole-file hash, then identity application as a three-way merge (SPEC §6). Added members go last; the ZIP comment is a unit of its own; `/archive/prefix` and `/archive/apk-signing-block` changes have no payload (`--binary` exits 3).
+**Implemented (#44):** a member's payload is an archive of the same format (bare: no prefix, comment, or outer compression) holding that member alone, raw-copied on apply; a `/meta/` unit's is the same with empty content, its fields taken from that record; `/content` is the member's bytes; a nested address is the member format's own payload when that format has patches, else the member's bytes. A rename is two units, `erase` at the old path and `move` at the new one (the diff writes the extra unit for any move with a `from` elsewhere). Base verification is the envelope's whole-file hash, then identity application as a three-way merge (SPEC §6). Added members go last (#108); the ZIP comment is a unit of its own; `/archive/prefix` and `/archive/apk-signing-block` changes have no payload (`--binary` exits 2, 3 with `--exit-codes`; #109).
 
 ## 7. Serialization and preservation
 
@@ -217,7 +219,7 @@ This subsection comes first in section 7 because §7.2 and §7.3 are built on it
 
 Outer re-encode parameters: gzip `XFL` (2 = maximum, 4 = fastest) narrows the deflate level, then a trial on the first 1 MiB picks it. zstd frames do not record the level, so it is guessed from the window descriptor plus a trial, else level 3. xz keeps the preset implied by the LZMA2 dictionary size in the block header (verify).
 
-**Raw copy and layout stability.** Untouched ZIP members are copied as one span (local header to end of descriptor). Local headers hold no offsets, so the only bytes that change for them are the 4-byte (or ZIP64 8-byte) offsets in their central records when an earlier member changed size. Untouched TAR members are copied verbatim inside the decoded TAR stream. `--layout=stable` keeps ours' member order, so members before the first touched one keep their offsets (Q-ZIP-14).
+**Raw copy and layout stability.** Untouched ZIP members are copied as one span (local header to end of descriptor). Local headers hold no offsets, so the only bytes that change for them are the 4-byte (or ZIP64 8-byte) offsets in their central records when an earlier member changed size. Untouched TAR members are copied verbatim inside the decoded TAR stream. `--layout=stable` keeps ours' member order, so members before the first touched one keep their offsets (Q-ZIP-14). `--layout` is not implemented yet (#49); the order is always ours'.
 
 **Signatures and the keyed boundary** (`--signatures=auto`, §6.3):
 
@@ -254,7 +256,7 @@ Nothing semantic. Compressed byte identity of touched members and of the outer g
 
 ## 8. Validation
 
-After writing, the writer re-opens the archive with the same reader and checks: central directory parses, every local header matches, CRC-32 of every touched member (and, with `--validate=full`, every member), no overlaps, entry count and sizes within limits, profile invariants (mimetype first and stored). Member-level validation is delegated to each member format's `validate()` for touched members.
+After writing, the writer re-opens the archive with the same reader and checks: central directory parses, every local header matches, CRC-32 of every touched member (and every member with `--validate=full`, not implemented yet, #49), no overlaps, entry count and sizes within limits, profile invariants (mimetype first and stored). Member-level validation is delegated to each member format's `validate()` for touched members.
 
 Optional external validators for CI (not runtime dependencies): `zip -T`/`unzip -t`, `zipalign -c -v 4`, `apksigner verify` (expected to fail after merge unless re-signed), `jarsigner -verify`, EPUB: epubcheck.
 
@@ -308,11 +310,11 @@ Optional external validators for CI (not runtime dependencies): `zip -T`/`unzip 
 
 ## 12. Phases
 
-| Phase | Content | Effort |
-|---|---|---|
-| MVP | ZIP reader with all defences, writer with raw copy and deterministic touched members, deflate/stored, member KeyedMerge with recursion, rename by hash, dump, mimetype-first profile | L |
-| v2 | zstd method, TAR family with gzip/zstd/xz, signatures handling (`--signatures=`, JAR v1 manifest handling per D-50; JAR v1 re-sign with `--sign-key` is post-v1, D-36), zipalign preservation, similarity renames | M |
-| later | libarchive-based read-only module for 7z/RAR/ISO, Git binary patch interop for members | M |
+| Phase | Content | Effort | State |
+|---|---|---|---|
+| MVP | ZIP reader with all defences, writer with raw copy and deterministic touched members, deflate/stored, member KeyedMerge with recursion, rename by hash, dump, mimetype-first profile | L | done |
+| v2 | zstd method, TAR family with gzip/zstd/xz, signatures handling (`--signatures=`, JAR v1 manifest handling per D-50; JAR v1 re-sign with `--sign-key` is post-v1, D-36), zipalign preservation, similarity renames | M | partly done: all but similarity renames (and `resign`, #21) |
+| later | libarchive-based read-only module for 7z/RAR/ISO, Git binary patch interop for members | M | not started |
 
 ### 12.1 Implementation status (Phase 6)
 
@@ -324,34 +326,36 @@ data and its offset shift; APK Signing Block detection. The writer copies untouc
 rewrites only central-record offsets, writes ours verbatim when nothing changed, and writes touched members
 deterministically (deflate level from flag bits 1-2 and a trial up to 1 MiB, zstd level 3), keeping ZIP64 where
 the source had it and zipalign 4-byte (`.so`: 4 or 16 KiB) alignment (`realigned`). Mimetype-first order,
-`--signatures=auto|strip|keep` (`resign` exits 3), and D-50 manifest digest removal. TAR: ustar, pax, and GNU
+`--signatures=auto|strip|keep` (`resign` exits 2, 3 with `--exit-codes`; #21), and D-50 manifest digest removal. TAR: ustar, pax, and GNU
 (base-256, signed checksums, `L`/`K`, `path#N` duplicates), gzip/zstd/xz/bzip2 wrappers re-encoded with ours'
 header and parameters, verbatim member copy, touched headers in the source flavour. Shared: member diff and
 KeyedMerge with renames by content hash, per-field metadata merge (`newest-mtime`), recursion through the
 registry with nested changes and conflicts under `/entries/<path>/content`, nested conflict ids accepted by
 `--resolve`, `zip-times=ignore|strict`, dump with member dumps.
 
-Patch payloads (§6.5) came with #44. Not yet: the EnvelopeMap (churn line, `inspect --layout`), `--zip-strict`, `--zip-strict-order`, `--max-dump` (fixed at 1 MiB),
-`--validate=full` and `--integrity=strict` (untouched members' CRCs stay `not-checked`), `--strict-limits`,
-`--visual`, and `--layout` (the order is always ours'). Member times are DOS times; 0x5455/0x000A extras follow
-the content side. A value that needs ZIP64 in a record that had none exits 3. The zstd and xz re-encode levels
-are fixed (3, preset 6) instead of inferred; TAR blocking padding is ours' tail verbatim. Fuzz targets, the
-checked-in EPUB/APK/JAR/NuGet fixtures, and the measured hostile corpus are Phase 8 work (#16, #17).
+Patch payloads (§6.5) came with #44. Not yet: the EnvelopeMap (churn line, `inspect --layout`; #45); `--zip-strict`,
+`--zip-strict-order`, `--max-dump` (fixed at 1 MiB), `--validate=full`, `--strict-limits`, `--visual`, and
+`--layout` (the order is always ours') (#49); `--integrity=strict` forcing every CRC (untouched members' CRCs stay
+`not-checked`); `--find-renames`; line addresses in the dump (#102); prefix and APK Signing Block patches (#109).
+Member times are DOS times; 0x5455/0x000A extras follow the content side, and a value that needs ZIP64 in a record
+that had none exits 2 (3 with `--exit-codes`) (#50). The zstd and xz re-encode levels are fixed (3, preset 6)
+instead of inferred (#49); TAR blocking padding is ours' tail verbatim. Fuzz targets, the checked-in
+EPUB/APK/JAR/NuGet fixtures, and the measured hostile corpus are Phase 8 work (#16, #17).
 
 ## 13. Open questions
 
-- **Q-ZIP-1**: Own ZIP implementation or libzip/minizip-ng? **Provisional:** own reader/writer (about 1.5k LOC for ZIP core) over zlib and zstd; libzip as fallback. **Why:** byte-exact record preservation and pre-allocation limits need control that the libraries do not expose.
-- **Q-ZIP-2**: Which deflate implementation and level for touched members? **Provisional:** zlib 1.3.x at level 6 (the level most apps use); zlib-ng or libdeflate only if profiling demands it. **Why:** zlib is already needed by PNG, and a single implementation keeps output deterministic across builds.
-- **Q-ZIP-3**: Default treatment of timestamp-only changes in diff? **Provisional:** listed as metadata changes but not counted for exit status 1; `--zip-times=strict` counts them. **Why:** re-saved packages differ only in times constantly, which is noise for users and for Git.
-- **Q-ZIP-4**: What does `--conflict=mark` do for an opaque member? **Provisional:** fall back to ours with a warning; do not add sidecar members. **Why:** extra members break package manifests and signatures.
-- **Q-ZIP-5**: Keep or strip invalidated signatures by default? **Provisional:** under `--signatures=auto`, strip (JAR v1/APK v1 files, APK Signing Block, NuGet/VSIX `.signature.p7s`) and warn `signature-stripped` per removal; `--signatures=keep` keeps ours' bytes with `signature-invalidated`. This replaces the earlier "keep by default" answer, per SPEC §12.5 and D-35. **Why:** an invalidly signed JAR throws `SecurityException` on class load and an invalid NuGet signature fails restore, while unsigned ones load; the change of type (signed to unsigned) is never silent because each removal is warned, and the user must re-sign anyway.
-- **Q-ZIP-6**: Should both-sides mtime changes auto-resolve? **Provisional:** yes, to the later time, reported as `auto: newest-mtime`. **Why:** the value comes from one side (no invention) and times carry no content meaning.
-- **Q-ZIP-7**: Address root for members? **Provisional:** `/entries/<path>` with `/content` and `/meta` children. **Why:** separating content from metadata avoids key clashes with member formats' own addresses.
-- **Q-ZIP-9**: Similarity-based rename detection in v1? **Provisional:** no, exact content hash only; similarity in v2 behind `--find-renames`. **Why:** exact renames cover tool-driven renames (media renumbering), and similarity needs per-format scoring.
-- **Q-ZIP-10**: Reject or tolerate local/central header mismatches? **Provisional:** reject by default (`zip-header-mismatch`), `--zip-lenient` trusts the central directory with a warning. **Why:** mismatches are the main parser-differential attack and are rare in legitimate files.
-- **Q-ZIP-11**: Verify every member's CRC-32 on load (SPEC §12.3 step 2)? **Provisional:** only members that are decompressed anyway (changed members, recursion, `--validate=full`); `--integrity=strict|repair` forces all. Unchecked members are reported as a count `not-checked`, which SPEC §12.3 does not yet list as a status. **Why:** the equality shortcut (§4) exists so that a 200 MB package with one changed part decompresses one part.
-- **Q-ZIP-12**: On `--signatures=strip`, recompute or drop the `MANIFEST.MF` per-entry digests? **Provisional:** recompute (integrity) and keep them; drop only the `.SF`/PKCS#7 files. **Why:** digests in an unsigned JAR are ignored by the JDK and by apksigner, keeping them means fewer manifest lines change, and `jarsigner` re-signing reuses them.
-- **Q-ZIP-13**: Preserve the non-signature pairs of an APK Signing Block (verity padding `0x42726577`, SourceStamp, Play dependency metadata) when stripping? **Provisional:** no, the whole block goes and each dropped pair ID is listed in the warning. **Why:** those pairs are written by signing tools and are regenerated when the APK is re-signed (verify for Play metadata).
-- **Q-ZIP-14**: Under `--layout=stable`, move a touched member that grew to the end of the archive so that all other members keep their offsets? **Provisional:** no, keep ours' order. **Why:** local headers carry no offsets, so shifting members costs only the central-record offset bytes, while reordering is visible in listings and conflicts with profile order rules (mimetype first, JAR manifest first).
-- **Q-TAR-1**: Write gzip as single-member even when the input was multi-member? **Provisional:** yes, reported as `recompressed`. **Why:** multi-member layout carries no meaning and reproducing it adds complexity for no user benefit.
-- **Q-TAR-2**: Duplicate paths in TAR: merge per occurrence or collapse? **Provisional:** identity `path` for the last occurrence, `path#N` for earlier ones, warning `tar-duplicate-path`. **Why:** matches extraction semantics (last wins) while keeping all bytes.
+- **Q-ZIP-1**: Own ZIP implementation or libzip/minizip-ng? **Superseded by D-27 (amended 2026-10-10):** own reader/writer (about 1.5k LOC for ZIP core) over zlib and zstd; libzip as fallback. **Why:** byte-exact record preservation and pre-allocation limits need control that the libraries do not expose.
+- **Q-ZIP-2**: Which deflate implementation and level for touched members? **Decided:** zlib 1.3.x at level 6 (the level most apps use) when nothing better is inferred (§7.1: flag bits 1-2 plus a trial); zlib-ng or libdeflate only if profiling demands it. **Why:** zlib is already needed by PNG, and a single implementation keeps output deterministic across builds.
+- **Q-ZIP-3**: Default treatment of timestamp-only changes in diff? **Decided:** listed as metadata changes but not counted for exit status 1; `--zip-times=strict` counts them. **Why:** re-saved packages differ only in times constantly, which is noise for users and for Git.
+- **Q-ZIP-4**: What does `--conflict=mark` do for an opaque member? **Decided:** fall back to ours with a warning; do not add sidecar members. **Why:** extra members break package manifests and signatures.
+- **Q-ZIP-5**: Keep or strip invalidated signatures by default? **Decided:** under `--signatures=auto`, strip (JAR v1/APK v1 files, APK Signing Block, NuGet/VSIX `.signature.p7s`) and warn `signature-stripped` per removal; `--signatures=keep` keeps ours' bytes with `signature-invalidated`. This replaces the earlier "keep by default" answer, per SPEC §12.5 and D-35. **Why:** an invalidly signed JAR throws `SecurityException` on class load and an invalid NuGet signature fails restore, while unsigned ones load; the change of type (signed to unsigned) is never silent because each removal is warned, and the user must re-sign anyway.
+- **Q-ZIP-6**: Should both-sides mtime changes auto-resolve? **Decided:** yes, to the later time, reported as `auto: newest-mtime`. **Why:** the value comes from one side (no invention) and times carry no content meaning.
+- **Q-ZIP-7**: Address root for members? **Decided:** `/entries/<path>` with `/content` and `/meta` children. **Why:** separating content from metadata avoids key clashes with member formats' own addresses.
+- **Q-ZIP-9**: Similarity-based rename detection in v1? **Decided:** no, exact content hash only; similarity in v2 behind `--find-renames`. **Why:** exact renames cover tool-driven renames (media renumbering), and similarity needs per-format scoring.
+- **Q-ZIP-10**: Reject or tolerate local/central header mismatches? **Decided:** reject by default (`zip-header-mismatch`), `--zip-lenient` trusts the central directory with a warning. **Why:** mismatches are the main parser-differential attack and are rare in legitimate files.
+- **Q-ZIP-11**: Verify every member's CRC-32 on load (SPEC §12.3 step 2)? **Decided:** only members that are decompressed anyway (changed members, recursion, `--validate=full`); `--integrity=strict|repair` forces all. The code checks decompressed members only; neither forcing option is implemented yet (§12.1). Unchecked members are reported as a count `not-checked`, which SPEC §12.3 does not yet list as a status. **Why:** the equality shortcut (§4) exists so that a 200 MB package with one changed part decompresses one part.
+- **Q-ZIP-12**: On `--signatures=strip`, recompute or drop the `MANIFEST.MF` per-entry digests? **Decided:** recompute (integrity) and keep them; drop only the `.SF`/PKCS#7 files. Overridden in v1 by D-50: without the `crypto` feature (#21) the digest lines of changed and added entries are removed with a warning. **Why:** digests in an unsigned JAR are ignored by the JDK and by apksigner, keeping them means fewer manifest lines change, and `jarsigner` re-signing reuses them.
+- **Q-ZIP-13**: Preserve the non-signature pairs of an APK Signing Block (verity padding `0x42726577`, SourceStamp, Play dependency metadata) when stripping? **Decided:** no, the whole block goes and each dropped pair ID is listed in the warning. The code drops the whole block but its `signature-stripped` warning does not list the pair IDs yet. **Why:** those pairs are written by signing tools and are regenerated when the APK is re-signed (verify for Play metadata).
+- **Q-ZIP-14**: Under `--layout=stable`, move a touched member that grew to the end of the archive so that all other members keep their offsets? **Decided:** no, keep ours' order (the only order the code writes; `--layout` is #49). **Why:** local headers carry no offsets, so shifting members costs only the central-record offset bytes, while reordering is visible in listings and conflicts with profile order rules (mimetype first, JAR manifest first).
+- **Q-TAR-1**: Write gzip as single-member even when the input was multi-member? **Decided:** yes, reported as `recompressed`. **Why:** multi-member layout carries no meaning and reproducing it adds complexity for no user benefit.
+- **Q-TAR-2**: Duplicate paths in TAR: merge per occurrence or collapse? **Decided:** identity `path` for the last occurrence, `path#N` for earlier ones, warning `tar-duplicate-path`. **Why:** matches extraction semantics (last wins) while keeping all bytes.

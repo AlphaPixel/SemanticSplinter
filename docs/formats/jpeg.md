@@ -8,9 +8,10 @@ and GridMerge over MCUs with guard band and `adjacent-edits`; pixel-mode diff wh
 KeyedMerge; ICC dependency conflict; passthrough; metadata-only splice (scan bytes verbatim); ours' scan script, restart
 interval and Huffman tables reused, verified by reload; `derived-stale` for Exif IFD1/JFIF/JFXX thumbnails and MPF;
 C2PA `signature-invalidated` (keep) or `signature-stripped`; dump, inspect, EnvelopeMap, diff and merge visuals.
-Not yet: DCT-mode `--tolerance` and re-encode detection, `--jpeg-reencode`, MPF offset rewrite, patch payloads (all v1.1);
-Exif/XMP/IRB keyed merge, extended XMP reassembly, ICC re-split (v2); `--jpeg-mode`, `--ignore-markers`, `q~` estimate,
-`psnr`, `invisible`; lossless SOF3 and DNL heights (rejected as unsupported); 12-bit fixtures.
+Not yet: DCT-mode `--tolerance` and re-encode detection, `--jpeg-reencode` (#73); MPF offset rewrite, patch payloads
+(`caps.patch` is off), lossless SOF3 and DNL heights (rejected as unsupported), 12-bit fixtures (#74); Exif/XMP/IRB keyed
+merge, extended XMP reassembly, ICC re-split (v2, #75); `@@ ADDRESS` hunk headers and `--annotate` (#102);
+`--jpeg-mode`, `--ignore-markers`, `q~` estimate, `psnr`, `invisible`.
 MVP simplifications: segments of one APPn signature form one unit (`/app/APP11:JP`), comments are keyed by index
 (`/com/<i>`), JFIF and IRB are whole units (`/jfif`, `/irb`), extended XMP is `/xmp/extended`; the coefficient writer splices
 the APPn segments around libjpeg-turbo's output instead of `jpeg_write_marker`, and tries ours' Huffman tables first and
@@ -101,7 +102,8 @@ IDCT `JDCT_ISLOW` and fancy upsampling fixed so decoding is deterministic across
 libjpeg-turbo produce identical output for ISLOW, assumed per libjpeg-turbo docs, verified by CI).
 
 Options: `--jpeg-mode=auto|dct|pixels`, `--tolerance=N` (pixel mode, 8-bit units; in DCT mode it is a
-coefficient tolerance, §6.2), `--ignore-markers=COM,APP12`.
+coefficient tolerance, §6.2), `--ignore-markers=COM,APP12`. Not implemented yet: the module declares no options;
+`--tolerance` works only in a pixel-mode diff and is rejected as unsupported in DCT mode and in merges (#73).
 
 ## 5. Diff
 
@@ -341,21 +343,21 @@ lines); own Exif/TIFF IFD reader/writer shared with the TIFF module (about 800 l
 
 ## 12. Phases
 
-| Phase | Scope | Effort |
-|---|---|---|
-| MVP | Segment parser/writer, DCT-mode diff and merge, MCU regions, passthrough, metadata-only splice, OpaqueLeaf metadata, pixel-mode diff, dump, visual | M |
-| v1.1 | Re-encode noise detection, DCT-mode tolerance, `--jpeg-reencode`, MPF offset rewrite, patches | S |
-| v2 | Exif keyed merge via shared IFD module, XMP via xml module, extended XMP, `--jpeg-requantize`, thumbnail regeneration | M |
-| Later | Lossless transform detection, gain-map aware merge | M |
+| Phase | Scope | Effort | State |
+|---|---|---|---|
+| MVP | Segment parser/writer, DCT-mode diff and merge, MCU regions, passthrough, metadata-only splice, OpaqueLeaf metadata, pixel-mode diff, dump, visual | M | done (gaps in the status line) |
+| v1.1 | Re-encode noise detection, DCT-mode tolerance, `--jpeg-reencode`, MPF offset rewrite, patches | S | not started (#73, #74) |
+| v2 | Exif keyed merge via shared IFD module, XMP via xml module, extended XMP, `--jpeg-requantize`, thumbnail regeneration | M | not started (#75) |
+| Later | Lossless transform detection, gain-map aware merge | M | not started |
 
 ## 13. Open questions
 
-- **Q-JPEG-1**: Merge cell: 8×8 block or MCU? **Provisional:** MCU. **Why:** mixing luma and chroma blocks from different sides invents colors in subsampled images.
-- **Q-JPEG-2**: Merge default when quant tables differ? **Provisional:** refuse with `encoding-mismatch`; lossy merge only with `--jpeg-reencode`. **Why:** silent generational loss violates the no-best-effort rule.
-- **Q-JPEG-3**: Guard band unit for DCT mode? **Provisional:** 1 MCU. **Decided 2026-10-08:** 0 MCUs, with `--guard=N` for a larger band (D-10). **Why (original):** consistent with raster default; MCUs are coarse already but anti-aliased edits still couple across MCU borders.
-- **Q-JPEG-4**: Should tolerance be on by default for JPEG given re-encode noise? **Provisional:** no, diff detects re-encoding and recommends `--tolerance`. **Why:** SPEC says tolerance is opt-in and recorded.
-- **Q-JPEG-5**: Regenerate Exif/JFIF thumbnails after pixel merges? **Provisional:** MVP marks `derived-stale`; v2 regenerates with ours' thumbnail size and quality. **Why:** stale thumbnails are harmless for most viewers; regeneration needs pixel decode + encode.
-- **Q-JPEG-6**: Write our own Exif writer or depend on exiv2? **Provisional:** own, shared with TIFF. **Why:** exiv2 is GPL-2.0-or-later and libexif is LGPL; both conflict with a static permissive binary.
-- **Q-JPEG-7**: Preserve ours' custom progressive scan script? **Provisional:** yes, parse it from ours' SOS headers and pass it as `scan_info`; fall back to `jpeg_simple_progression` with `scan-script-changed` only if libjpeg-turbo rejects it. **Why:** SPEC §12.2 re-encodes with parameters inferred from the original, and reproducing the script and tables keeps unchanged scan bytes stable.
-- **Q-JPEG-8**: Treat Exif orientation change as a pixel dependency? **Provisional:** no. **Why:** pixels are edited in stored coordinates; orientation only affects display.
-- **Q-JPEG-9**: Recompute the Photoshop IPTC digest (IRB 0x0425) after merging IPTC (0x0404)? **Provisional:** recompute only when the digest matched on the input the IPTC came from and the merged IPTC and XMP come from the same side; otherwise copy the input's value. **Why:** Photoshop uses a digest mismatch to detect IPTC edited by other tools and reconcile it with XMP *(verify)*; a fresh digest over mixed-side metadata would hide that.
+- **Q-JPEG-1**: Merge cell: 8×8 block or MCU? **Decided:** MCU by default; finer merges only with opt-in re-encoding. **Why:** mixing luma and chroma blocks from different sides invents colors in subsampled images.
+- **Q-JPEG-2**: Merge default when quant tables differ? **Decided:** refuse with `encoding-mismatch`; lossy merge only with `--jpeg-reencode`. **Why:** silent generational loss violates the no-best-effort rule.
+- **Q-JPEG-3**: Guard band unit for DCT mode? **Decided:** 0 MCUs, with `--guard=N` for a larger band; touching edits warn `adjacent-edits` (D-10). **Why (original 1-MCU proposal):** consistent with raster default; MCUs are coarse already but anti-aliased edits still couple across MCU borders.
+- **Q-JPEG-4**: Should tolerance be on by default for JPEG given re-encode noise? **Decided:** no, diff detects re-encoding and recommends `--tolerance`. **Why:** SPEC says tolerance is opt-in and recorded. The detection is not implemented yet (#73).
+- **Q-JPEG-5**: Regenerate Exif/JFIF thumbnails after pixel merges? **Decided:** MVP marks `derived-stale`; v2 regenerates with ours' thumbnail size and quality. **Why:** stale thumbnails are harmless for most viewers; regeneration needs pixel decode + encode.
+- **Q-JPEG-6**: Write our own Exif writer or depend on exiv2? **Decided:** own, shared with TIFF. **Why:** exiv2 is GPL-2.0-or-later and libexif is LGPL; both conflict with a static permissive binary.
+- **Q-JPEG-7**: Preserve ours' custom progressive scan script? **Decided:** yes, parse it from ours' SOS headers and pass it as `scan_info`; fall back to `jpeg_simple_progression` with `scan-script-changed` only if libjpeg-turbo rejects it. **Why:** SPEC §12.2 re-encodes with parameters inferred from the original, and reproducing the script and tables keeps unchanged scan bytes stable.
+- **Q-JPEG-8**: Treat Exif orientation change as a pixel dependency? **Decided:** no. **Why:** pixels are edited in stored coordinates; orientation only affects display.
+- **Q-JPEG-9**: Recompute the Photoshop IPTC digest (IRB 0x0425) after merging IPTC (0x0404)? **Decided:** recompute only when the digest matched on the input the IPTC came from and the merged IPTC and XMP come from the same side; otherwise copy the input's value. **Why:** Photoshop uses a digest mismatch to detect IPTC edited by other tools and reconcile it with XMP *(verify)*; a fresh digest over mixed-side metadata would hide that. D-50 overrides this until the crypto feature ships (#21): v1 keeps the IRB as one opaque unit and copies the digest.

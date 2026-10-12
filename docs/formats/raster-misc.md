@@ -1,6 +1,8 @@
 # Miscellaneous Raster Formats — Implementation Document
 
-**Tier:** T2 (TIFF, GIF, WebP, BMP, TGA, QOI) · **Modules:** `semantic-splinter-tiff`, `-bmp`, `-tga`, `-gif`, `-webp`, `-qoi` · **vcpkg features:** same names · **Depends on modules:** `semantic-splinter-raster` (helper, png.md §3.4); `xml` for XMP (v2) · **Status:** v1 (MVP + v1.1 WebP) done in step 10 (#12): diff, merge, dump, inspect for all six formats; no patch payloads yet. Details and what is missing: §12.1
+**Tier:** T2 (TIFF, GIF, WebP, BMP, TGA, QOI) · **Modules:** `semantic-splinter-tiff`, `-bmp`, `-tga`, `-gif`, `-webp`, `-qoi` · **vcpkg features:** same names · **Depends on modules:** `semantic-splinter-raster` (helper, png.md §3.4); `xml` for XMP (v2) · **Status:** v1 (MVP + v1.1 WebP) done in step 10 (#12): diff, merge, dump, inspect for all six formats. Details: §12.1. Not yet: patch payloads (`caps.patch` is off),
+`@@ ADDRESS` hunk headers and `--annotate` (#102), TIFF lossy tile merge, float/CMYK samples and `--layout=compact`
+(#83), Exif/XMP keyed merge, the GIF 256-colour conflict and the cross-input BMP alpha rule (#84), fuzz targets (#16).
 **Extensions / magic:**
 
 | Format | Extensions | Magic |
@@ -135,7 +137,8 @@ Common: compression method, predictor, strip/tile layout, byte order, row order 
 RLE on/off, interlace, palette order in RGBA mode, chunk order where the format assigns no meaning.
 Never normalized: stored sample values and type, alpha mode, palettes in indexed mode, metadata values,
 frame timing/disposal. TIFF `Photometric=MinIsWhite` is **not** inverted (stored values are compared);
-visuals invert for display. TIFF `Software`/`DateTime` tags are volatile (SPEC §12.1): hidden by `--ignore=volatile` (the Git-mode default), merged by the volatile rule, still listed by `--ignore-tags=0x0131,0x0132` for explicit control.
+visuals invert for display. TIFF `Software`/`DateTime` tags are volatile (SPEC §12.1): hidden by `--ignore=volatile` (the Git-mode default; not implemented yet, #29), merged by the volatile rule, still
+listed by `--tiff-ignore-tags=0x0131,0x0132` (diff) for explicit control.
 
 ## 5. Diff
 
@@ -156,7 +159,8 @@ Per format, after metadata KeyedMerge (SPEC §5.1):
 - **TIFF (lossy tiles: JPEG compression 7, WebP, LERC with MaxZError > 0)**: merge at **tile granularity**
   only: cells are whole tiles (compared by decoded pixels, copied by compressed bytes). A tile edited on both
   sides is a conflict. `JPEGTables` must be identical across sides, else conflict `encoding-mismatch`.
-  `--reencode` opt-in decodes and merges in pixel space with warning `lossy-reencode`.
+  `--reencode` opt-in decodes and merges in pixel space with warning `lossy-reencode`. Not implemented yet (#83):
+  such pages are opaque units merged whole, and `--reencode` is a WebP option only.
 - **BMP, TGA, QOI**: GridMerge, full re-encode with the output encoding (always lossless). Same
   representability and promotion rules as PNG §7.3 (bpp, palette size, alpha presence).
 - **GIF**: indexed mode when tables match, else RGBA mode with re-palettization only if the merged frame
@@ -183,7 +187,7 @@ before/after as OpaqueLeaf payloads.
   our own LZW, PackBits and zlib encoders. Unknown tags are re-emitted with their original type and bytes. IFD
   order and page order follow the merge. Under `--layout=stable` (default) ours' file is kept whole: unchanged
   strips, tiles and opaque blobs keep their absolute offsets and changed IFDs and strips are appended (§7.1);
-  `--layout=compact` relays out the whole file (later). Classic TIFF is promoted to BigTIFF when > 4 GiB, with
+  `--layout=compact` relays out the whole file (later, #83; today the option is accepted and ignored). Classic TIFF is promoted to BigTIFF when > 4 GiB, with
   warning (later).
 - **GIF**: own writer (LZW encoder with deterministic code-size and clear-code policy, Q-RAST-4). Unchanged frames
   re-emit their original table and sub-blocks.
@@ -295,12 +299,12 @@ counts vs `--max-memory`, LZW expansion bound.
 
 ## 12. Phases
 
-| Phase | Scope | Effort |
-|---|---|---|
-| MVP | BMP, TGA, QOI (diff + merge), GIF still and animated (index mode), TIFF single-page lossless | M |
-| v1.1 | WebP all variants, TIFF multipage, GeoTIFF keys, TIFF lossy tile-granularity merge | M |
-| v2 | Exif/XMP keyed merges, COG overviews regeneration | M |
-| Later | Image sequences diff | L |
+| Phase | Scope | Effort | State |
+|---|---|---|---|
+| MVP | BMP, TGA, QOI (diff + merge), GIF still and animated (index mode), TIFF single-page lossless | M | done |
+| v1.1 | WebP all variants, TIFF multipage, GeoTIFF keys, TIFF lossy tile-granularity merge | M | partly done: missing TIFF lossy tile merge (#83) |
+| v2 | Exif/XMP keyed merges, COG overviews regeneration | M | not started (#84) |
+| Later | Image sequences diff | L | not started |
 
 ### 12.1 Implementation status (Phase 7, step 10)
 
@@ -345,17 +349,18 @@ Done:
 Not yet (deferred, with follow-ups): TIFF lossy tile-granularity merge (v1.1 row: JPEG-compressed pages are opaque
 units, merged whole, because the light libtiff build has no JPEG codec); float/CMYK TIFF in the canonical model
 (the raster helper is RGBA only, Q-RAST-1); `--layout=compact`, in-place strip rewrite and BigTIFF promotion at
-4 GiB; Exif and XMP keyed merges (v2); the GIF/WebP composited-canvas report; the cross-input Q-RAST-8 decision
-(each BMP decides alpha on its own); a GIF merge past 256 colors is refused with an error, not reported as a
-conflict; the TGA scan-line table; patch payloads (`SPPX`); fuzz targets and the CI cross-checks of §8.
+4 GiB (all #83); Exif and XMP keyed merges (v2, #84); the GIF/WebP composited-canvas report; the cross-input
+Q-RAST-8 decision (each BMP decides alpha on its own, #84); a GIF merge past 256 colors is refused as unsupported
+(exit 2, or 3 with `--exit-codes=extended`), not reported as a conflict (#84); the TGA scan-line table; patch
+payloads (`SPPX`); line addresses in the dump (#102); fuzz targets (#16) and the CI cross-checks of §8.
 
 ## 13. Open questions
 
-- **Q-RAST-1**: One shared canonical type or per-format canonical? **Provisional:** shared `Raster` with stored sample type (PNG keeps its RGBA16 view on top). **Why:** float/32-bit TIFF cannot be squeezed into RGBA16 without loss.
-- **Q-RAST-3**: What to do with TIFF Photoshop layer data (tag 37724) after a pixel merge? **Provisional:** drop it with `layers-dropped`. **Why:** keeping it makes Photoshop silently show the pre-merge layers.
-- **Q-RAST-4**: Own GIF LZW writer or giflib? **Provisional:** own writer, giflib for decode. **Why:** deterministic, byte-stable output independent of giflib version, about 250 lines.
-- **Q-RAST-5**: WebP lossless re-encode settings? **Provisional:** `method=6, quality=100, exact=1`, fixed. **Why:** best compression and deterministic; speed is secondary for merges.
-- **Q-RAST-6**: Lossy still WebP with both sides changed: conflict or re-encode? **Provisional:** conflict `encoding-mismatch`, `--reencode` to override. **Why:** VP8 has no lossless splice unit.
-- **Q-RAST-7**: Allow TIFF re-layout (new offsets) when only metadata changed? **Provisional:** no under `--layout=stable` (default): append the rewritten IFD and keep strip data in place; full re-layout only with `--layout=compact`. **Why:** SPEC D-38, and private blobs with absolute offsets (MakerNote, 37724) break silently when data moves.
-- **Q-RAST-8**: BMP 32 bpp V3 alpha ambiguity rule? **Provisional:** alpha if declared by mask or any nonzero 4th byte in any input. **Why:** one decision for all three inputs keeps the canonical form stable.
-- **Q-RAST-9**: Treat wrong BMP `bfSize`/`biSizeImage` (and the RIFF size off-by-pad of old WebP writers) as invalid input per SPEC §12.3? **Provisional:** no, they are advisory: warn `framing-inconsistent` and continue without `--lenient`; the writer always emits correct values. **Why:** decoders ignore these fields and many real files get them wrong, so rejecting them would make common files unloadable.
+- **Q-RAST-1**: One shared canonical type or per-format canonical? **Decided:** shared `Raster` with stored sample type (PNG keeps its RGBA16 view on top). **Why:** float/32-bit TIFF cannot be squeezed into RGBA16 without loss. The code deviates for now: the shared `Raster` is RGBA8/16 only, and other sample types are opaque units (§12.1, #83).
+- **Q-RAST-3**: What to do with TIFF Photoshop layer data (tag 37724) after a pixel merge? **Decided:** drop it with `layers-dropped`. **Why:** keeping it makes Photoshop silently show the pre-merge layers.
+- **Q-RAST-4**: Own GIF LZW writer or giflib? **Decided:** own writer, giflib for decode. **Why:** deterministic, byte-stable output independent of giflib version, about 250 lines.
+- **Q-RAST-5**: WebP lossless re-encode settings? **Decided:** `method=6, quality=100, exact=1`, fixed. **Why:** best compression and deterministic; speed is secondary for merges.
+- **Q-RAST-6**: Lossy still WebP with both sides changed: conflict or re-encode? **Decided:** conflict `encoding-mismatch`, `--reencode` to override. **Why:** VP8 has no lossless splice unit.
+- **Q-RAST-7**: Allow TIFF re-layout (new offsets) when only metadata changed? **Decided:** no under `--layout=stable` (default): append the rewritten IFD and keep strip data in place; full re-layout only with `--layout=compact`. **Why:** SPEC D-38, and private blobs with absolute offsets (MakerNote, 37724) break silently when data moves. `--layout=compact` is not implemented yet (#83).
+- **Q-RAST-8**: BMP 32 bpp V3 alpha ambiguity rule? **Decided:** alpha if declared by mask or any nonzero 4th byte in any input. **Why:** one decision for all three inputs keeps the canonical form stable. The code deviates for now: each input decides on its own (#84).
+- **Q-RAST-9**: Treat wrong BMP `bfSize`/`biSizeImage` (and the RIFF size off-by-pad of old WebP writers) as invalid input per SPEC §12.3? **Decided:** no, they are advisory: warn `framing-inconsistent` and continue without `--lenient`; the writer always emits correct values. **Why:** decoders ignore these fields and many real files get them wrong, so rejecting them would make common files unloadable.

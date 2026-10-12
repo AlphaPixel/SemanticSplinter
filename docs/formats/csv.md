@@ -2,7 +2,7 @@
 
 **Tier:** T1 · **Module:** `semantic-splinter-csv` · **vcpkg feature:** `csv` · **Depends on modules:** `text` (core seqdiff, encoding detection)
 **Extensions / magic:** `.csv`, `.tsv`, `.tab`, `.psv`. No magic; content probe sniffs the dialect on the first 64 KiB and returns confidence 70 when at least 5 records have a consistent field count ≥ 2 under one dialect, 40 for 2 to 4 records. Extension alone gives 60.
-**Status (v1 = MVP, #10):** own tokenizer (RFC 4180, doubled quotes, quoted newlines, CR/LF/CRLF, blank lines, ragged rows, `sep=` line), sniffer over `, \t ; |`, UTF-8 with or without BOM, UTF-16/32 through `src/core/text` (other bytes compared as is and reported `windows-1252`), header and key detection (§2, §3), keyed rows by KeyedMerge and unkeyed rows by SequenceMerge with a three-way merge per cell, column add/delete with `modify-delete` per column, span-splice writer (`src/formats/common/splice.hpp`) in ours' dialect with `dialect-mismatch`, dump, diff with numeric `delta`/`rel`, `--csv-key`, `--csv-header=auto|yes|no`. Deviations: the content probe needs *every* sampled record to share the field count (40 only for 3 or more fields) and rejects text-like samples (a column empty in every record, as in `x = 1;` lines, or most later fields starting with a space); a header is also detected when row 0 names a key column (`id`, `key`, …, `*_id`); column order is ours' (theirs' when only theirs reordered) instead of a SequenceMerge, and a column reorder is one `column-order` change; unkeyed merges pair rows only in equal-length runs; the writer reuses the splice helper rather than the Emitter, since CSV has no framing or integrity fields (§7.1); `--conflict=mark` falls back to ours (`mark-unsupported`). Unified diffs carry `@@ ADDRESS` hunk headers and `--annotate` metrics (#33). Not yet (v2 or later): rename detection, `--csv-order`, sorted-table re-sorting (Q-CSV-4), `--csv-mark`, `--csv-cell-lines`, `--delimiter`/`--quote`/`--encoding`/`--ignore-space`/`--numeric`/`--ignore-columns`/`--trim-empty-columns`, backslash escapes and `'` quotes, comment lines, `possible-rename`, `auto: filled-empty` reporting, the grid and HTML renderers, patch payloads, `.csv.gz`, and fuzz targets.
+**Status (v1 = MVP, #10):** own tokenizer (RFC 4180, doubled quotes, quoted newlines, CR/LF/CRLF, blank lines, ragged rows, `sep=` line), sniffer over `, \t ; |`, UTF-8 with or without BOM, UTF-16/32 through `src/core/text` (other bytes compared as is and reported `windows-1252`), header and key detection (§2, §3), keyed rows by KeyedMerge and unkeyed rows by SequenceMerge with a three-way merge per cell, column add/delete with `modify-delete` per column, span-splice writer (`src/formats/common/splice.hpp`) in ours' dialect with `dialect-mismatch`, dump, diff with numeric `delta`/`rel`, `--csv-key`, `--csv-header=auto|yes|no`. Deviations: the content probe needs *every* sampled record to share the field count (40 only for 3 or more fields) and rejects text-like samples (a column empty in every record, as in `x = 1;` lines, or most later fields starting with a space); a header is also detected when row 0 names a key column (`id`, `key`, …, `*_id`); column order is ours' (theirs' when only theirs reordered) instead of a SequenceMerge, and a column reorder is one `column-order` change; unkeyed merges pair rows only in equal-length runs; the writer reuses the splice helper rather than the Emitter, since CSV has no framing or integrity fields (§7.1); `--conflict=mark` falls back to ours (`mark-unsupported`). Unified diffs carry `@@ ADDRESS` hunk headers and `--annotate` metrics (#33; unkeyed row inserts get no annotation, #103). Not yet (v2 or later): rename detection (#71), `--csv-order` and sorted-table re-sorting (Q-CSV-4, #72), `--csv-mark` (#72), `--delimiter`/`--quote`/`--encoding`/`--ignore-space`/`--numeric`/`--ignore-columns`/`--trim-empty-columns`, backslash escapes and `'` quotes, comment lines, `possible-rename`, and `auto: filled-empty` reporting (all #72), `--csv-cell-lines`, `.splinter.toml` key rules, the grid and HTML renderers, patch payloads (`caps.patch` is false), and `.csv.gz` (#139), and fuzz targets (#16).
 
 ## 1. Why it matters
 
@@ -33,12 +33,12 @@ quotes doubled, quoted fields may contain delimiters and line breaks, optional h
 **Dialect sniffing** (similar to Python's `csv.Sniffer`, but deterministic):
 
 1. Encoding: BOM decides; else valid UTF-8 means UTF-8; else Windows-1252 (reported as an assumption).
-   `--encoding=` overrides. This logic is shared with text.md.
+   `--encoding=` overrides (not implemented yet, #72). This logic is shared with text.md.
 2. For each candidate delimiter in `, ; \t |` and quote `"`, tokenize the sample and score =
    (fraction of records with the modal field count) × log2(modal count), requiring modal count ≥ 2. Highest wins;
    ties prefer `,` then `\t` then `;` then `|`.
 3. Header detection: row 0 is a header if all its fields are non-empty, unique, and non-numeric, and at least one
-   column has a type in rows 1..N (numeric, boolean, date) that row 0 does not match. `--header` / `--no-header` override.
+   column has a type in rows 1..N (numeric, boolean, date) that row 0 does not match. `--csv-header=yes|no` overrides.
 4. Line ending: majority of record terminators; mixed is recorded per record.
 
 All three files of a merge must sniff to the same dialect, otherwise the dialect of ours is used for all and a
@@ -57,7 +57,8 @@ All three files of a merge must sniff to the same dialect, otherwise the dialect
 
 **Key column selection** (stops at first hit):
 
-1. `--key=COL[,COL...]` by name or 1-based index; or a `.splinter.toml` rule per path glob.
+1. `--csv-key=COL[,COL...]` by name or 1-based index; or a `.splinter.toml` rule per path glob (not implemented
+   yet).
 2. Auto: first column whose header matches `id`, `key`, `uuid`, `guid`, `name`, `code`, `string_id`, `msgid`
    (case-insensitive, also `*_id` as the first column), and whose values are non-empty and unique in base, ours,
    and theirs.
@@ -68,7 +69,8 @@ All three files of a merge must sniff to the same dialect, otherwise the dialect
 Composite keys are written `id,lang:sword_01,de` in addresses. Key values are percent-encoded per SPEC §3.1.
 
 **Column identity:** header name. Rename detection: a column removed and a column added on the same side whose
-cell values match on ≥ 90 % of keyed rows is a `move` with `kind: "column-rename"` (confidence = match ratio).
+cell values match on ≥ 90 % of keyed rows is a `move` with `kind: "column-rename"` (confidence = match ratio;
+not implemented yet, #71).
 No header: columns are identified by position, and column insert/delete detection uses seqdiff over column
 content hashes.
 
@@ -89,9 +91,10 @@ case, numeric spelling (`1.0` vs `1`, `1,5` vs `1.5`), empty vs missing trailing
 `kind: "ragged"`), row order for keyed tables (order change reported only with `--csv-order`, default off
 for keyed and inherently on for unkeyed).
 
-Options: `--key`, `--header/--no-header`, `--delimiter=C`, `--quote=C`, `--encoding=E`, `--ignore-space`,
+Options: `--csv-key`, `--csv-header=auto|yes|no`, `--delimiter=C`, `--quote=C`, `--encoding=E`, `--ignore-space`,
 `--numeric` (compare numbers by value, `1.0` equals `1`), `--ignore-columns=a,b` (volatile columns like
-`last_modified`), `--csv-order`.
+`last_modified`), `--csv-order`. Only `--csv-key` and `--csv-header` are implemented; the rest are not
+implemented yet (#72).
 
 ## 5. Diff
 
@@ -120,7 +123,8 @@ Unkeyed tables dump one line per row as canonical CSV (all fields quoted only if
 with nothing, so `splinter -u` over dumps looks like a normal CSV diff but with stable quoting.
 
 **Renderers:** `-y` side-by-side shows a cell grid with changed cells highlighted (ANSI color with `--color`).
-`--visual=html` (v2) writes a table with per-cell coloring.
+`--visual=html` (v2) writes a table with per-cell coloring. Neither is implemented yet (#139); `-y` shows the
+dump lines side by side.
 
 **Cost:** O(cells) parse and hash. Tables up to 10^7 cells within default limits; key maps use a sorted
 vector of `(key hash, row index)` for memory compactness.
@@ -134,22 +138,24 @@ vector of `(key hash, row index)` for memory compactness.
 - Rows keyed: KeyedMerge on row key with recursion into cells, row order from ours with theirs-only rows inserted
   after their nearest preceding surviving key (SPEC §5.1 order rule), which keeps sorted tables sorted when both
   inputs were sorted. If base, ours, and theirs are all sorted by key, the output is re-sorted by the same comparator
-  (detected: lexicographic or numeric).
+  (detected: lexicographic or numeric; not implemented yet, #72).
 - Rows unkeyed: diff3 SequenceMerge over row hashes; a chunk where both sides changed rows that pair 1:1 by
   similarity recurses into cells, otherwise conflict over the row range.
 - Cells: OpaqueLeaf three-way. Multi-line cells (quoted with newlines, such as dialogue text) optionally merge by lines
-  (`--csv-cell-lines`).
+  (`--csv-cell-lines`, not implemented yet).
 - Key column edit on one side: that is a row identity change, treated as delete plus insert with a
-  `possible-rename` hint when the other cells are ≥ 80 % equal; if the other side edited that row: conflict `modify-delete`.
+  `possible-rename` hint (not implemented yet, #72) when the other cells are ≥ 80 % equal; if the other side edited that row: conflict `modify-delete`.
 - Localization tables: adding a language column on one side and adding rows on the other merges cleanly; new rows get
-  an empty cell in the new column (reported `auto: filled-empty`), never a value copied from anywhere.
+  an empty cell in the new column (reported `auto: filled-empty`, not yet, #72), never a value copied from anywhere.
 
 **`--conflict=mark`:** CSV has no comments in general. Mark mode writes ours' value in the cell and adds
 a trailing column `splinter_conflict` holding `x-<id>: theirs=<value>` on affected rows. This changes the schema, so it
 is opt-in via `--csv-mark=column`; plain `--conflict=mark` falls back to ours with a warning. `--csv-mark=text` writes
 Git-style line markers around whole conflicting rows (file still tokenizes as CSV but contains junk records).
+`--csv-mark` is not implemented yet (#72); `--conflict=mark` writes ours with a `mark-unsupported` warning.
 
 **Patch payload:** per touched cell, before/after as CSV-encoded field text; rows as full CSV records. Text, not binary.
+Not implemented yet (`caps.patch` is false; #139).
 
 ## 7. Serialization and preservation
 
@@ -209,9 +215,9 @@ max field 64 MiB, max records from `--max-memory`) that no candidate exposes. En
 
 ## 10. Hard cases and explicit non-goals
 
-- Tables whose first row is not a header but looks like one (all text): header detection may misfire; `--no-header` fixes,
+- Tables whose first row is not a header but looks like one (all text): header detection may misfire; `--csv-header=no` fixes,
   and the sniffer reports its decision.
-- Duplicate keys in base (data errors): auto key detection rejects the column; explicit `--key` with duplicates fails with
+- Duplicate keys in base (data errors): auto key detection rejects the column; explicit `--csv-key` with duplicates fails with
   `invalid_input` listing the first duplicates.
 - Numbers formatted by locale (`1.234,5`), dates in mixed formats: compared as strings unless `--numeric`.
 - Excel artifacts: trailing empty columns (`a,b,,,`) that vary between saves; `--trim-empty-columns` treats all-empty
@@ -227,21 +233,23 @@ max field 64 MiB, max records from `--max-memory`) that no candidate exposes. En
   properties: disjoint edits merge to sequential application, idempotence, `merge(b,o,o)==o`, byte-exact round trip.
 - **Golden:** Excel-saved CSV (CRLF, BOM, `;`), UTF-16 TSV, multi-line quoted dialogue cells, localization table with new
   language column vs new rows, keyed row reorder plus edit, key edit conflict, ragged rows.
-- **Compat:** text renderer output for unkeyed tables with `--csv=off` equals GNU diff output on the same file (falls back to text module).
+- **Compat:** text renderer output for unkeyed tables with `--format=text` equals GNU diff output on the same file (falls back to text module).
 - **Fuzz:** `fuzz_csv_tokenize` (round trip identity) and `fuzz_csv_sniff` (no crash, deterministic result).
 
 ## 12. Phases
 
 - **MVP (M):** tokenizer, sniffer, keyed/unkeyed row merge, cell merge, column add/delete, span-preserving writer, dump.
+  *Done* (#10), with the deviations in the status line.
 - **v2 (S–M):** column rename detection, sorted-table reordering, side-by-side grid renderer, HTML visual, `--csv-mark=column`.
-- **Later (S):** CSVW/frictionless schema hints for keys and types, JSON Lines interop.
+  *Not started* (#71, #72; renderers #139).
+- **Later (S):** CSVW/frictionless schema hints for keys and types, JSON Lines interop. *Not started.*
 
 ## 13. Open questions
 
-- **Q-CSV-1:** Auto-detect key column or require `--key`? **Provisional:** auto-detect with strict uniqueness on all three sides, report choice, `--key` overrides. **Why:** most game and localization tables lead with a unique ID column.
-- **Q-CSV-2:** Is column insertion order significant when both sides add columns at the same place? **Provisional:** no, keep both ours-first. **Why:** consumers address columns by header name.
-- **Q-CSV-3:** What does `--conflict=mark` do for CSV? **Provisional:** fall back to ours plus sidecar; `--csv-mark=column` adds a conflict column on request. **Why:** markers break consumers; an extra column is visible but changes the schema.
-- **Q-CSV-4:** Keep a sorted table sorted on merge? **Provisional:** yes, when base, ours, and theirs are all sorted by the same key comparator. **Why:** sorted files are a common convention and the order rule alone can break it.
-- **Q-CSV-5:** Detect totals/derived rows? **Provisional:** no in v1. **Why:** no reliable signal in plain CSV; document the hazard.
-- **Q-CSV-6:** Dialect mismatch between inputs (Excel resave changes `,` to `;`)? **Provisional:** parse each with its own sniffed dialect, compare decoded values, write in ours' dialect, warn. **Why:** a resave is not a semantic change.
-- **Q-CSV-7:** Should a numeric-sequential first column (`1..N`) be a key? **Provisional:** no, treat as position. **Why:** row-number columns renumber on insertion and would turn inserts into mass edits.
+- **Q-CSV-1:** Auto-detect key column or require `--key`? **Decided:** auto-detect with strict uniqueness on all three sides, report choice, `--key` overrides. **Why:** most game and localization tables lead with a unique ID column.
+- **Q-CSV-2:** Is column insertion order significant when both sides add columns at the same place? **Decided:** no, keep both ours-first. **Why:** consumers address columns by header name.
+- **Q-CSV-3:** What does `--conflict=mark` do for CSV? **Decided:** fall back to ours plus sidecar; `--csv-mark=column` adds a conflict column on request. The fallback is implemented (`mark-unsupported`); `--csv-mark` is not yet (#72). **Why:** markers break consumers; an extra column is visible but changes the schema.
+- **Q-CSV-4:** Keep a sorted table sorted on merge? **Decided:** yes, when base, ours, and theirs are all sorted by the same key comparator. Not implemented yet (#72): the code keeps ours' row order with theirs-only rows after their nearest preceding key. **Why:** sorted files are a common convention and the order rule alone can break it.
+- **Q-CSV-5:** Detect totals/derived rows? **Decided:** no in v1. **Why:** no reliable signal in plain CSV; document the hazard.
+- **Q-CSV-6:** Dialect mismatch between inputs (Excel resave changes `,` to `;`)? **Decided:** parse each with its own sniffed dialect, compare decoded values, write in ours' dialect, warn. **Why:** a resave is not a semantic change.
+- **Q-CSV-7:** Should a numeric-sequential first column (`1..N`) be a key? **Decided:** no, treat as position. **Why:** row-number columns renumber on insertion and would turn inserts into mass edits.

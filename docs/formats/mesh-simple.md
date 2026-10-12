@@ -20,10 +20,13 @@ plus rewritten face lines); EnvelopeMap for binary STL and PLY. Deviations: whol
 (the core's non-differing kind) instead of `storage`, which is kept for conversions between formats; STL normals are
 not compared at all in the diff (always derived, never `kind: derived`); OBJ objects are compared whole (no separate
 `/usemtl` unit); PLY merges whole-file (the MVP row lists only its diff); Hausdorff samples are a fixed R2 sequence, not
-seeded by the content hash (equally reproducible); no OBJ EnvelopeMap yet (face-index digits would be framing).
+seeded by the content hash (equally reproducible). The module declares no options of its own (`--tolerance` is
+shared), has no patch payloads (`caps.patch` false) and no visual (`caps.visual` false), and its dump has no line
+addresses, so `@@ ADDRESS` and `--annotate` do not apply.
 Not yet (v2 or later): vertex GridMerge for OBJ/PLY, PLY element KeyedMerge and comment SequenceMerge, statement merge
-in shared-pool OBJ, `--dump-data`, `--max-geom-tris` (fixed at 5M), SVG/PLY heatmap visuals, patch payloads, `--align`,
-the tinyobjloader/happly CI oracles, and fuzz targets.
+in shared-pool OBJ (#81); the OBJ EnvelopeMap (face-index digits would be framing), `--dump-data`, `--max-geom-tris`
+(fixed at 5M), SVG/PLY heatmap visuals, faster Hausdorff, the tinyobjloader/happly CI oracles (#82); fuzz targets
+(#16); patch payloads and `--align` (#124).
 
 This document also specifies **`geomcore`** (`src/formats/geomcore/`), a helper static library with no format registration, built with `mesh` and kept free of mesh-format types so other geometry formats can reuse it.
 
@@ -204,17 +207,18 @@ d, index shifting round-trip); fuzz OBJ/PLY/STL parsers (counts bounded by file 
 ## 12. Phases
 
 - **MVP (M):** parsers, `geomcore` metrics, dump, OBJ object-level merge (object-local), MTL merge, STL/PLY diff.
-- **v2 (S–M):** vertex GridMerge for OBJ/PLY, SVG/PLY heatmap visuals.
-- **Later:** optional rigid alignment before diff (`--align`, heuristic).
+  **Done** (#15); OBJ EnvelopeMap and `--dump-data` missing (#82).
+- **v2 (S–M):** vertex GridMerge for OBJ/PLY, SVG/PLY heatmap visuals. **Not started** (#81, #82).
+- **Later:** optional rigid alignment before diff (`--align`, heuristic). **Not started** (#124).
 
 ## 13. Open questions
 
-- **Q-MESH-1:** Merge OBJ objects when the pool is shared? **Provisional:** no, whole-geometry OpaqueLeaf. **Why:** index
+- **Q-MESH-1:** Merge OBJ objects when the pool is shared? **Decided:** no, whole-geometry OpaqueLeaf. **Why:** index
   coupling across objects makes independent edits unprovable.
-- **Q-MESH-2:** Default sample count and exact threshold for Hausdorff? **Provisional:** exact ≤ 200k triangles, else
+- **Q-MESH-2:** Default sample count and exact threshold for Hausdorff? **Decided:** exact ≤ 200k triangles, else
   16k deterministic samples plus all vertices. **Why:** bounded runtime with reproducible reports.
-- **Q-MESH-3:** Where does `geomcore` live? **Provisional:** `src/formats/geomcore/`, a helper static library without a
+- **Q-MESH-3:** Where does `geomcore` live? **Decided:** `src/formats/geomcore/`, a helper static library without a
   format registration, built with `mesh`. **Why:** geometry metrics stay separate from file parsing, so a future
   geometry format reuses them without depending on the mesh module.
-- **Q-MESH-4:** Treat STL facet normals as derived? **Provisional:** yes. **Why:** most tools recompute them and
+- **Q-MESH-4:** Treat STL facet normals as derived? **Decided:** yes. **Why:** most tools recompute them and
   exporters disagree on rounding.

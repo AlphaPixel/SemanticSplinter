@@ -595,7 +595,7 @@ Extended codes are never used in Git modes.
 | Max pixels per image | 2^30 | `--max-pixels` |
 | ZIP: max entries / max total uncompressed / max ratio | 65 536 / 4 GiB / 200:1 | `--max-zip-*` |
 | Container recursion depth | 8 | `--max-depth` |
-| XML: entity expansion | disabled (no DTD entities); external entities are never loaded | `--xml-internal-entities` allows *internal* general entities only, under expat's amplification limits. The SVG dialect has a default bounded exception for Illustrator exports (svg.md §10, Q-SVG-2) |
+| XML: entity expansion | disabled (no DTD entities); external entities are never loaded | `--xml-internal-entities` (not implemented yet, #119) will allow *internal* general entities only, under expat's amplification limits. The SVG dialect has a default bounded exception for Illustrator exports (svg.md §10, Q-SVG-2) |
 
 - Memory and ZIP-size budgets are per document: each input, each result (or patched target) has its own,
   shared by every recursion level inside it (D-47), and the diff or merge step has one more for its working
