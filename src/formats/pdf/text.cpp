@@ -201,11 +201,11 @@ public:
     std::string& line() { return line_; }
 
 private:
-    double num(std::size_t i) const {
+    double num(std::size_t i) { // not const: qpdf 11 getters are non-const (#143)
         return i < args_.size() && args_[i].isNumber() ? args_[i].getNumericValue() : 0;
     }
 
-    QPDFObjectHandle resource(const char* kind, std::size_t arg) const {
+    QPDFObjectHandle resource(const char* kind, std::size_t arg) {
         if (arg >= args_.size() || !args_[arg].isName() || !res_.isDictionary())
             return QPDFObjectHandle::newNull();
         auto group = res_.getKey(kind);

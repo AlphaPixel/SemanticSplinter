@@ -1480,24 +1480,25 @@ MergeResult PdfFormat::merge(const Document& base_d, const Document& ours_d, con
             });
         } else {
             const Annot& src = apage(*s, r.page).annots[*r.i[static_cast<std::size_t>(*s)]];
+            auto obj = src.obj; // a copy of the handle: qpdf 11's getters are non-const (#143)
             auto& imp = importer(*s);
             auto dict = QPDFObjectHandle::newDictionary();
-            for (auto& k : src.obj.getKeys())
+            for (auto& k : obj.getKeys())
                 if (k != "/P" && k != "/Popup" && k != "/IRT" && k != "/Parent" && (k != "/AP" || !has_c))
-                    dict.replaceKey(k, imp(src.obj.getKey(k)));
+                    dict.replaceKey(k, imp(obj.getKey(k)));
             dict.replaceKey("/P", page);
             if (has_c) { // modified: keep the carrier's object and popup; /AP is stale (pdf.md §6 step 3)
                 if (existing.getKey("/Popup").isIndirect())
                     dict.replaceKey("/Popup", existing.getKey("/Popup"));
                 dst->replaceObject(existing.getObjGen(), dict);
                 existing = dst->getObject(existing.getObjGen());
-                if (src.obj.hasKey("/AP"))
+                if (obj.hasKey("/AP"))
                     res.warnings.push_back(
                         {"derived-stale", r.at, "appearance stream removed; viewers regenerate it"});
             } else {
                 existing = dst->makeIndirectObject(dict);
                 list.push_back(existing);
-                auto popup = src.obj.getKey("/Popup");
+                auto popup = obj.getKey("/Popup");
                 if (popup.isDictionary()) {
                     auto pd = QPDFObjectHandle::newDictionary();
                     for (auto& k : popup.getKeys())

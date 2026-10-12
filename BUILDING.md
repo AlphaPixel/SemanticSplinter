@@ -3,7 +3,8 @@
 All third-party dependencies (zlib, zstd, xxHash, nlohmann-json, libpng, expat, qpdf, ...) come from
 **[vcpkg](https://vcpkg.io) in manifest mode**. `vcpkg.json` lists them, pinned to one vcpkg commit
 (`builtin-baseline`, D-52), and CMake finds them with `find_package(... CONFIG)` through vcpkg's toolchain file.
-System packages such as Debian's `libxxhash-dev` are not used; several ship no CMake config at all.
+On Linux you can instead build from distro packages ([section 5](#5-without-vcpkg-distro-packages)); vcpkg remains
+the tested and release configuration.
 
 So every build needs a bootstrapped vcpkg checkout and the environment variable `VCPKG_ROOT` pointing at it.
 The CMake presets pass `$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake` as the toolchain, and the first configure
@@ -92,3 +93,23 @@ you don't need to skip its dependencies, e.g. `-DSEMSPLINTER_FORMAT_PDF=OFF` (qp
 | `CMake was unable to find a build program corresponding to "Ninja Multi-Config"` | Install Ninja (step 1). |
 | `building <port>:x64-linux failed` | Look at the log path vcpkg prints. Usually a missing tool from step 1 (`pkg-config`, `zip`, ...). |
 | `clang++: not found` with `linux-clang` | Install `clang`, or pass the versioned compiler as above. |
+
+## 5. Without vcpkg: distro packages
+
+`-DSEMSPLINTER_SYSTEM_DEPS=ON` skips vcpkg and uses the installed `-dev` packages. Four of them ship no usable
+CMake config (xxHash, zstd, liblzma, SQLite); `cmake/SystemDeps.cmake` finds those through pkg-config. Tested on
+Ubuntu 24.04 with GCC 13 and Clang 19, all formats on.
+
+Ubuntu 24.04:
+
+```bash
+sudo apt-get install -y build-essential cmake ninja-build pkg-config     nlohmann-json3-dev libxxhash-dev libzstd-dev zlib1g-dev libpng-dev libexpat1-dev libjpeg-turbo8-dev     libsqlite3-dev libqpdf-dev libgif-dev libtiff-dev libwebp-dev liblzma-dev libbz2-dev catch2
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DSEMSPLINTER_SYSTEM_DEPS=ON
+cmake --build build && ctest --test-dir build
+```
+
+Distro versions differ from the pinned ports (for example libwebp 1.3.2 and qpdf 11.9 against 1.6.0 and 12.4.0).
+Diff and merge work the same, but a re-encoded stream (deflate, lossless WebP) can differ byte for byte from a
+vcpkg build, so don't compare outputs across the two. With libjpeg-turbo before 3.0 (Ubuntu 24.04 has 2.1.5),
+12-bit JPEGs diff and merge but get no pixel metrics or `--visual`. Report build failures on other distributions
+as issues.
