@@ -9,7 +9,9 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdint>
 #include <deque>
+#include <functional>
 #include <locale>
 #include <map>
 #include <optional>
@@ -992,6 +994,7 @@ struct Emitter {
     std::array<const Doc*, 3> docs;
     const std::vector<Conflict>& conflicts;
     mutable std::map<const Node*, bool> multi_cache; // side containers, asked once per inserted item
+    bool verbatim = false;                           // other sides' values keep their layout (patch payloads)
 
     bool side_multiline(const Doc& d, const Node& c) const {
         auto [it, fresh] = multi_cache.try_emplace(&c, false);
@@ -1019,7 +1022,7 @@ struct Emitter {
         const Doc& sd = doc(s);
         const auto text = sd.slice(n.begin, n.end);
         const bool has_nl = text.find('\n') != npos;
-        if (composite(n.kind) && !n.kids.empty()) {
+        if (composite(n.kind) && !n.kids.empty() && !verbatim) {
             const bool want = like                                                 ? *like
                               : n.parent && side_multiline(sd, *n.parent) != multi ? multi
                                                                                    : has_nl;
@@ -1177,6 +1180,145 @@ struct Emitter {
     }
 };
 
+// ---- Patch payloads (json.md §6) ----
+// A unit's payload is its value's source text, the lines after the first re-indented to column 0.
+
+// An array index segment's value; SIZE_MAX for any other segment.
+std::size_t index_of(const std::string& seg) {
+    if (seg.empty() || seg.size() > 18 || !std::all_of(seg.begin(), seg.end(), digit))
+        return SIZE_MAX;
+    return std::stoull(seg);
+}
+
+// The child at an address segment: a member name, an array index, or an element identity ("id:42").
+const Node* child(const Node& c, const std::string& seg) {
+    if (c.kind == Kind::object)
+        return member(c, seg);
+    if (c.kind != Kind::array)
+        return nullptr;
+    if (const auto i = index_of(seg); i != SIZE_MAX)
+        return i < c.kids.size() ? c.kids[i] : nullptr;
+    const auto colon = seg.find(':');
+    if (colon == npos)
+        return nullptr;
+    const std::string key = seg.substr(0, colon);
+    for (auto* e : c.kids) {
+        const Node* v = e->kind == Kind::object ? member(*e, key) : nullptr;
+        if (v && !composite(v->kind) && identity(*e, key) == seg)
+            return e;
+    }
+    return nullptr;
+}
+
+// The node at the first `n` segments; nullptr when there is none.
+const Node* find(const Doc& d, const std::vector<std::string>& segs, std::size_t n) {
+    const Node* x = &d.root();
+    for (std::size_t k = 0; k < n && x; ++k)
+        x = child(*x, segs[k]);
+    return x;
+}
+
+// `t` with the units set, as text: the merge writer places each value like a change from theirs, kept in its
+// own layout. New array elements go at their index (the patched side's), identified ones and members last.
+std::string implant_units(const Doc& t, std::span<const UnitValue> units) {
+    struct Edit {
+        const Node* at = nullptr;     // the existing unit
+        const Node* parent = nullptr; // else its container
+        std::string seg;
+        bool set = false;
+    };
+    std::vector<Edit> edits;
+    std::string scratch = "[";
+    std::size_t values = 0;
+    for (auto& u : units) {
+        const auto segs = pointer_split(u.at.path);
+        const Node* parent = segs.empty() ? nullptr : find(t, segs, segs.size() - 1);
+        // An insert at an array index is a new element, wherever that index points now.
+        const bool fresh =
+            u.op == Op::insert && parent && parent->kind == Kind::array && index_of(segs.back()) != SIZE_MAX;
+        Edit e{fresh ? nullptr : find(t, segs, segs.size()), nullptr, {}, u.value != nullptr};
+        if (!e.at) {
+            // ponytail: a unit whose container the target lacks is dropped, not reported as a failed hunk.
+            if (!u.value || !parent || !composite(parent->kind))
+                continue;
+            e.parent = parent;
+            e.seg = segs.back();
+        }
+        if (u.value) {
+            const std::string v(reinterpret_cast<const char*>(u.value->data()), u.value->size());
+            scratch += values++ ? ",\n" : "\n";
+            scratch +=
+                e.parent && e.parent->kind == Kind::object ? "{" + canon_string(e.seg) + ": " + v + "}" : v;
+        }
+        edits.push_back(std::move(e));
+    }
+    scratch += "\n]";
+    std::unique_ptr<Doc> sd;
+    try {
+        auto* p = reinterpret_cast<const std::byte*>(scratch.data());
+        sd = parse(ByteSource::from_memory({p, p + scratch.size()}, "payload.json"), nullptr);
+    } catch (const Error& e) {
+        throw Error(ErrorCategory::invalid_input,
+                    std::string("patch: a JSON payload does not parse: ") + e.what());
+    }
+    if (sd->root().kids.size() != values)
+        throw Error(ErrorCategory::invalid_input, "patch: a JSON payload holds more than one value");
+
+    std::map<const Node*, const Node*> updates;
+    std::set<const Node*> erased, touched;
+    std::map<const Node*, std::vector<std::pair<std::string, const Node*>>> inserts;
+    std::size_t k = 0;
+    for (auto& e : edits) {
+        const Node* v = e.set ? sd->root().kids[k++] : nullptr;
+        if (v && e.parent && e.parent->kind == Kind::object)
+            v = v->kids[0];
+        if (e.at && v)
+            updates[e.at] = v;
+        else if (e.at)
+            erased.insert(e.at);
+        else
+            inserts[e.parent].emplace_back(e.seg, v);
+        for (const Node* p = e.at ? e.at->parent : e.parent; p; p = p->parent)
+            touched.insert(p);
+    }
+    std::function<std::shared_ptr<Plan>(const Node&)> plan = [&](const Node& c) {
+        auto p = std::make_shared<Plan>();
+        for (auto* m : members(c)) {
+            if (erased.count(m))
+                continue;
+            Item it{Side::ours, m, m, nullptr};
+            if (auto f = updates.find(m); f != updates.end())
+                it = {Side::theirs, f->second, m, nullptr};
+            else if (touched.count(m))
+                it.plan = plan(*m);
+            p->slots.push_back({{it}, {}, {}});
+        }
+        auto f = inserts.find(&c);
+        if (f == inserts.end())
+            return p;
+        auto index = [&](const std::string& seg) { return c.kind == Kind::array ? index_of(seg) : SIZE_MAX; };
+        auto& list = f->second;
+        std::stable_sort(list.begin(), list.end(),
+                         [&](auto& x, auto& y) { return index(x.first) < index(y.first); });
+        for (auto& [seg, v] : list) {
+            const auto at = std::min<std::size_t>(index(seg), p->slots.size());
+            p->slots.insert(p->slots.begin() + static_cast<std::ptrdiff_t>(at),
+                            Slot{{Item{Side::theirs, v, nullptr, nullptr}}, {}, {}});
+        }
+        return p;
+    };
+    const Node& r = t.root();
+    Slot root{{Item{Side::ours, &r, &r, nullptr}}, {}, {}};
+    if (auto f = updates.find(&r); f != updates.end())
+        root.items[0] = {Side::theirs, f->second, &r, nullptr};
+    else if (erased.count(&r))
+        throw Error(ErrorCategory::invalid_input, "patch: the root value cannot be removed");
+    else if (touched.count(&r))
+        root.items[0].plan = plan(r);
+    const std::vector<Conflict> none;
+    return Emitter{{&t, &t, sd.get()}, none, {}, true}.emit(root);
+}
+
 // ---- Dump (json.md §5) ----
 
 void dump_node(const Node& n, std::string& path, std::ostream& os, std::vector<Address>* at) {
@@ -1238,7 +1380,7 @@ public:
         static const FormatInfo i{"json",
                                   "JSON and JSONC (order- and format-preserving)",
                                   {".json", ".jsonc", ".geojson", ".webmanifest", ".code-workspace"},
-                                  {true, true, false, true, false},
+                                  {true, true, true, true, false},
                                   {}};
         return i;
     }
@@ -1345,6 +1487,26 @@ public:
     void dump(const Document& d, std::ostream& os, const DumpOptions& o) const override {
         std::string path;
         dump_node(cast(d).root(), path, os, o.line_at);
+    }
+
+    std::optional<std::vector<std::byte>> payload(const Document& d, const Address& at) const override {
+        const Doc& j = cast(d);
+        const auto segs = pointer_split(at.path);
+        const Node* n = find(j, segs, segs.size());
+        if (!n)
+            return std::nullopt;
+        const auto s = reindent(j.slice(n->begin, n->end), line_indent(j.s, n->start()), "", "\n");
+        auto b = as_bytes(s);
+        return std::vector<std::byte>(b.begin(), b.end());
+    }
+
+    std::unique_ptr<Document> implant(const Document& t, std::span<const UnitValue> units,
+                                      const LoadOptions& o) const override {
+        const Doc& d = cast(t);
+        const std::string text = implant_units(d, units);
+        auto* p = reinterpret_cast<const std::byte*>(text.data());
+        Limits budget = o.ctx.budget.fresh(); // a new document (#51)
+        return parse(ByteSource::from_memory({p, p + text.size()}, d.src.name()), &budget);
     }
 
     nlohmann::ordered_json inspect(const Document& d) const override {

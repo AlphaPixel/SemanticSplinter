@@ -165,6 +165,8 @@ The container has nothing to mark; it delegates to members (text members get mar
 
 Per member: add (full raw member: local header fields + compressed bytes, so it can be raw-copied on apply), remove (path + content hash), rename (from, to, hash), metadata (field before/after), content (nested payload of the member format). Base verification uses the member's content hash.
 
+**Implemented (#44):** a member's payload is an archive of the same format (bare: no prefix, comment, or outer compression) holding that member alone, raw-copied on apply; a `/meta/` unit's is the same with empty content, its fields taken from that record; `/content` is the member's bytes; a nested address is the member format's own payload when that format has patches, else the member's bytes. A rename is two units, `erase` at the old path and `move` at the new one (the diff writes the extra unit for any move with a `from` elsewhere). Base verification is the envelope's whole-file hash, then identity application as a three-way merge (SPEC §6). Added members go last; the ZIP comment is a unit of its own; `/archive/prefix` and `/archive/apk-signing-block` changes have no payload (`--binary` exits 3).
+
 ## 7. Serialization and preservation
 
 ### 7.1 Envelope fields
@@ -326,8 +328,7 @@ KeyedMerge with renames by content hash, per-field metadata merge (`newest-mtime
 registry with nested changes and conflicts under `/entries/<path>/content`, nested conflict ids accepted by
 `--resolve`, `zip-times=ignore|strict`, dump with member dumps.
 
-Not yet: container patch payloads (§6.5; no phase row puts them in v1, so `--binary` on archives exits 3), the
-EnvelopeMap (churn line, `inspect --layout`), `--zip-strict`, `--zip-strict-order`, `--max-dump` (fixed at 1 MiB),
+Patch payloads (§6.5) came with #44. Not yet: the EnvelopeMap (churn line, `inspect --layout`), `--zip-strict`, `--zip-strict-order`, `--max-dump` (fixed at 1 MiB),
 `--validate=full` and `--integrity=strict` (untouched members' CRCs stay `not-checked`), `--strict-limits`,
 `--visual`, and `--layout` (the order is always ours'). Member times are DOS times; 0x5455/0x000A extras follow
 the content side. A value that needs ZIP64 in a record that had none exits 3. The zstd and xz re-encode levels

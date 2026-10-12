@@ -183,6 +183,10 @@ struct ZipDoc final : Archive {
         return hashes[i] = h.digest();
     }
 
+    std::vector<std::byte> write(const std::array<const Archive*, 3>& docs,
+                                 const std::vector<OutEntry>& entries, bool bare, Limits&,
+                                 std::vector<Warning>&) const override;
+
     bool same(std::size_t i, const Archive& other, std::size_t j, Limits& l) const override {
         auto& o = static_cast<const ZipDoc&>(other);
         const Rec &a = recs[i], &b = o.recs[j];
@@ -669,6 +673,22 @@ struct Writer {
     }
 };
 
+std::vector<std::byte> ZipDoc::write(const std::array<const Archive*, 3>& docs,
+                                     const std::vector<OutEntry>& list, bool bare, Limits& l,
+                                     std::vector<Warning>& notes) const {
+    std::array<const ZipDoc*, 3> zd{};
+    for (std::size_t k = 0; k < 3; ++k)
+        zd[k] = static_cast<const ZipDoc*>(docs[k]);
+    Writer w{zd, *this, l, notes, bare || !shift ? 0 : prefix, {}, {}, 0};
+    if (!bare)
+        append(w.out, bytes(0, prefix));
+    for (auto& e : list)
+        w.entry(e);
+    w.finish(!bare && sigblock ? std::optional(bytes(*sigblock, cd_start - *sigblock)) : std::nullopt,
+             bare ? Bytes{} : as_bytes(comment()));
+    return std::move(w.out);
+}
+
 // ---- Signatures (containers.md §6.3, §7.1; D-50) ----
 
 bool signature_member(std::string_view path) {
@@ -755,7 +775,7 @@ public:
             "ZIP archives (JAR, APK, NuGet, VSIX, EPUB, ...): members diffed and merged by path",
             {".zip", ".jar", ".war", ".ear", ".apk", ".aab", ".nupkg", ".whl", ".xpi", ".vsix", ".crx",
              ".epub"},
-            {true, true, false, true, false},
+            {true, true, true, true, false},
             {{"zip-lenient", OptionSpec::Arg::none,
               "trust the central directory when a local header disagrees (warning)"},
              {"zip-times", OptionSpec::Arg::required,
@@ -780,7 +800,48 @@ public:
     }
 
     std::unique_ptr<Document> load(ByteSource src, const LoadOptions& o) const override {
-        return load_doc(std::move(src), o.ctx.budget, o.ctx.format_options);
+        auto d = load_doc(std::move(src), o.ctx.budget, o.ctx.format_options);
+        d->remember(o.ctx);
+        return d;
+    }
+
+    // Patches (containers.md §6.5): the member layer's payloads, plus the archive comment as its text.
+    std::optional<std::vector<std::byte>> payload(const Document& d, const Address& at) const override {
+        if (at.path == "/archive/comment") {
+            auto c = as_bytes(doc(d).comment());
+            return std::vector<std::byte>(c.begin(), c.end());
+        }
+        return container::payload(doc(d), at);
+    }
+
+    std::unique_ptr<Document> implant(const Document& t, std::span<const UnitValue> units,
+                                      const LoadOptions& o) const override {
+        std::vector<UnitValue> members;
+        const std::vector<std::byte>* comment = nullptr;
+        for (auto& u : units)
+            if (u.at.path == "/archive/comment")
+                comment = u.value;
+            else
+                members.push_back(u);
+        std::vector<Warning> warnings;
+        auto bytes = container::implant(*this, doc(t), members, o, warnings);
+        Limits budget = o.ctx.budget.fresh(); // a new document (#51)
+        Context ctx{o.ctx.registry, budget, o.ctx.depth, o.ctx.format_options};
+        auto d = load_doc(ByteSource::from_memory(std::move(bytes), doc(t).src.name()), budget,
+                          o.ctx.format_options);
+        if (comment) { // the end record is last: its comment length, then the comment
+            if (comment->size() > 0xFFFF)
+                throw Error(ErrorCategory::invalid_input, "patch: a zip comment holds at most 65535 bytes");
+            auto b = d->src.bytes();
+            std::vector<std::byte> out(b.begin(), b.begin() + static_cast<std::ptrdiff_t>(d->end_pos + 20));
+            put(out, comment->size(), 2);
+            append(out, *comment);
+            d = load_doc(ByteSource::from_memory(std::move(out), doc(t).src.name()), budget,
+                         o.ctx.format_options);
+        }
+        d->remember(ctx);
+        d->warnings.insert(d->warnings.end(), warnings.begin(), warnings.end());
+        return d;
     }
 
     ChangeSet diff(const Document& a, const Document& b, const DiffOptions& o) const override {

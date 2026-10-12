@@ -6,6 +6,7 @@
 
 #include <semsplinter/format.hpp>
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -20,6 +21,8 @@
 namespace semsplinter::container {
 
 using Meta = std::vector<std::pair<std::string, std::string>>; // (field, display value), in a fixed order
+
+struct OutEntry;
 
 // A loaded archive as the member layer sees it.
 struct Archive : Document {
@@ -36,6 +39,21 @@ struct Archive : Document {
     virtual Hash128 hash(std::size_t i, Limits&) const = 0; // content identity, for renames
     // Decoded content, within the budget. Throws Error{unsupported} for opaque members.
     virtual std::span<const std::byte> content(std::size_t i, Limits&) const = 0;
+
+    // Patches (containers.md §6.5): `entries` picked from `docs` (base, ours, theirs; null where unused),
+    // written in this archive's layout (prefix, comment, end records, outer compression), or without any of
+    // it when `bare` (payload archives).
+    virtual std::vector<std::byte> write(const std::array<const Archive*, 3>& docs,
+                                         const std::vector<OutEntry>& entries, bool bare, Limits&,
+                                         std::vector<Warning>&) const = 0;
+    // What nested payloads load members with; set by the format's load() through remember().
+    const Registry* registry = nullptr;
+    OptionValues options;
+    Limits limits;
+    int depth = 0;
+    void remember(const Context& c) {
+        registry = &c.registry, options = c.format_options, limits = c.budget.fresh(), depth = c.depth;
+    }
 };
 
 std::string entry_address(std::string_view path); // "/entries/" + escaped path
@@ -76,6 +94,15 @@ bool is_ours(const Merged&, const Archive& ours);
 
 // Appends the members' own dumps, sorted by path, after the caller's entry lines (containers.md §5).
 void dump_members(const Archive&, std::ostream&, const DumpOptions&);
+
+// Patch payloads (containers.md §6.5) under /entries: a member is an archive of its format holding it alone
+// (for a /meta/ unit, with empty content); /content is the member's bytes; a nested address is the member
+// format's payload when that format has patches, else the member's bytes.
+std::optional<std::vector<std::byte>> payload(const Archive&, const Address&);
+// `t` with the /entries units set, as bytes in its layout. Members the patch adds go last. Throws
+// Error{unsupported} for other addresses. `self` loads the payload archives.
+std::vector<std::byte> implant(const Format& self, const Archive& t, std::span<const UnitValue>,
+                               const LoadOptions&, std::vector<Warning>&);
 
 // A Comparison whose exit status ignores `/meta/mtime` changes unless `count_times` (containers.md §4).
 std::unique_ptr<Comparison> compare(std::unique_ptr<Comparison> inner, bool count_times);

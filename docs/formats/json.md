@@ -164,6 +164,13 @@ Composition: objects use **KeyedMerge** (SPEC §5.1 table, key order rule includ
 **Patch payload:** per touched unit, `before` and `after` as canonical JSON text in the hunk body
 (`- ` / `+ ` lines). No binary encoding needed.
 
+**Implemented (#44):** each side's payload is the unit's source text as written, its continuation lines
+re-indented to column 0. `implant()` places the values through the span-splice writer, like changes from
+theirs that keep their own layout, so a patch applied to its exact base reproduces the new file byte for byte.
+An insert at an array index makes a new element at that index (the new side's); an inserted identified element
+or member goes last. Element moves apply as value updates (the order is not patched), and a unit whose
+container the target lacks is dropped.
+
 ## 7. Serialization and preservation
 
 **Span splice.** `SpanJson` records for every node `[begin, end)` byte offsets in the source, and for objects the
@@ -291,7 +298,7 @@ sides' leading text of an inserted member are dropped; an object that is rebuilt
 members just before the member that overrides them.
 
 Not yet: JSON5 (`.json5` is not claimed), `--json-key`/`--json-set` rules, `--json-order`, `--json-numeric`,
-`--ignore-order`, `--json-string-lines`, `--dump-full`, exports and patch payloads (`caps.patch` is off),
+`--ignore-order`, `--json-string-lines`, `--dump-full`, exports,
 JSON Lines, conflict comments in JSONC, lockfile handling (Q-JSON-5), `possible-rename`, `pairing-skipped`,
 UTF-16/32 input, and the JSONTestSuite corpus and fuzz targets (Phase 7+ tracks).
 

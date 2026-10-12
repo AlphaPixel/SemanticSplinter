@@ -1,5 +1,6 @@
 #include "../cli/console.hpp"
 #include "../scratch.hpp"
+#include "patch_util.hpp"
 
 #include <semsplinter/format.hpp>
 #include <semsplinter/formats/xml.hpp>
@@ -535,4 +536,31 @@ TEST_CASE("cli: xml diff, unified dump diff, and merge") {
     REQUIRE(rep["conflicts"].size() == 1);
     CHECK(rep["conflicts"][0]["resolved_as"] == "mark");
     CHECK(j.out_text.find("<!-- splinter-conflict") != std::string::npos);
+}
+
+TEST_CASE("xml: patch payloads round trip (#44)") {
+    using patch_util::bytes;
+    const auto a = bytes("<?xml version=\"1.0\"?>\n<root xmlns:x=\"urn:x\">\n  <item id=\"1\">one</item>\n"
+                         "  <item id=\"2\" x:a=\"v\" old=\"o\">two</item>\n  <gone/>\n  <empty/>\n</root>\n");
+    const auto b = bytes("<?xml version=\"1.0\"?>\n<root xmlns:x=\"urn:x\">\n  <item id=\"1\">uno</item>\n"
+                         "  <item id=\"2\" x:a=\"w\" new=\"n\">two</item>\n  <item id=\"3\"><x:sub/></item>\n"
+                         "  <empty><c/></empty>\n</root>\n");
+    const auto patch = patch_util::make("x.xml", a, b);
+    CHECK(patch.find("@@ update /root/item[@id=1]/text() ") != std::string::npos);
+    auto exact = patch_util::apply("x.xml", patch, a);
+    CHECK(exact.failed == 0);
+    CHECK(patch_util::same("x.xml", exact.bytes, b));
+    CHECK(patch_util::text(exact.bytes).find("<item id=\"3\"><x:sub/></item>") !=
+          std::string::npos); // no redundant xmlns:x
+    // An edited copy whose patched units are untouched.
+    const auto t =
+        bytes("<root xmlns:x=\"urn:x\">\n  <keep/>\n  <item id=\"2\" x:a=\"v\" old=\"o\">two</item>\n"
+              "  <item id=\"1\">one</item>\n  <gone/>\n  <empty/>\n</root>\n");
+    auto r = patch_util::apply("x.xml", patch, t);
+    CHECK(r.messages.find("base-mismatch") != std::string::npos);
+    CHECK(r.failed == 0);
+    CHECK(patch_util::same(
+        "x.xml", r.bytes,
+        bytes("<root xmlns:x=\"urn:x\"><keep/><item id=\"2\" x:a=\"w\" new=\"n\">two</item>"
+              "<item id=\"1\">uno</item><item id=\"3\"><x:sub/></item><empty><c/></empty></root>")));
 }

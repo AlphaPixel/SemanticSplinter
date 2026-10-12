@@ -490,7 +490,8 @@ payload after zstd+base85 19
   `#` lines are comments. `payload before|after CODEC N` is followed by the base85 lines of N encoded bytes
   (64 bytes, 80 characters per line, Git's base85 alphabet). A side without a payload is absent (insert,
   erase).
-- What a payload holds is defined by the format's `payload()` (SPEC §4); png.md §6.7 has PNG's.
+- What a payload holds is defined by the format's `payload()` (SPEC §4); png.md §6.7 has PNG's, json.md §6
+  JSON's, xml.md §6 XML's, and containers.md §6.5 those of ZIP and TAR.
 
 - `diff` mode writes a human report only, unless `--binary` is given. With `--binary` it writes the
   envelope with payloads, mirroring `git diff --binary`. For text files the output is a plain unified

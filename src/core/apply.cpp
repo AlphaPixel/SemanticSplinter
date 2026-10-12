@@ -387,8 +387,8 @@ private:
         }
         std::vector<UnitValue> before, after;
         for (auto& u : s.units) {
-            before.push_back({u.at, u.before ? &*u.before : nullptr});
-            after.push_back({u.at, u.after ? &*u.after : nullptr});
+            before.push_back({u.at, u.before ? &*u.before : nullptr, u.op});
+            after.push_back({u.at, u.after ? &*u.after : nullptr, u.op});
         }
         std::unique_ptr<Document> result;
         std::vector<std::size_t> failed;

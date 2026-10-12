@@ -396,6 +396,9 @@ struct TarDoc final : Archive {
         return data(i);
     }
     Hash128 hash(std::size_t i, Limits&) const override { return hash128(data(i)); }
+    std::vector<std::byte> write(const std::array<const Archive*, 3>& docs,
+                                 const std::vector<OutEntry>& entries, bool bare, Limits&,
+                                 std::vector<Warning>&) const override;
     bool same(std::size_t i, const Archive& other, std::size_t j, Limits&) const override {
         auto a = data(i), b = static_cast<const TarDoc&>(other).data(j);
         return std::equal(a.begin(), a.end(), b.begin(), b.end());
@@ -685,6 +688,35 @@ void write_member(std::vector<std::byte>& out, const std::array<const TarDoc*, 3
     out.resize(out.size() + (kBlock - content.size() % kBlock) % kBlock);
 }
 
+std::vector<std::byte> TarDoc::write(const std::array<const Archive*, 3>& docs,
+                                     const std::vector<OutEntry>& list, bool bare, Limits&,
+                                     std::vector<Warning>& notes) const {
+    std::array<const TarDoc*, 3> td{};
+    for (std::size_t k = 0; k < 3; ++k)
+        td[k] = static_cast<const TarDoc*>(docs[k]);
+    std::vector<std::byte> out;
+    for (auto& e : list) {
+        const TarDoc& s = *td[static_cast<int>(e.body.side)];
+        const Rec& rec = s.recs[e.body.index];
+        if (e.raw())
+            out.insert(out.end(), s.tar.bytes().begin() + static_cast<std::ptrdiff_t>(rec.start),
+                       s.tar.bytes().begin() + static_cast<std::ptrdiff_t>(rec.end));
+        else
+            write_member(out, td, e);
+    }
+    if (bare) {
+        out.resize(out.size() + 2 * kBlock); // the end blocks
+        return out;
+    }
+    out.insert(out.end(), tar.bytes().begin() + static_cast<std::ptrdiff_t>(tail), tar.bytes().end());
+    if (wrapper != Wrapper::none)
+        notes.push_back({"recompressed",
+                         {},
+                         std::string("the ") + wrapper_name(wrapper) +
+                             " stream was re-encoded (the TAR content is exact)"});
+    return wrap(wrapper, src.bytes(), out);
+}
+
 std::string type_name(char t) {
     switch (t) {
     case '0':
@@ -715,7 +747,7 @@ public:
             "tar",
             "TAR archives (ustar, pax, GNU), plain or gzip/zstd/xz/bzip2: members by path",
             {".tar", ".tgz", ".gz", ".tzst", ".zst", ".txz", ".xz", ".tbz2", ".tbz", ".bz2"},
-            {true, true, false, true, false},
+            {true, true, true, true, false},
             {}};
         return i;
     }
@@ -733,7 +765,24 @@ public:
     }
 
     std::unique_ptr<Document> load(ByteSource src, const LoadOptions& o) const override {
-        return load_doc(std::move(src), o.ctx.budget);
+        auto d = load_doc(std::move(src), o.ctx.budget);
+        d->remember(o.ctx);
+        return d;
+    }
+
+    std::optional<std::vector<std::byte>> payload(const Document& d, const Address& at) const override {
+        return container::payload(doc(d), at);
+    }
+
+    std::unique_ptr<Document> implant(const Document& t, std::span<const UnitValue> units,
+                                      const LoadOptions& o) const override {
+        std::vector<Warning> warnings;
+        auto bytes = container::implant(*this, doc(t), units, o, warnings);
+        Limits budget = o.ctx.budget.fresh(); // a new document (#51)
+        auto d = load_doc(ByteSource::from_memory(std::move(bytes), doc(t).src.name()), budget);
+        d->remember({o.ctx.registry, budget, o.ctx.depth, o.ctx.format_options});
+        d->warnings.insert(d->warnings.end(), warnings.begin(), warnings.end());
+        return d;
     }
 
     ChangeSet diff(const Document& a, const Document& b, const DiffOptions& o) const override {
@@ -758,24 +807,7 @@ public:
         if (container::is_ours(m, o)) {
             bytes.assign(o.src.bytes().begin(), o.src.bytes().end()); // no-op shortcut: ours verbatim
         } else {
-            std::vector<std::byte> tar;
-            for (auto& e : m.entries) {
-                const TarDoc& s = *docs[static_cast<int>(e.body.side)];
-                const Rec& rec = s.recs[e.body.index];
-                if (e.raw())
-                    tar.insert(tar.end(), s.tar.bytes().begin() + static_cast<std::ptrdiff_t>(rec.start),
-                               s.tar.bytes().begin() + static_cast<std::ptrdiff_t>(rec.end));
-                else
-                    write_member(tar, docs, e);
-            }
-            tar.insert(tar.end(), o.tar.bytes().begin() + static_cast<std::ptrdiff_t>(o.tail),
-                       o.tar.bytes().end());
-            bytes = wrap(o.wrapper, o.src.bytes(), tar);
-            if (o.wrapper != Wrapper::none)
-                r.warnings.push_back({"recompressed",
-                                      {},
-                                      std::string("the ") + wrapper_name(o.wrapper) +
-                                          " stream was re-encoded (the TAR content is exact)"});
+            bytes = o.write({docs[0], docs[1], docs[2]}, m.entries, false, mo.ctx.budget, r.warnings);
         }
         Limits budget = mo.ctx.budget.fresh(); // the result is a new document (#51)
         r.document = load_doc(ByteSource::from_memory(std::move(bytes), o.src.name()), budget);

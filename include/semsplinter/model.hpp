@@ -51,6 +51,9 @@ struct Address {
 // Escapes one JSON Pointer reference token ("~" -> "~0", "/" -> "~1").
 std::string pointer_escape(std::string_view segment);
 
+// The unescaped reference tokens of a JSON Pointer: "/a/b~1c" -> {"a", "b/c"}; "" -> {}.
+std::vector<std::string> pointer_split(std::string_view path);
+
 // True when `path` equals `ancestor` or lies below it ("/a/b" is within "/a", "/ab" is not).
 bool path_within(std::string_view path, std::string_view ancestor) noexcept;
 

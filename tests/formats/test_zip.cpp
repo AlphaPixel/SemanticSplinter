@@ -12,6 +12,7 @@
 
 #include "../cli/console.hpp"
 #include "../scratch.hpp"
+#include "patch_util.hpp"
 
 #include <algorithm>
 #include <filesystem>
@@ -475,4 +476,43 @@ TEST_CASE("cli zip: diff report and merge options") {
     CaptureConsole same;
     CHECK(run_cli(same, {out, b}) == 0);
     std::filesystem::remove_all(dir);
+}
+
+TEST_CASE("zip: patch payloads round trip (#44)") {
+    auto mode = [](zip::NewEntry e, std::uint32_t m) {
+        e.unix_mode = m;
+        return e;
+    };
+    Raster painted = pattern();
+    paint(painted, 4, 4, 3, 2, {0xFFFF, 0, 0, 0xFFFF});
+    const auto img = png::write(pattern()), img2 = png::write(painted);
+    const auto a =
+        zip::build(Entries{entry("a.txt", "hello\n"), entry("data.json", "{\"k\": 1, \"j\": 0}"),
+                           entry("old.bin", "xyz"), entry("gone.txt", "bye"), entry("i.png", str(img))});
+    const auto b = zip::build(Entries{mode(entry("a.txt", "hello world\n"), 0100755),
+                                      entry("data.json", "{\"k\": 2, \"j\": 0}"), entry("new.bin", "xyz"),
+                                      entry("i.png", str(img2)), entry("added.txt", "new\n")});
+    const auto patch = patch_util::make("x.zip", a, b);
+    CHECK(patch.find("@@ erase /entries/old.bin ") != std::string::npos);
+    CHECK(patch.find("@@ move /entries/new.bin ") != std::string::npos);
+    CHECK(patch.find("@@ update /entries/data.json/content/k ") != std::string::npos);
+    CHECK(patch.find("@@ update /entries/i.png/content/pixels#rect=") != std::string::npos);
+    CHECK(patch.find("@@ update /entries/a.txt/meta/mode ") != std::string::npos);
+    Fx fx;
+    auto exact = patch_util::apply("x.zip", patch, a);
+    CHECK(exact.failed == 0);
+    CHECK(patch_util::same("x.zip", exact.bytes, b));
+    CHECK(fx.members(exact.bytes).count("old.bin") == 0);
+    // An edited copy: a member of its own and another JSON key; the patched units are untouched.
+    const auto t = zip::build(Entries{entry("keep.txt", "k"), entry("a.txt", "hello\n"),
+                                      entry("data.json", "{\"k\": 1, \"j\": 3}"), entry("old.bin", "xyz"),
+                                      entry("gone.txt", "bye"), entry("i.png", str(img))});
+    auto r = patch_util::apply("x.zip", patch, t);
+    CHECK(r.messages.find("base-mismatch") != std::string::npos);
+    CHECK(r.failed == 0);
+    CHECK(patch_util::same(
+        "x.zip", r.bytes,
+        zip::build(Entries{entry("keep.txt", "k"), mode(entry("a.txt", "hello world\n"), 0100755),
+                           entry("data.json", "{\"k\": 2, \"j\": 3}"), entry("new.bin", "xyz"),
+                           entry("i.png", str(img2)), entry("added.txt", "new\n")})));
 }

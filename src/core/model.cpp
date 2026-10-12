@@ -67,6 +67,20 @@ std::string pointer_escape(std::string_view seg) {
     return out;
 }
 
+std::vector<std::string> pointer_split(std::string_view path) {
+    std::vector<std::string> out;
+    for (char c : path) {
+        if (c == '/')
+            out.emplace_back();
+        else if (!out.empty())
+            out.back() += c;
+    }
+    for (auto& s : out)
+        for (std::size_t k = 0; (k = s.find('~', k)) != std::string::npos && k + 1 < s.size(); ++k)
+            s.replace(k, 2, s[k + 1] == '1' ? "/" : "~");
+    return out;
+}
+
 bool path_within(std::string_view path, std::string_view ancestor) noexcept {
     if (!path.starts_with(ancestor))
         return false;
