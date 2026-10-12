@@ -574,9 +574,10 @@ struct Differ {
                 make_change(side, Op::update, {path + "/" + pointer_escape(c)}, x && y ? "cell" : "ragged");
             ch.before = cell_value(x), ch.after = cell_value(y);
             if (auto p = x ? number(*x) : std::nullopt, q = y ? number(*y) : std::nullopt; p && q) {
-                ch.metrics["delta"] = *q - *p;
-                if (*p != 0)
-                    ch.metrics["rel"] = (*q - *p) / std::fabs(*p);
+                const double before = p.value(), after = q.value(); // value(): GCC 13 -Wmaybe-uninitialized
+                ch.metrics["delta"] = after - before;
+                if (before != 0)
+                    ch.metrics["rel"] = (after - before) / std::fabs(before);
             }
             out.push_back(std::move(ch));
         }
