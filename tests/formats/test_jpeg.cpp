@@ -91,7 +91,8 @@ TEST_CASE("jpeg: probe, segments, and framing errors") {
     auto truncated = f;
     truncated.resize(f.size() - 2); // no EOI
     CHECK_THROWS_AS(fx.load(truncated), Error);
-    const auto* map = fx.jpg.envelope(*fx.load(f));
+    auto d = fx.load(f);
+    const auto* map = fx.jpg.envelope(*d);
     REQUIRE(map);
     CHECK_NOTHROW(map->validate(f.size()));
 }

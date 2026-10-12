@@ -7,6 +7,13 @@
 #include <jpeglib.h>
 // clang-format on
 
+#if LIBJPEG_TURBO_VERSION_NUMBER < 3000000 // no 12-bit API before libjpeg-turbo 3.0 (distro builds, #143)
+#define SEMSPLINTER_NO_JPEG12
+using J12SAMPLE = short;
+using J12SAMPROW = J12SAMPLE*;
+static JDIMENSION jpeg12_read_scanlines(j_decompress_ptr, J12SAMPROW*, JDIMENSION) { return 0; } // never called
+#endif
+
 #include <array>
 #include <csetjmp>
 #include <cstdlib>
@@ -231,6 +238,10 @@ void read_coefficients(JpegDoc& doc) {
 
 std::optional<raster::Raster> decode_pixels(const JpegDoc& doc, Limits& budget) {
     const bool wide = doc.precision == 12;
+#ifdef SEMSPLINTER_NO_JPEG12
+    if (wide)
+        return std::nullopt;
+#endif
     J_COLOR_SPACE out = JCS_UNKNOWN;
     if (doc.comps.size() == 1)
         out = JCS_GRAYSCALE;
@@ -362,7 +373,7 @@ std::optional<std::vector<std::byte>> write_coefficients(const JpegDoc& ours,
                  }
                  for (std::size_t c = 0; c < sel.size(); ++c)
                      ci.comp_info[c].dc_tbl_no = sel[c].first, ci.comp_info[c].ac_tbl_no = sel[c].second;
-             } else {
+             } else if (!ours.arithmetic()) { // Huffman only; libjpeg-turbo < 3 rejects it with arithmetic (#143)
                  ci.optimize_coding = TRUE;
              }
              jpeg_write_coefficients(&ci, arrays);

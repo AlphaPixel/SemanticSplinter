@@ -168,6 +168,9 @@
 #endif
 #include <string.h>
 #include <assert.h>
+#ifndef SQLITE_IOCAP_SUBPAGE_READ /* SemanticSplinter: added in SQLite 3.48; older distro builds never set it (#143) */
+# define SQLITE_IOCAP_SUBPAGE_READ 0x00008000
+#endif
 
 
 /*

@@ -1,19 +1,26 @@
 cmake_minimum_required(VERSION 3.25)
 
+option(SEMSPLINTER_SYSTEM_DEPS "Use installed (distro) packages instead of vcpkg; see BUILDING.md" OFF)
+
 # Dependencies come from vcpkg in manifest mode (BUILDING.md). Without its toolchain, find_package() fails with
 # errors that never mention vcpkg, so check here: a plain `cmake ..` uses $VCPKG_ROOT when it is set.
-if(NOT CMAKE_TOOLCHAIN_FILE AND DEFINED ENV{VCPKG_ROOT})
-    file(TO_CMAKE_PATH "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" _vcpkg_toolchain)
-    set(CMAKE_TOOLCHAIN_FILE "${_vcpkg_toolchain}" CACHE FILEPATH "vcpkg toolchain, from VCPKG_ROOT")
-endif()
-if(CMAKE_TOOLCHAIN_FILE AND NOT EXISTS "${CMAKE_TOOLCHAIN_FILE}")
-    message(FATAL_ERROR "Toolchain file not found: ${CMAKE_TOOLCHAIN_FILE}\n"
-                        "Set VCPKG_ROOT to a bootstrapped vcpkg checkout (see BUILDING.md) and configure again "
-                        "in a fresh build directory.")
-elseif(NOT CMAKE_TOOLCHAIN_FILE AND NOT CMAKE_PREFIX_PATH AND NOT DEFINED ENV{CMAKE_PREFIX_PATH})
-    message(FATAL_ERROR "No vcpkg toolchain: this project gets its dependencies from vcpkg in manifest mode.\n"
-                        "Clone and bootstrap vcpkg, set VCPKG_ROOT to it, then run `cmake --preset <name>` "
-                        "(see BUILDING.md). To supply the dependencies yourself, pass CMAKE_PREFIX_PATH.")
+if(NOT SEMSPLINTER_SYSTEM_DEPS)
+    if(NOT CMAKE_TOOLCHAIN_FILE AND DEFINED ENV{VCPKG_ROOT})
+        file(TO_CMAKE_PATH "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" _vcpkg_toolchain)
+        set(CMAKE_TOOLCHAIN_FILE "${_vcpkg_toolchain}" CACHE FILEPATH "vcpkg toolchain, from VCPKG_ROOT")
+    endif()
+    if(CMAKE_TOOLCHAIN_FILE AND NOT EXISTS "${CMAKE_TOOLCHAIN_FILE}")
+        message(FATAL_ERROR "Toolchain file not found: ${CMAKE_TOOLCHAIN_FILE}
+"
+                            "Set VCPKG_ROOT to a bootstrapped vcpkg checkout (see BUILDING.md) and configure again "
+                            "in a fresh build directory.")
+    elseif(NOT CMAKE_TOOLCHAIN_FILE AND NOT CMAKE_PREFIX_PATH AND NOT DEFINED ENV{CMAKE_PREFIX_PATH})
+        message(FATAL_ERROR "No vcpkg toolchain: this project gets its dependencies from vcpkg in manifest mode.
+"
+                            "Clone and bootstrap vcpkg, set VCPKG_ROOT to it, then run `cmake --preset <name>` "
+                            "(see BUILDING.md). To use distro packages instead, pass -DSEMSPLINTER_SYSTEM_DEPS=ON; "
+                            "to supply the dependencies yourself, pass CMAKE_PREFIX_PATH.")
+    endif()
 endif()
 
 option(SEMSPLINTER_BUILD_TESTS "Build the test suite" ON)
@@ -66,6 +73,10 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_SCAN_FOR_MODULES OFF) # no C++20 modules; scanning needs clang-scan-deps, absent with clang++-N (#117)
+
+if(SEMSPLINTER_SYSTEM_DEPS)
+    include(cmake/SystemDeps.cmake)
+endif()
 
 if(MSVC)
     add_compile_options(/W4 /permissive- /utf-8)
