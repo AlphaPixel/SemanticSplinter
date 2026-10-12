@@ -3,8 +3,10 @@
 **Tier:** T1 · **Module:** `semantic-splinter-png` · **vcpkg feature:** `png` · **Depends on modules:** none (core only). Introduces the shared helper module `semantic-splinter-raster` (see 3.4), with no external dependencies.
 **Extensions / magic:** `.png`, `.apng`. Magic `89 50 4E 47 0D 0A 1A 0A`, first chunk must be `IHDR`. APNG is detected by an `acTL` chunk before the first `IDAT` (extension alone is not trusted). Probe confidence: 100 on signature + well-formed 13-byte `IHDR`, 0 otherwise. An `IHDR` CRC mismatch does not fail the probe; it is reported as `integrity-mismatch-input` (SPEC §12.3).
 **Status (v1 = MVP + v1.1, Phases 3–5):** done: diff, merge, dump, inspect, visuals, and patch payloads (§6.7);
-unified diffs carry `@@ ADDRESS` hunk headers and `--annotate` metrics (#33). APNG animation is one unit. Details and
-what is missing (indexed mode, lcms2 ΔE, fuzz targets): §12.1.
+unified diffs carry `@@ ADDRESS` hunk headers and `--annotate` metrics (#33). APNG animation is one unit. Details:
+§12.1. Not yet: indexed mode, lcms2 ΔE, the fuzzy patch offset search, `--signatures` for `caBX`/`dSIG` (#21),
+`--tolerance` forms other than whole 8-bit units (#29), annotations on `/encoding/*` changes (#103), fuzz targets
+and corpus (#16, #17).
 
 ## 1. Why it matters
 
@@ -131,8 +133,8 @@ Never normalized: stored sample values (no gamma or profile math), colors under 
 `--alpha-zero-equal`), the presence or value of any ancillary chunk, palette order in indexed mode,
 the bytes of APNG animation chunks.
 
-Options: `--png-mode`, `--alpha-zero-equal`, `--tolerance=N` (per channel, in 8-bit units, internally
-`N*257` on the 16-bit scale; not available in indexed mode), `--png-ignore-chunks=tIME,tEXt:Software` (diff
+Options: `--png-mode` (`index` is not implemented yet), `--alpha-zero-equal`, `--tolerance=N` (per channel, in
+8-bit units, internally `N*257` on the 16-bit scale; not available in indexed mode; other SPEC forms are rejected, #29), `--png-ignore-chunks=tIME,tEXt:Software` (diff
 only; merge still carries them). The `png-` prefix keeps GNU's `--ignore-c` abbreviation of `--ignore-case`
 unambiguous (D-42).
 
@@ -305,7 +307,8 @@ Applying (SPEC §4): with an exact base hash, the after values are set directly 
 `merge(base = target with the before values, ours = target, theirs = target with the after values)`; a hunk that
 overlaps an unresolved conflict is a reject and the target keeps its pixels. Pixels or encoding that change are
 re-encoded with the target's filters and inferred zlib settings; replaced chunks take the place of the chunk they
-replace, and new chunks are ranked into their legal position (§7.2). `/animation` hunks are not supported (exit 3).
+replace, and new chunks are ranked into their legal position (§7.2). `/animation` hunks are not supported (exit 2, or 3 with
+`--exit-codes=extended`).
 The fuzzy offset search (locating a rect at ±F pixels) is v1.1.
 
 ## 7. Serialization and preservation
@@ -478,12 +481,12 @@ libpng, extra dependency).
 
 ## 12. Phases
 
-| Phase | Scope | Effort |
-|---|---|---|
-| MVP | Chunk layer, libpng decode/encode, canonical RGBA grid, raster core (classification, runs, CCL, guard band, tolerance), still-PNG diff/merge, APNG default image with opaque animation (D-48), pure crop/extension detection (Q-PNG-3), KeyedMerge metadata, passthrough, representability + promotion, dump, heatmap visual, JSON report, Git driver end-to-end | M (3 wk) |
-| v1.1 | Indexed mode + palette merge/remap, patch payloads + fuzzed apply, color-dependency upgrade, ΔE via lcms2 | S |
-| v2 | Streaming two-pass merge for huge non-interlaced images, `--detect-offset` (general translation), eXIf via shared IFD parser, XMP in iTXt via xml module | M |
-| Later | Wuffs as alternate decoder, object-aware heuristic merge (opt-in) | L |
+| Phase | Scope | Effort | State |
+|---|---|---|---|
+| MVP | Chunk layer, libpng decode/encode, canonical RGBA grid, raster core (classification, runs, CCL, guard band, tolerance), still-PNG diff/merge, APNG default image with opaque animation (D-48), pure crop/extension detection (Q-PNG-3), KeyedMerge metadata, passthrough, representability + promotion, dump, heatmap visual, JSON report, Git driver end-to-end | M (3 wk) | done (§12.1 lists the gaps) |
+| v1.1 | Indexed mode + palette merge/remap, patch payloads + fuzzed apply, color-dependency upgrade, ΔE via lcms2 | S | partly done: patch payloads and color-dependency upgrade; missing indexed mode, fuzzy offset search, fuzzing (#16), lcms2 ΔE |
+| v2 | Streaming two-pass merge for huge non-interlaced images, `--detect-offset` (general translation), eXIf via shared IFD parser, XMP in iTXt via xml module | M | not started |
+| Later | Wuffs as alternate decoder, object-aware heuristic merge (opt-in) | L | not started |
 
 ### 12.1 Implementation status (Phase 3)
 
@@ -497,9 +500,10 @@ reload validation; color-dependency upgrade (v1.1); ΔE00 in sRGB; dump; heatmap
 
 Phase 4 added the Git drivers and Phase 5 the patch payloads (§6.7).
 
-Not yet: indexed mode (`--png-mode=index` exits 3), the fuzzy patch offset search (v1.1), ΔE through
+Not yet: indexed mode (`--png-mode=index` is rejected as unsupported: exit 2, or 3 with `--exit-codes=extended`;
+`auto` always merges in RGBA), the fuzzy patch offset search (v1.1), ΔE through
 lcms2 (`png-icc`), the `iCCP` description tag, `requantized`, `--visual=side-by-side`, `--signatures` handling of
-`caBX`/`dSIG` (kept as opaque chunks), `sbit-mismatch`, and the PngSuite corpus and fuzz targets (Phase 8: #16, #17).
+`caBX`/`dSIG` (kept verbatim as opaque chunks without a warning, whatever the policy; #21), `sbit-mismatch`, and the PngSuite corpus and fuzz targets (Phase 8: #16, #17).
 A `cropped-away` conflict resolved to the painting side writes that side's whole image.
 
 Measured (Release, one 4096×4096 RGBA8 ImageMagick pair): diff 1.7 s, decode-dominated; a merge spends most of
@@ -508,14 +512,15 @@ Streaming and parallel deflate are the upgrade path if large merges matter.
 
 ## 13. Open questions
 
-- **Q-PNG-1**: Should the canonical model be RGBA16 always, or adapt storage width? **Provisional:** adapt (RGBA8 when all inputs ≤ 8-bit), semantics are always 16-bit. **Why:** halves memory on the common case at no fidelity cost.
-- **Q-PNG-2**: Default merge domain for all-indexed inputs: palette index or RGBA? **Provisional:** index (`--png-mode=auto`). **Why:** palette recolors become one keyed change and merge cleanly with paint.
-- **Q-PNG-3**: One-sided shape change while the other side painted: wholesale win or conflict? **Provisional:** conflict `shape-mismatch`. **Why:** the SPEC default would silently drop the other side's pixels. **Decided 2026-10-08:** conflict, except that content edits against a pure crop or uncrop merge (§6.1).
-- **Q-PNG-4**: Should byte-identical output be guaranteed across platforms and builds, given zlib implementation differences? **Provisional:** guaranteed per pinned vcpkg baseline with the `zlib` port only; document zlib-ng overlay as breaking cross-build byte identity. **Why:** canonical identity is guaranteed regardless; byte identity needs a fixed deflate.
-- **Q-PNG-5**: Do color-interpretation changes against pixel changes conflict? **Provisional:** yes, `dependency`, with `--png-color-dependency=warn` to downgrade. **Why:** a profile swap reinterprets every stored value.
-- **Q-PNG-7**: What does `--conflict=mark` produce? **Provisional:** ours plus a sidecar overlay PNG, warning `mark-unsupported`. **Why:** any in-image marking invents pixels.
-- **Q-PNG-8**: Default guard band for PNG? **Provisional:** 1 (SPEC D-10). **Decided 2026-10-08:** 0, overridable with `--guard=N`; touching edits warn `adjacent-edits` (D-10). **Why:** catches anti-aliased edges touching; larger values cause too many false conflicts on sprite sheets.
-- **Q-PNG-9**: Should colors under alpha 0 be compared? **Provisional:** yes by default, `--alpha-zero-equal` to ignore. **Why:** they are stored data used by texture bleeding and premultiplication pipelines.
-- **Q-PNG-10**: Own decoder or libpng? **Provisional:** libpng for pixels, own chunk layer. **Why:** byte-exact chunk control without re-implementing a hardened inflate/unfilter path.
-- **Q-PNG-11**: Should `tIME` be updated on merge? **Provisional:** no, merged as an ordinary key. **Why:** determinism invariant forbids wall-clock data.
-- **Q-PNG-12**: Under `--signatures=auto`, keep or strip a C2PA `caBX` manifest after a content change? **Provisional:** keep it verbatim and warn `signature-invalidated`, overriding the not-safe-to-copy drop rule; `strip` removes it. **Why:** matches the JPEG C2PA default, keeps provenance history visible, and validators then report the edit truthfully instead of the file silently losing its credentials.
+- **Q-PNG-1**: Should the canonical model be RGBA16 always, or adapt storage width? **Decided:** adapt (RGBA8 when all inputs ≤ 8-bit), semantics are always 16-bit. **Why:** halves memory on the common case at no fidelity cost.
+- **Q-PNG-2**: Default merge domain for all-indexed inputs: palette index or RGBA? **Decided:** index (`--png-mode=auto`). **Why:** palette recolors become one keyed change and merge cleanly with paint. The code deviates until indexed mode lands (§12.1): `auto` merges in RGBA.
+- **Q-PNG-3**: One-sided shape change while the other side painted: wholesale win or conflict? **Decided:** conflict `shape-mismatch`, except that content edits against a pure crop or uncrop merge (§6.1). **Why:** the SPEC default would silently drop the other side's pixels.
+- **Q-PNG-4**: Should byte-identical output be guaranteed across platforms and builds, given zlib implementation differences? **Decided:** guaranteed per pinned vcpkg baseline with the `zlib` port only; document zlib-ng overlay as breaking cross-build byte identity. **Why:** canonical identity is guaranteed regardless; byte identity needs a fixed deflate.
+- **Q-PNG-5**: Do color-interpretation changes against pixel changes conflict? **Decided:** yes, `dependency`, with `--png-color-dependency=warn` to downgrade. **Why:** a profile swap reinterprets every stored value.
+- **Q-PNG-7**: What does `--conflict=mark` produce? **Decided:** ours plus a sidecar overlay PNG, warning `mark-unsupported`. **Why:** any in-image marking invents pixels.
+- **Q-PNG-8**: Default guard band for PNG? **Decided:** 0, overridable with `--guard=N`; touching edits warn `adjacent-edits` (D-10). **Why:** catches anti-aliased edges touching; larger values cause too many false conflicts on sprite sheets.
+- **Q-PNG-9**: Should colors under alpha 0 be compared? **Decided:** yes by default, `--alpha-zero-equal` to ignore. **Why:** they are stored data used by texture bleeding and premultiplication pipelines.
+- **Q-PNG-10**: Own decoder or libpng? **Decided:** libpng for pixels, own chunk layer. **Why:** byte-exact chunk control without re-implementing a hardened inflate/unfilter path.
+- **Q-PNG-11**: Should `tIME` be updated on merge? **Decided:** no, merged as an ordinary key. **Why:** determinism invariant forbids wall-clock data.
+- **Q-PNG-12**: Under `--signatures=auto`, keep or strip a C2PA `caBX` manifest after a content change? **Decided:** keep it verbatim and warn `signature-invalidated`, overriding the not-safe-to-copy drop rule; `strip` removes it. **Why:** matches the JPEG C2PA default, keeps provenance history visible, and validators then report the edit truthfully instead of the file silently losing its credentials. The code deviates for now (§12.1, #21): `caBX` is kept
+verbatim without the warning, and `strip` is ignored.

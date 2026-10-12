@@ -3,9 +3,11 @@
 **Tier:** T0 · **Module:** `semantic-splinter-binary` · **vcpkg feature:** none (mandatory, no dependencies beyond core xxHash) · **Depends on modules:** none (uses `src/core/diff` from text.md)
 **Extensions / magic:** none. Chosen when nothing else probes and the text test of SPEC §11 step 4 fails, or with `--format=binary`.
 **Status (v1 = MVP + `--binary-merge`, D-49, Phase 2):** done: GNU "differ" line and exit status, byte-range
-report, chunked hex dump, OpaqueLeaf merge, and opt-in `--binary-merge` with guard band and size rule. Not yet:
-binary patch payloads (`--binary` on unknown binaries exits as unsupported), `--scan-streams` (D-49), and the
-`later` row of §12.
+report (`--json`, `--md`), chunked hex dump, OpaqueLeaf merge, and opt-in `--binary-merge` with guard band and
+size rule. No `@@ ADDRESS` hunk headers or `--annotate` metrics. Not yet: binary patch payloads (`caps.patch` is
+false; `--binary` on two binaries exits as unsupported, #36), `--scan-streams` (D-49; exits as unsupported, #138
+yet), the range report in plain and Git diff-driver output and `--binary-detail` (§5.3), the "no common content
+found" message (§5.2), output validation (§8), and the `later` row of §12 (Git binary patches: #36).
 
 ## 1. Why it matters
 
@@ -18,7 +20,7 @@ Every file Splinter does not understand still flows through it, as a Git driver 
 
 ## 2. Format anatomy
 
-None. The input is an opaque byte string of length N (bounded by `--max-input`, default 2 GiB). The module is memory-mapped where the platform allows it (`ByteSource` mmap path), otherwise read into one buffer.
+None. The input is an opaque byte string of length N (bounded by `--max-input`, default 2 GiB). The input is read into one buffer (`ByteSource`; a mapped path is not implemented).
 
 ## 3. Semantic units and identity
 
@@ -32,7 +34,7 @@ No dependencies, no invariants known. That lack of knowledge is exactly why merg
 
 ## 4. Normalization
 
-None. Bytes are bytes. Options that make sense for text (`-i`, `-w`, ...) are rejected with a usage error in binary mode unless `-a` forces text treatment, in which case the text module handles the file.
+None. Bytes are bytes. Options that make sense for text (`-i`, `-w`, ...) are meant to be rejected with a usage error in binary mode unless `-a` forces text treatment, in which case the text module handles the file. Not implemented: the binary module ignores them today.
 
 ## 5. Diff
 
@@ -50,7 +52,7 @@ Complexity is O(N) for chunking and hashing plus histogram over N/8 KiB elements
 
 Each change: `op` = insert, erase, or update (replace), `at` = `/bytes#range=` in the new side (for erase: in the old side, with `before` set), `before`/`after` values carrying hashes and, for ranges up to 64 bytes, the hex text. Report-level metrics: `bytes_inserted`, `bytes_deleted`, `bytes_replaced`, `ranges`, `size_a`, `size_b`, `anchor_coverage` (fraction of B covered by anchors; low coverage means "the file was recompressed or re-encrypted and nothing useful can be said"), and `in_place` (true when sizes are equal and only updates exist).
 
-When `anchor_coverage < 0.1` the human report says so explicitly instead of listing hundreds of ranges: `Binary files a and b differ (no common content found; compressed or encrypted?)`. (The `--scan-streams` hint returns when that option ships, post-v1, D-49.) This is a typical outcome for ZIP-like formats that are not recognized, and the message tells the user to check whether a format module exists.
+When `anchor_coverage < 0.1` the human report says so explicitly instead of listing hundreds of ranges: `Binary files a and b differ (no common content found; compressed or encrypted?)`. (The `--scan-streams` hint returns when that option ships, post-v1, D-49.) This is a typical outcome for ZIP-like formats that are not recognized, and the message tells the user to check whether a format module exists. Not implemented yet: `anchor_coverage` is in the JSON metrics, but the human output is always the plain GNU line.
 
 ### 5.3 GNU compatibility
 
@@ -60,9 +62,9 @@ When `anchor_coverage < 0.1` the human report says so explicitly instead of list
 | `diff -q a b`, any files differ | `Files a and b differ` | 1 |
 | identical | nothing | 0 |
 | `diff3` with a binary input | GNU reports trouble; we print `diff3: FILE: binary file` style diagnostics to stderr unless `-a` (verify exact wording against GNU in the golden corpus) | 2 |
-| Git diff driver | `Binary files a/x and b/x differ` is Git's own text and is not emitted by us; in git-diff mode we emit the range report | 0 |
+| Git diff driver | planned: the range report. Today `diff --git a/x b/x` then `Binary files a/x and b/x differ`, the same line as plain diff | 0 (1 when Git trusts exit codes, D-16) |
 
-An earlier draft used "Binary files differ" for `-q`. GNU actually prints `Files X and Y differ` under `-q` and uses the `Binary files X and Y differ` text only without `-q` (believed from GNU diffutils behaviour; confirmed by the golden corpus generator before release). Splinter's own richer report replaces the GNU line only when the user asks for it (`--json`, `--dump`, `-u` with `--binary-detail`), so plain `splinter diff a b` stays GNU-identical by default (Q-BIN-1).
+An earlier draft used "Binary files differ" for `-q`. GNU actually prints `Files X and Y differ` under `-q` and uses the `Binary files X and Y differ` text only without `-q` (believed from GNU diffutils behaviour; confirmed by the golden corpus generator before release). Splinter's own richer report replaces the GNU line only when the user asks for it (`--json`, `--dump`, `-u` with `--binary-detail`), so plain `splinter diff a b` stays GNU-identical by default (Q-BIN-1). Implemented: `--json`/`--md` (range report) and `--dump` (hex dump of one file); `--binary-detail` does not exist, and every output style prints the GNU line.
 
 ### 5.4 `dump()` layout (textconv)
 
@@ -71,13 +73,13 @@ Diff-friendly hex: one header line per content-defined chunk, then hex rows pref
 ```text
 # binary 1048576 bytes xxh3:7c1e...
 ## chunk 0 8231 bytes xxh3:a19f...
-89504e470d0a1a0a0000000d49484452  |.PNG........IHDR|
-00000400000003000806000000a1b7c3  |................|
+00000000  89504e470d0a1a0a0000000d49484452  |.PNG........IHDR|
+00000010  00000400000003000806000000a1b7c3  |................|
 ...
 ## chunk 1 9012 bytes xxh3:03be...
 ```
 
-Rows are 16 bytes, lowercase hex, then an ASCII column. `--dump-offsets` adds absolute offsets (like `xxd`) for humans who do not care about diff stability. Dumps over `--max-dump` (default 1 MiB of input) print only the chunk header lines, which still give a meaningful textconv diff ("chunks 40 to 43 changed").
+Rows are a chunk-relative offset, 16 bytes of lowercase hex, then an ASCII column. `--dump-offsets` switches to absolute offsets (like `xxd`) for humans who do not care about diff stability. Dumps over `--max-dump` (default 1 MiB of input) print only the chunk header lines, which still give a meaningful textconv diff ("chunks 40 to 43 changed").
 
 ### 5.5 Visual output
 
@@ -95,7 +97,7 @@ With `--binary-merge` (opt-in):
 4. Every successful byte merge carries the validation warning `binary-merge-unverified` and the human output prints a prominent warning: `WARNING: byte-level merge of an unrecognized format. Internal offsets, checksums, and compression are not understood. Verify the result.`
 5. If either side changed the file size and the other side has any edit after the first size-changing edit, the merge refuses with conflict `dependency` (reason: offsets after an insertion likely shifted). `--binary-merge=force` disables this check. This rule catches the most common corruption pattern (a table of absolute offsets after an inserted blob).
 
-Patch payload (`--binary` in diff mode): per change, `base_offset`, `delete_length`, inserted bytes, plus `xxh3` of the deleted bytes for verification. Encoded with the default zstd+base85 envelope. Applying uses the same merge path: a hunk applies if its deleted bytes are found at `base_offset` plus the running offset, or, with fuzz, at the nearest position where the deleted bytes and up to 32 bytes of recorded leading context match exactly (scan ±64 KiB).
+Patch payload (`--binary` in diff mode; not implemented yet, #36): per change, `base_offset`, `delete_length`, inserted bytes, plus `xxh3` of the deleted bytes for verification. Encoded with the default zstd+base85 envelope. Applying uses the same merge path: a hunk applies if its deleted bytes are found at `base_offset` plus the running offset, or, with fuzz, at the nearest position where the deleted bytes and up to 32 bytes of recorded leading context match exactly (scan ±64 KiB).
 
 ## 7. Serialization and preservation
 
@@ -122,7 +124,8 @@ Raw deflate and LZ4 block format have no signature and are not scanned. Trial de
 
 ## 8. Validation
 
-Re-hash the output. For `--binary-merge`, re-run the probe of all registered formats on the output: if the base was unrecognized but the output now probes as something (or vice versa), warn. There is no deeper validation possible.
+Re-hash the output. For `--binary-merge`, re-run the probe of all registered formats on the output: if the base was unrecognized but the output now probes as something (or vice versa), warn. There is no deeper validation possible. Not implemented yet: neither check runs; the only safeguard is the
+`binary-merge-unverified` warning.
 
 ## 9. Libraries
 
@@ -155,18 +158,18 @@ Re-hash the output. For `--binary-merge`, re-run the probe of all registered for
 
 ## 12. Phases
 
-| Phase | Content | Effort |
-|---|---|---|
-| MVP | Fast paths, CDC, anchor diff, refinement, range report, GNU messages, chunked hex dump, OpaqueLeaf merge | S |
-| v2 | `--binary-merge` with guard band and size rule, binary patch payload and apply with fuzz | S |
-| later | Byte-map visual, reading Git binary patches, VCDIFF export | S |
+| Phase | Content | Effort | State |
+|---|---|---|---|
+| MVP | Fast paths, CDC, anchor diff, refinement, range report, GNU messages, chunked hex dump, OpaqueLeaf merge | S | done, except the range report outside `--json`/`--md` and the low-coverage message |
+| v2 | `--binary-merge` with guard band and size rule, binary patch payload and apply with fuzz | S | partly: `--binary-merge` done; patch payload and apply not started (#36) |
+| later | Byte-map visual, reading Git binary patches, VCDIFF export | S | not started (Git binary patches: #36) |
 
 ## 13. Open questions
 
-- **Q-BIN-1**: Should plain `splinter diff` on binaries print only the GNU line or the range summary? **Provisional:** GNU line by default; range report with `--json`, `-u --binary-detail`, or in Git diff-driver mode. **Why:** scripts parse GNU output, while Git diff users want detail.
-- **Q-BIN-2**: CDC parameters fixed or adaptive? **Provisional:** two fixed tiers (8 KiB and 64 KiB average) switched at 256 MiB input. **Why:** determinism matters more than optimal granularity, and two tiers bound memory.
-- **Q-BIN-3**: Is `--binary-merge` worth shipping at all? **Provisional:** yes, opt-in, with guard band, size-change refusal, and an unconditional warning. **Why:** some users have fixed-layout binaries (save data, ROM patches) where it is exactly right, and refusing everywhere pushes them to worse tools.
-- **Q-BIN-4**: Default `--gap` for coalescing reported ranges? **Provisional:** 8 bytes. **Why:** merges edits to adjacent fields of one record without hiding genuinely separate edits.
-- **Q-BIN-5**: Hex dump with or without offsets for textconv? **Provisional:** without offsets, chunk-sectioned; offsets only with `--dump-offsets`. **Decided 2026-10-08:** chunk-relative offsets on every row; `--dump-offsets` switches to absolute. **Why:** absolute offsets make every line after an insertion differ, which defeats textconv.
-- **Q-BIN-6**: Support applying `GIT binary patch` hunks in `patch` mode? **Provisional:** later phase, read-only (apply, never generate). **Why:** useful interop, but no user of the MVP needs it.
-- **Q-BIN-7**: Should `--scan-streams` be on by default in diff mode? **Provisional:** off by default, suggested in the "no common content found" message, and on by default in `splinter inspect`. **Why:** trial decoding costs time on large files and can produce false positives in random data; users opt in when the report says nothing useful.
+- **Q-BIN-1**: Should plain `splinter diff` on binaries print only the GNU line or the range summary? **Decided:** GNU line by default; range report with `--json`, `-u --binary-detail`, or in Git diff-driver mode. The code deviates: only `--json`/`--md` give the range report; `--binary-detail` and the Git driver's range report are not implemented. **Why:** scripts parse GNU output, while Git diff users want detail.
+- **Q-BIN-2**: CDC parameters fixed or adaptive? **Decided:** two fixed tiers (8 KiB and 64 KiB average) switched at 256 MiB input. **Why:** determinism matters more than optimal granularity, and two tiers bound memory.
+- **Q-BIN-3**: Is `--binary-merge` worth shipping at all? **Decided:** yes, opt-in, with guard band, size-change refusal, and an unconditional warning. **Why:** some users have fixed-layout binaries (save data, ROM patches) where it is exactly right, and refusing everywhere pushes them to worse tools.
+- **Q-BIN-4**: Default `--gap` for coalescing reported ranges? **Decided:** 8 bytes. **Why:** merges edits to adjacent fields of one record without hiding genuinely separate edits.
+- **Q-BIN-5**: Hex dump with or without offsets for textconv? **Decided 2026-10-08 (amended):** chunk-relative offsets on every row; `--dump-offsets` switches to absolute. **Why:** absolute offsets make every line after an insertion differ, which defeats textconv.
+- **Q-BIN-6**: Support applying `GIT binary patch` hunks in `patch` mode? **Decided:** later phase, read-only (apply, never generate); #36. **Why:** useful interop, but no user of the MVP needs it.
+- **Q-BIN-7**: Should `--scan-streams` be on by default in diff mode? **Deferred (not v1, D-49):** off by default, suggested in the "no common content found" message, and on by default in `splinter inspect`. **Why:** trial decoding costs time on large files and can produce false positives in random data; users opt in when the report says nothing useful.

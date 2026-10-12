@@ -14,12 +14,15 @@ check, replies re-linked, popups copied, `/AP` dropped on modified ones), field 
 `/NeedAppearances` for PDF 1.x), carrier-wins `/Outlines`, `/Names`, `/PageLabels`; incremental writer on the
 Emitter (classic table or xref stream, 10-digit offsets, `/Prev`, deterministic `/ID[1]`), with byte-identical output
 when nothing changes; `--layout=compact` through QPDFWriter; signatures reported `no-crypto`, `auto`/`strip`/`keep`,
-conflict `signature`, DocMDP `certification-violated`.
-Not yet: `#rect=` boxes on text changes, NFC, `--pdf-dehyphenate`; `--conflict=mark` notes,
-`--pdf-transfer-annots=similar`, patch payloads; incremental writing of encrypted carriers (v1 rewrites them through
-qpdf); new object streams (Q-PDF-8); FieldMDP and UR3 reporting; `--pdf-touch-moddate`; the `outline`, `attachments`,
-`objects`, and `revisions` layers and `--pdf-text-flow` (Later row); `pdf-render`, `visual`, and page-content merge
-(post-v1, D-46).
+conflict `signature`, DocMDP `certification-violated`. Options: `--pdf-layers` (a post-v1 layer is unsupported:
+exit 2, 3 with `--exit-codes`) and `--pdf-show-noise`. No patch payloads (`caps.patch` false); the dump has no line
+addresses, so `@@ ADDRESS` and `--annotate` do not apply.
+Not yet: `#rect=` boxes on text changes, NFC, `--pdf-dehyphenate` (#86); `--conflict=mark` notes (falls back to the
+policy side), `--pdf-transfer-annots=similar`, incremental writing of encrypted carriers (v1 rewrites them through
+qpdf), new object streams (Q-PDF-8), FieldMDP and UR3 reporting, `--pdf-touch-moddate` (#85); `pdf-render`, `visual`,
+and page-content merge (post-v1, D-46; both-sided page changes conflict at `/pages`) (#20); signature verification
+and `resign` (#21); patch payloads, `--password-file`, the `outline`, `attachments`, `objects`, and `revisions` layers,
+`--pdf-revision`, and `--pdf-text-flow` (Later row) (#123).
 
 ## 1. Why it matters
 
@@ -163,7 +166,8 @@ Merge covers the collaborative layers and, since Q-PDF-4 was decided, page conte
    after resource names are normalized. Resources used by the non-carrier side are copied in, renamed on collision.
    Overlapping edits to the same object conflict `both-modified` at `/pages/N/content#range=…`. Splinter does not
    reflow or check the layout: overlapping or misplaced text in the result is accepted and reported only as
-   `info: content-merged`.
+   `info: content-merged`. Not implemented yet (#20): when both sides changed page content the pages are a
+   `both-modified` conflict at `/pages`, the policy side's pages are kept, and the report warns `content-not-merged`.
 2. **Metadata:** KeyedMerge of Info keys and XMP properties (via the xml module). Noise keys take the carrier's.
 3. **Annotations:** KeyedMerge per page, applied onto the carrier. An annotation from the non-carrier side is
    transferred only if its page is aligned with confidence 1 (identical page fingerprint) or, with
@@ -185,9 +189,10 @@ Merge covers the collaborative layers and, since Q-PDF-4 was decided, page conte
    refuses with conflict `signature` unless `--signatures=strip` or `--signatures=keep` is given explicitly (§7.1).
 
 `--conflict=mark`: conflicts with an anchor on a page add a Text annotation by author `splinter` at the anchor with
-the conflict id and both values; `/pages`-level conflicts add one note on page 1. Otherwise policy side.
+the conflict id and both values; `/pages`-level conflicts add one note on page 1. Otherwise policy side. Not
+implemented yet (#85): `mark` falls back to the policy side.
 
-**Patch payloads:** `pdf-annot/1` (annotation dictionary serialized as PDF object syntax with indirect references
+**Patch payloads** (not implemented yet, `caps.patch` false; #123): `pdf-annot/1` (annotation dictionary serialized as PDF object syntax with indirect references
 replaced by symbolic paths; appearance streams omitted), `pdf-field/1` (FQN + value), `pdf-meta/1` (key/value).
 Page content patches use `pdf-content/1` (the graphics objects of a page as content-stream operator text, with symbolic resource names).
 
@@ -202,7 +207,8 @@ Page content patches use `pdf-content/1` (the graphics objects of a page as cont
 - Deterministic: `/ID[1]` derived from the XXH3 of the output content instead of time/random; no `/ModDate` update
   unless `--pdf-touch-moddate`.
 - Encrypted inputs (D-41): permission-only encryption (empty user password) is looked through, and merges write the
-  incremental update with the carrier's encryption and keys (qpdf supports writing encrypted objects). Files that need a
+  incremental update with the carrier's encryption and keys (qpdf supports writing encrypted objects; not implemented
+  yet, #85: v1 rewrites an encrypted carrier through QPDFWriter, `layout-rewritten`). Files that need a
   password are `encrypted` OpaqueLeaf in v1; `--password-file` support comes later. Unsupported security handlers
   (certificate/public-key) are an explicit error.
 - Lost or stale (warnings): appearance streams regenerated or removed, linearization (incremental update makes the file
@@ -300,32 +306,33 @@ dump and reports.
 
 ## 12. Phases
 
-| Phase | Scope | Effort |
-|---|---|---|
-| MVP | qpdf load, `meta`/`pages`/`text` (qpdf extractor)/`annots`/`forms` diff, page alignment, `dump()`, metadata merge | M |
-| v2 | `pdf-render` (PDFium overlay port), `visual` layer and heatmaps, PDFium text; annotation and form merge with carrier logic; incremental writer; signatures check | L |
-| v2 | page content merge (§6 step 1a) | L |
-| Later | `objects` Merkle diff, `revisions` diff within one file, outline/attachment merge, `--pdf-text-flow` | M |
+| Phase | Scope | Effort | State |
+|---|---|---|---|
+| MVP | qpdf load, `meta`/`pages`/`text` (qpdf extractor)/`annots`/`forms` diff, page alignment, `dump()`, metadata merge | M | Done (text boxes, NFC: #86) |
+| v2 | `pdf-render` (PDFium overlay port), `visual` layer and heatmaps, PDFium text; annotation and form merge with carrier logic; incremental writer; signatures check | L | Partly done (D-46): annotation and form merge, incremental writer, signature policy (signatures reported `no-crypto`); `pdf-render`, `visual`, PDFium text not started (#20), signature verification #21 |
+| v2 | page content merge (§6 step 1a) | L | Not started (#20) |
+| Later | `objects` Merkle diff, `revisions` diff within one file, outline/attachment merge, `--pdf-text-flow` | M | Not started |
 
 ## 13. Open questions
 
 - `Q-PDF-1`: Rendering/text library? **Decided 2026-10-08:** no rendering in v1; qpdf only (D-31). **Provisional (original):** PDFium as optional `pdf-render` feature via an overlay port building
   static libs; qpdf-only extractor otherwise. **Why:** only permissive renderer of production quality; no vcpkg port exists.
-- `Q-PDF-2`: Accept MuPDF or Poppler as optional features for users who accept copyleft? **Provisional:** no. **Why:** a
+- `Q-PDF-2`: Accept MuPDF or Poppler as optional features for users who accept copyleft? **Decided:** no. **Why:** a
   build flag that silently relicenses the binary is a trap; PDFium covers the need.
 - `Q-PDF-3`: Default write mode for merges? **Provisional:** incremental update on the carrier. **Decided 2026-10-08:** as provisional; `--layout=compact` forces a full rewrite. **Why:** byte-exact
   preservation, keeps signatures' byte ranges intact.
-- `Q-PDF-4`: What can merge? **Provisional:** metadata, annotations, form values, attachments; page content never. **Decided 2026-10-08:** page content merges too (additions, deletions, and edits from both sides, §6 step 1a); an ugly result is the user's call. **Why (original):**
+- `Q-PDF-4`: What can merge? **Provisional:** metadata, annotations, form values, attachments; page content never. **Decided 2026-10-08:** page content merges too (additions, deletions, and edits from both sides, §6 step 1a); an ugly result is the user's call. The code deviates: page-content merge is not implemented yet (#20), so both-sided page changes are a conflict at `/pages` (§6 step 1a). **Why (original):**
   PDF is an output representation; content merge would invent layouts.
-- `Q-PDF-5`: Transfer annotations onto a page whose content changed? **Provisional:** only for identical page fingerprints
-  by default; `--pdf-transfer-annots=similar` relaxes. **Why:** an annotation's meaning is its position over specific content.
-- `Q-PDF-6`: Default diff layers? **Provisional:** all except `objects` and `visual` (visual on when `pdf-render` is built and
-  `--visual` given). **Why:** keeps default reports focused and fast.
-- `Q-PDF-7`: Appearance streams for merged fields? **Provisional:** regenerate with qpdf for text/choice fields, set
+- `Q-PDF-5`: Transfer annotations onto a page whose content changed? **Decided:** only for identical page fingerprints
+  by default; `--pdf-transfer-annots=similar` relaxes (not implemented yet, #85). **Why:** an annotation's meaning is its position over specific content.
+- `Q-PDF-6`: Default diff layers? **Decided:** all except `objects` and `visual` (visual on when `pdf-render` is built and
+  `--visual` given). v1 has only the five layers `meta,pages,text,annots,forms`, all on by default. **Why:** keeps default reports focused and fast.
+- `Q-PDF-7`: Appearance streams for merged fields? **Decided:** regenerate with qpdf for text/choice fields, set
   `/NeedAppearances` for PDF 1.x. **Why:** `/AP` is derived; PDF 2.0 deprecates `NeedAppearances`, so both are needed.
-- `Q-PDF-8`: How are new objects stored in an incremental update of an xref-stream carrier? **Provisional:** as plain
-  indirect objects, with a new xref stream; no new object stream unless more than 100 small objects are added. **Why:** plain
+- `Q-PDF-8`: How are new objects stored in an incremental update of an xref-stream carrier? **Decided:** as plain
+  indirect objects, with a new xref stream; no new object stream unless more than 100 small objects are added. v1
+  never writes a new object stream (the threshold is #85). **Why:** plain
   objects keep the appended section readable and small, and every PDF 1.5+ reader accepts them next to an xref stream.
-- `Q-PDF-9`: Merge result exceeds a DocMDP `/P` level: write it or refuse? **Provisional:** write it with
+- `Q-PDF-9`: Merge result exceeds a DocMDP `/P` level: write it or refuse? **Decided:** write it with
   `certification-violated`. **Why:** the file stays loadable and earlier revisions stay
   verifiable, which is the `auto` principle; refusing would block routine merges of certified forms.

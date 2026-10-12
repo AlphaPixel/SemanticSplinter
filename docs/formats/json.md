@@ -3,8 +3,9 @@
 **Tier:** T0 · **Module:** `semantic-splinter-json` · **vcpkg feature:** `json` · **Depends on modules:** `text` (core seqdiff only)
 **Extensions / magic:** `.json`, `.jsonc`, `.json5`, `.geojson`, `.webmanifest`, `.babelrc`, `tsconfig.json`, `package.json`, `composer.json`, `*.code-workspace`. Content probe: after optional UTF-8 BOM and whitespace, first byte is `{` or `[` and the first 64 KiB tokenizes without error (confidence 60), or `{`/`[` followed by `"key":` (confidence 80). A bare scalar document is valid JSON but probes at confidence 10 so `text` wins.
 **Status (v1 = MVP, Phase 6):** done: strict JSON and JSONC diff and merge, span-splice writer, patch payloads (#44),
-and `@@ ADDRESS` hunk headers with `--annotate` metrics (#33). Details and what is missing (JSON5, JSON Lines, key
-rules, similarity pairing): §12.1.
+and `@@ ADDRESS` hunk headers with `--annotate` metrics (#33). Not yet: JSON5, JSON Lines, key and set rules, the
+§4 options, exports, JSONC conflict comments, lockfile handling (#40); similarity pairing (#39); the EnvelopeMap
+(#45); patched moves and identified inserts keeping their position (#108). Details: §12.1.
 
 ## 1. Why it matters
 
@@ -93,7 +94,7 @@ the dialect declares order insignificant), `null` vs missing member, duplicate m
 `invalid-duplicate-key` warning, and the last occurrence is the logical value, matching most JavaScript engines).
 
 Options: `--ignore-order` (arrays without key rules compared as multisets), `-w` (ignore whitespace inside
-string values, rarely useful), `--json-numeric`, `--json-order`.
+string values, rarely useful), `--json-numeric`, `--json-order`. None is implemented yet (#40, including `-w`).
 
 ## 5. Diff
 
@@ -131,7 +132,7 @@ appear as `= {}` / `= []`. Strings longer than 120 bytes are emitted as `= "<fir
 **Exports** (`--export=FMT`): RFC 6902 JSON Patch (array positions computed against the evolving document,
 `move` emitted for ID moves), RFC 7386 Merge Patch (lossy: cannot express array element edits or setting
 `null`; a warning is emitted when the change set is not representable), jsondiffpatch delta format (for web
-viewers), and `jd`-style lines. Import of RFC 6902 as a patch is Phase v2.
+viewers), and `jd`-style lines. Import of RFC 6902 as a patch is Phase v2. Not implemented yet (#40).
 
 **Visual:** none (`render_visual` returns false).
 
@@ -164,6 +165,9 @@ Composition: objects use **KeyedMerge** (SPEC §5.1 table, key order rule includ
   text markers around the conflicting member lines (file no longer parses; useful only for manual editing
   in Git workflows, mirrors what users expect from `git merge`).
 
+v1 writes ours with warning `mark-unsupported` for every dialect; the JSONC comments are #40, `--json-mark=text`
+is not implemented yet.
+
 **Patch payload:** per touched unit, `before` and `after` as canonical JSON text in the hunk body
 (`- ` / `+ ` lines). No binary encoding needed.
 
@@ -171,8 +175,8 @@ Composition: objects use **KeyedMerge** (SPEC §5.1 table, key order rule includ
 re-indented to column 0. `implant()` places the values through the span-splice writer, like changes from
 theirs that keep their own layout, so a patch applied to its exact base reproduces the new file byte for byte.
 An insert at an array index makes a new element at that index (the new side's); an inserted identified element
-or member goes last. Element moves apply as value updates (the order is not patched), and a unit whose
-container the target lacks is dropped.
+or member goes last. Element moves apply as value updates (the order is not patched; #108), and a unit whose
+container the target lacks is dropped (#107).
 
 ## 7. Serialization and preservation
 
@@ -277,9 +281,9 @@ comments in a mutable tree (based on documentation of their feature sets, not te
 
 ## 12. Phases
 
-- **MVP (M):** SpanJson strict + JSONC, tree diff, KeyedMerge/SequenceMerge with auto key detection, span-splice writer, dump, unified-over-dump, JSON report.
-- **v2 (M):** JSON5, `--json-key` rules file, RFC 6902 / 7386 / jsondiffpatch export, RFC 6902 import as patch, JSON Lines, conflict comments in JSONC.
-- **Later (S each):** JSON Schema validation, `--json-grid`, rename detection for keyed elements, dialect profile API polish.
+- **MVP (M):** SpanJson strict + JSONC, tree diff, KeyedMerge/SequenceMerge with auto key detection, span-splice writer, dump, unified-over-dump, JSON report. *Done* (similarity pairing simplified, #39).
+- **v2 (M):** JSON5, `--json-key` rules file, RFC 6902 / 7386 / jsondiffpatch export, RFC 6902 import as patch, JSON Lines, conflict comments in JSONC. *Not started* (#40).
+- **Later (S each):** JSON Schema validation, `--json-grid`, rename detection for keyed elements, dialect profile API polish. *Not started.*
 
 ### 12.1 Implementation status (Phase 6)
 
@@ -296,24 +300,26 @@ validation; dump; unified-over-dump; JSON report; detection by the extensions an
 Shared helper `src/formats/common/splice.hpp` (SPEC §2.3).
 
 Simplified: unidentified elements pair positionally inside a changed run (equal-length runs in diffs, 1:1:1
-conflicting chunks in merges) instead of the §3 similarity scoring, so no `confidence`; comments in other
-sides' leading text of an inserted member are dropped; an object that is rebuilt keeps shadowed duplicate
+conflicting chunks in merges) instead of the §3 similarity scoring, so no `confidence` (#39); comments in other
+sides' leading text of an inserted member are dropped (#40); an object that is rebuilt keeps shadowed duplicate
 members just before the member that overrides them.
 
 Not yet: JSON5 (`.json5` is not claimed), `--json-key`/`--json-set` rules, `--json-order`, `--json-numeric`,
-`--ignore-order`, `--json-string-lines`, `--dump-full`, exports,
-JSON Lines, conflict comments in JSONC, lockfile handling (Q-JSON-5), `possible-rename`, `pairing-skipped`,
-UTF-16/32 input, and the JSONTestSuite corpus and fuzz targets (Phase 8: #16, #17).
+`--ignore-order`, `--dump-full`, exports, JSON Lines, conflict comments in JSONC, lockfile handling (Q-JSON-5),
+`possible-rename` (#40); similarity pairing and `pairing-skipped` (#39); the EnvelopeMap and `encoding` churn
+(#45); `--json-string-lines`, `--json-mark=text`, `-w`, and UTF-16/32 input (#40); the JSONTestSuite
+corpus and fuzz targets (Phase 8: #16, #17).
 
 Measured (Release, a 10 MB file with a 100 000-record keyed array, on a loaded machine): parse about 0.5 s,
 merge about 8 s, most of it in the core SequenceMerge over the keyed array (identity maps and move detection).
+After #38 a 7.8 MB file of that shape merges in about 1.4 s; #64 tracks the rest.
 
 ## 13. Open questions
 
-- **Q-JSON-1:** Own parser or nlohmann with `JSON_DIAGNOSTIC_POSITIONS`? **Provisional:** own `SpanJson`. **Why:** spans plus raw number text plus duplicate keys, without a program-wide ODR-sensitive macro.
-- **Q-JSON-2:** Are arrays order-significant by default when both sides insert at the same place? **Provisional:** yes, `add-add` unless a set rule or profile says otherwise. **Why:** silently ordering inserts changes meaning in ordered lists (steps, layers).
-- **Q-JSON-3:** Auto-detect array identity keys or require configuration? **Provisional:** auto-detect from the fixed candidate list, require uniqueness on all three sides, report the choice. **Why:** most record arrays use `id`/`name`, and reporting makes the heuristic visible.
-- **Q-JSON-4:** Treat `1e2` and `100` as equal? **Provisional:** no by default, `--json-numeric` opts in. **Why:** integer vs float distinctions matter to typed consumers.
-- **Q-JSON-5:** Merge lockfiles? **Provisional:** not by default; detect known lockfile names, report `derived-stale`, take ours whole, exit with conflict only if both sides changed it. Taking one side whole satisfies the coupling rule (SPEC §12.5) trivially. Opt-in `--lockfile=merge` (v2) merges per package entry, where an entry's version, `resolved`, and hash fields are one coupled unit taken whole from one side; both sides changing one entry differently, or a merge that would pair one side's version with the other's hash, is a `dependency` conflict. Top-level manifest digests (`composer.lock` `content-hash`, `Pipfile.lock` `_meta.hash`) are coupled to the manifest and become `derived-stale` after any entry merge. **Why:** lockfiles are derived from manifests and package managers regenerate them, but disjoint dependency bumps are common enough to justify an opt-in that can never produce a version with a foreign hash.
-- **Q-JSON-6:** How to mark conflicts in strict JSON? **Provisional:** fall back to ours plus sidecar; `--json-mark=text` writes Git markers on request. **Why:** strict JSON has no place for markers that keeps the file valid.
-- **Q-JSON-7:** Is JSON5 written or only read? **Provisional:** read and write via span splice, new values emitted in JSON-compatible syntax. **Why:** span splice preserves JSON5 syntax for free; we never need to invent JSON5-only syntax.
+- **Q-JSON-1:** Own parser or nlohmann with `JSON_DIAGNOSTIC_POSITIONS`? **Decided:** own `SpanJson`. **Why:** spans plus raw number text plus duplicate keys, without a program-wide ODR-sensitive macro.
+- **Q-JSON-2:** Are arrays order-significant by default when both sides insert at the same place? **Decided:** yes, `add-add` unless a set rule or profile says otherwise (set rules are #40). **Why:** silently ordering inserts changes meaning in ordered lists (steps, layers).
+- **Q-JSON-3:** Auto-detect array identity keys or require configuration? **Decided:** auto-detect from the fixed candidate list, require uniqueness on all three sides, report the choice. **Why:** most record arrays use `id`/`name`, and reporting makes the heuristic visible.
+- **Q-JSON-4:** Treat `1e2` and `100` as equal? **Decided:** no by default, `--json-numeric` opts in (not implemented yet, #40). **Why:** integer vs float distinctions matter to typed consumers.
+- **Q-JSON-5:** Merge lockfiles? **Decided:** not by default; detect known lockfile names, report `derived-stale`, take ours whole, exit with conflict only if both sides changed it. Taking one side whole satisfies the coupling rule (SPEC §12.5) trivially. Opt-in `--lockfile=merge` (v2) merges per package entry, where an entry's version, `resolved`, and hash fields are one coupled unit taken whole from one side; both sides changing one entry differently, or a merge that would pair one side's version with the other's hash, is a `dependency` conflict. Top-level manifest digests (`composer.lock` `content-hash`, `Pipfile.lock` `_meta.hash`) are coupled to the manifest and become `derived-stale` after any entry merge. Not implemented yet (#40): v1 merges lockfiles as ordinary JSON. **Why:** lockfiles are derived from manifests and package managers regenerate them, but disjoint dependency bumps are common enough to justify an opt-in that can never produce a version with a foreign hash.
+- **Q-JSON-6:** How to mark conflicts in strict JSON? **Decided:** fall back to ours plus sidecar; `--json-mark=text` writes Git markers on request (not implemented yet). **Why:** strict JSON has no place for markers that keeps the file valid.
+- **Q-JSON-7:** Is JSON5 written or only read? **Decided:** read and write via span splice, new values emitted in JSON-compatible syntax (JSON5 is #40). **Why:** span splice preserves JSON5 syntax for free; we never need to invent JSON5-only syntax.

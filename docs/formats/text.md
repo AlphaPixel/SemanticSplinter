@@ -5,8 +5,11 @@
 **Status (v1 = MVP + v2, Phase 2):** done: GNU `diff` output styles, `diff3`, RCS `merge`, and `git merge-file`,
 byte-identical to GNU diff 3.12, GNU diff3, and Git on the golden corpus (`tests/golden/`); Myers, histogram, and
 patience; zealous refinement, zdiff3, `--eol`, UTF-16/32; unified patch apply with fuzz and rejects, and the
-splinter patch envelope (text or JSON). Not yet: context, normal, and ed patch input, `-D`, and `GIT binary patch`
-hunks (#36), and the `later` row of §12.
+splinter patch envelope (text or JSON). Text patches are unified diffs, not payloads (`caps.patch` is false). Not
+yet: context, normal, and ed patch input, `patch -D`, `patch --merge` on unified hunks, and `GIT binary patch` hunks
+(#36); the indent heuristic (#133), `diff -D` and the group/line formats (exit 2, 3 with
+`--exit-codes`; #134), `--unicode-case`, `--unicode-space`, East Asian Wide columns and `--posix` byte columns in side by
+side (Q-TEXT-7, Q-TEXT-8; #135), Git extended patch headers (#36), and, untracked, intra-line word diff (§12).
 
 ## 1. Why it matters
 
@@ -31,7 +34,7 @@ A text file here is: optional BOM, a sequence of lines in one encoding, each ter
 
 Line splitting follows GNU: **only LF terminates a line**. CR before LF is part of the line content unless `--strip-trailing-cr` is given. A lone-CR file is therefore one long line in GNU emulation. `--eol=auto` (Splinter extension, default only in merge modes, see §4) splits on CR, LF, and CRLF.
 
-Encoding detection and the line splitter are exported as a shared helper (`src/core/text/encoding.*`) for CSV, JSON, and XML text, with a mapping from decoded positions back to original byte offsets so that span-splicing writers work on UTF-16 input too.
+Encoding detection and the line splitter are exported as a shared helper (`src/core/text.cpp`, `semsplinter/text.hpp`) for CSV, JSON, and XML text, with a mapping from decoded positions back to original byte offsets so that span-splicing writers work on UTF-16 input too.
 
 For UTF-16/32 the splitter works on code units (LF = `0A 00` or `00 0A`), so that line boundaries never fall inside a code unit. Lines are stored as **byte spans into the original buffer**, never decoded copies, so that output is byte-exact.
 
@@ -66,7 +69,7 @@ All options affect only **comparison**. Output always prints original bytes.
 
 | Option | GNU semantics (we match) | Implementation |
 |---|---|---|
-| `-i`, `--ignore-case` | Case-insensitive comparison | ASCII fold in GNU. We fold ASCII by default and full Unicode simple case fold with `--unicode-case` (extension). |
+| `-i`, `--ignore-case` | Case-insensitive comparison | ASCII fold in GNU. We fold ASCII by default and full Unicode simple case fold with `--unicode-case` (extension; not implemented yet). |
 | `-E`, `--ignore-tab-expansion` | Tab vs equivalent spaces | Expand tabs to `--tabsize` (default 8) columns before hashing. |
 | `-Z`, `--ignore-trailing-space` | Ignore white space at line end | Strip trailing `[ \t\v\f\r]`. |
 | `-b`, `--ignore-space-change` | Runs of white space compare equal, trailing ignored | Collapse runs to one space, strip trailing. |
@@ -78,7 +81,7 @@ All options affect only **comparison**. Output always prints original bytes.
 
 The "white space" set for `-b`/`-w` is GNU's: space, tab, VT, FF, CR. Not Unicode spaces (Q-TEXT-7).
 
-Splinter extensions, merge modes only: `--eol=auto|keep` (default `auto` in merge, `keep` in diff). With `auto`, lines are compared without their terminator, and an EOL convention change that covers at least 90% of one side's lines is lifted out as a single `/eol` change. This makes "Alice converted the file to CRLF, Bob edited line 40" merge cleanly. It is reported as `auto: eol-convert`, never silent.
+Splinter extensions, merge modes only: `--eol=auto|keep` (accepted by `splinter merge` and `diff3`; default `auto` in `splinter merge`, `keep` in diff, `diff3`, `merge-file`, and the Git driver). With `auto`, lines are compared without their terminator, and an EOL convention change that covers at least 90% of one side's lines is lifted out as a single `/eol` change. This makes "Alice converted the file to CRLF, Bob edited line 40" merge cleanly. It is reported as `auto: eol-convert`, never silent.
 
 Never normalized: Unicode normalization (NFC vs NFD), BOM presence (it is a separate `/encoding` unit), tab vs space for non-`-E` modes.
 
@@ -108,27 +111,27 @@ Common steps for every algorithm: trim common prefix and suffix; then run the al
 Post-processing:
 
 - **Compaction (slider)**: a change group that can slide up or down because the lines at its edges are equal is moved to a canonical position: GNU's `shift_boundaries` behaviour for GNU emulation (merge with adjacent groups when possible, otherwise move down as far as possible).
-- **Indent heuristic**: Git's default since 2.14. Score each slider position by blank lines and indentation around the boundaries and pick the best. On in Git-compatible modes, off in GNU modes.
+- **Indent heuristic**: Git's default since 2.14. Score each slider position by blank lines and indentation around the boundaries and pick the best. On in Git-compatible modes, off in GNU modes. Not implemented yet: every mode uses the GNU compaction.
 
 Cost control: `cost_limit` (default derived from input size as above) bounds time on pathological inputs; it is ignored when `algo == minimal`. Worst-case memory is O(N+M) for Myers, O(N) for the histogram table.
 
 ### 5.2 Output formats (GNU diff)
 
-Implemented in `src/core/report/text_render.*` because structured formats use the same renderers on their dump lines.
+Implemented in `src/core/render.cpp` because structured formats use the same renderers on their dump lines.
 
 | Format | Option | Priority | Notes |
 |---|---|---|---|
 | Normal | default | MVP | `NaM`, `NcM`, `NdM` commands, `<`/`>`/`---`. |
 | Unified | `-u`, `-U NUM`, `--unified[=NUM]` | MVP | Header `--- LABEL\tTIMESTAMP`. Hunks join when the gap is at most 2×context. `@@ -l,s +l,s @@` with GNU's omitted `,1` rule and `,0` for empty ranges (line number is the line *before* the empty range). |
-| Brief | `-q` | MVP | `Files A and B differ`. Binary inputs: `Binary files A and B differ` (exact GNU wording, see binary.md). |
+| Brief | `-q` | MVP | `Files A and B differ`, binary inputs included (GNU; see binary.md §5.3). |
 | Context | `-c`, `-C NUM` | MVP | `***************`, `*** a,b ****`, `--- c,d ----`, `!`/`+`/`-` markers, omitted side when it has no changes. |
 | `\ No newline at end of file` | all of the above | MVP | Exact GNU text. |
 | Side by side | `-y`, `-W NUM`, `--left-column`, `--suppress-common-lines` | v2 | Gutter `|`, `<`, `>`, `(`, `)`. Column math follows GNU (half width minus gutter, tab expansion to tab stops). East-Asian-wide characters: GNU counts columns per byte in C locale; we count per code point by default (Q-TEXT-8). |
 | ed script | `-e` | v2 | Commands emitted bottom-up; a line consisting of `.` is escaped with the `..`/`s/.//` trick as GNU does. |
 | Forward ed | `-f` | v2 | Top-down, not runnable by ed. |
 | RCS | `-n`, `--rcs` | v2 | `aN COUNT` / `dN COUNT`. Needed by RCS `merge` emulation only marginally. |
-| ifdef | `-D NAME` | later | `#ifndef NAME` / `#else` / `#endif` merged output. |
-| Group/line formats | `--old-group-format` etc. | later | printf-like specifiers `%<`, `%>`, `%=`, `%L`, `%l`, `%dN`. Implemented on top of ifdef machinery. |
+| ifdef | `-D NAME` | later | `#ifndef NAME` / `#else` / `#endif` merged output. Not implemented yet: exits as unsupported (2, or 3 with `--exit-codes`). |
+| Group/line formats | `--old-group-format` etc. | later | printf-like specifiers `%<`, `%>`, `%=`, `%L`, `%l`, `%dN`. Implemented on top of ifdef machinery. Not implemented yet, as `-D`. |
 | Function headers | `-p`, `-F RE` | v2 | Text after `@@` (unified) or `***************` (context): last preceding line matching RE (`-p` = `^[[:alpha:]$_]`). |
 | Misc | `-t`, `-T`, `--tabsize`, `--color[=WHEN]`, `--label`, `--horizon-lines` | MVP (`--label`) / v2 | `--horizon-lines` is accepted and ignored (it only affects GNU's speed). |
 
@@ -154,7 +157,7 @@ Memory is input bytes plus 16 bytes per line (span plus class ID). A 1 GiB log w
 
 1. Diff base→ours and base→theirs with the selected algorithm (`--diff-algorithm`, default Myers in GNU modes and in `git merge-file` mode to match those tools; histogram in `splinter merge` native mode).
 2. Walk both edit scripts over base line ranges, forming chunks: *stable* (neither side changed), *ours-only*, *theirs-only*, *both-identical*, *both-different* (conflict). Two edits whose base ranges overlap or touch (adjacent, with zero stable lines between them) belong to one chunk. This adjacency rule is GNU diff3's and Git's, and it is deliberately conservative.
-3. **Refinement** (Git mode only, `XDL_MERGE_ZEALOUS` behaviour): inside a conflict chunk, diff ours against theirs; leading and trailing lines that are equal on both sides are moved out of the conflict, and the chunk can split into several smaller conflicts. Git's `zealous_alnum` further merges conflicts separated only by lines with no alphanumeric characters. GNU diff3 does not do this, so it is off in GNU modes.
+3. **Refinement** (Git and native modes, `XDL_MERGE_ZEALOUS` behaviour): inside a conflict chunk, diff ours against theirs; leading and trailing lines that are equal on both sides are moved out of the conflict, and the chunk can split into several smaller conflicts. Git's `zealous_alnum` further merges conflicts separated only by lines with no alphanumeric characters. GNU diff3 does not do this, so it is off in GNU modes.
 4. Emit result and Conflicts (`reason: both-modified`, or `add-add` when the base range is empty).
 
 ### 6.2 Conflict output (`--conflict=mark`, the default for text)
@@ -188,7 +191,7 @@ ed script outputs are v2. `-m` with `-A` and `-E` is MVP.
 
 ### 6.4 RCS `merge` and `git merge-file` emulation
 
-- RCS: `merge [-A|-E|-e] [-p] [-q] [-L l1 [-L l2 [-L l3]]] file1 file2 file3`. Default `-E`. Writes into file1 unless `-p`. Exit 0 clean, 1 conflicts, 2 trouble.
+- RCS: `merge [-A|-E|-e] [-p] [-q] [-L l1 [-L l2 [-L l3]]] file1 file2 file3`. Default `-E`. Writes into file1 unless `-p`. Exit 0 clean, 1 conflicts, 2 trouble. RCS `merge` and native `splinter merge` are one mode (`run_merge`): histogram, zealous refinement, and `--eol=auto` apply to both (a deviation from Q-TEXT-2 to Q-TEXT-4).
 - `git merge-file`: **yes, emulate it**, as the mode `splinter merge-file` (and the alias name `git-merge-file` is not installed, to avoid shadowing Git). Options `-p`, `-q`, `-L`×3, `--ours/--theirs/--union`, `--diff3`, `--zdiff3`, `--marker-size`, `--diff-algorithm`. Exit status is the **number of conflicts capped at 127**, negative-equivalent (255) on error. This costs little (the refinement step is needed anyway for the Git driver) and lets users swap `splinter` in for Git-generated golden tests. `--object-id` is not supported (no repository access; SPEC §9).
 
 ### 6.5 Encoding and EOL in merge
@@ -248,15 +251,17 @@ There are no framing, integrity, authenticity, derived, or volatile fields. Embe
 
 - **Exact GNU hunk shapes.** Equal-cost edit scripts can differ. The clean-room Myers aims for identical output on the corpus, but where GNU's internal tie-breaking cannot be reproduced without reading its code, we accept a different script of equal cost and document it (Q-TEXT-1).
 - **Lone CR files** are a single line in GNU mode. That is faithful but useless; `--eol=auto` fixes it in merge modes.
-- **BOM-less UTF-16 without NULs** (e.g. CJK-only text) is indistinguishable from binary noise. Use `--encoding=utf-16le`.
+- **BOM-less UTF-16 without NULs** (e.g. CJK-only text) is indistinguishable from binary noise. Use `--encoding=utf-16le` (not implemented yet).
 - **Legacy 8-bit encodings** (Shift-JIS, Windows-1252) are treated as opaque bytes. That is correct for diff and merge because line splitting on LF is safe in all of them except Shift-JIS second bytes, which never equal 0x0A. Case folding for `-i` is ASCII only there.
 - **Extremely long lines** (minified JS, 50 MB single line): diff is trivially one change; `--word-diff` style refinement is a later feature.
 - **`patch` corner cases**: reversed-patch detection prompts in GNU; we never prompt (`-t`/`--batch` semantics always) and report "Reversed (or previously applied) patch detected" then skip, or apply with `-R`. `-N` and `--forward` supported.
-- Non-goals: GNU `sdiff` interactive mode, `cmp`, `diff --from-file` multi-operand form (v2 at best), locale-dependent messages (messages are English, like `LC_ALL=C`).
+- Non-goals: GNU `sdiff` interactive mode, `cmp`, locale-dependent messages (messages are English, like `LC_ALL=C`).
 
 ### 10.1 GNU patch emulation (summary; full contract in CLI.md)
 
 Input formats: unified, context, normal, ed (via a built-in ed subset: `a`, `c`, `d`, `s/.//`, `.`). Hunk location: try the stated line plus the accumulated offset, then search outward alternately forward and backward. With fuzz F (`-F`, default 2), up to F leading and trailing context lines may be ignored, trying fuzz 0, then 1, up to F. Messages match GNU (`Hunk #2 succeeded at 47 (offset 3 lines).`, `Hunk #1 FAILED at 10.`, `with fuzz 1`). Rejects go to `FILE.rej` in the hunk's original format (unified when the input was unified). `--merge[=merge|diff3]` writes conflict markers instead of rejects. `-p`, `-R`, `-N`, `-o`, `-r`, `-b`/`-V`/`-z`, `--dry-run`, `-E`, `-s`, `--binary` supported. Git extended headers (`diff --git`, rename, mode, `GIT binary patch`) are parsed for renames and modes in v2.
+Implemented today: unified input and splinter envelopes; context, normal, and ed input, `--merge` on unified hunks, and
+`GIT binary patch` are #36; rename and mode headers are #36 too.
 
 ### 10.2 GNU compatibility findings (black-box, Phase 2)
 
@@ -304,22 +309,22 @@ corpus in `tests/golden/` pins them.
 
 ## 12. Phases
 
-| Phase | Content | Effort |
-|---|---|---|
-| MVP | Splitter (UTF-8, BOM, LF/CRLF), equivalence classes, Myers + minimal + histogram, normal/unified/context/brief renderers, `-i -E -Z -b -w -B -I --strip-trailing-cr -a`, diff3 merge with merge/diff3 styles, `-L`, `--marker-size`, GNU `diff3 -m`, RCS `merge`, unified patch apply with fuzz and rejects, dump-line rendering for other formats | L |
-| v2 | Patience, indent heuristic, zealous refinement, zdiff3, `merge-file` mode, side-by-side, ed/forward-ed/rcs outputs, diff3 non-merge outputs, `-p`/`-F`, context/normal/ed patch input, UTF-16/32, `--eol=auto`, `--color` | M |
-| later | ifdef and group/line formats, Git extended patch headers, intra-line word diff, `--from-file`/`--to-file` | M |
+| Phase | Content | Effort | State |
+|---|---|---|---|
+| MVP | Splitter (UTF-8, BOM, LF/CRLF), equivalence classes, Myers + minimal + histogram, normal/unified/context/brief renderers, `-i -E -Z -b -w -B -I --strip-trailing-cr -a`, diff3 merge with merge/diff3 styles, `-L`, `--marker-size`, GNU `diff3 -m`, RCS `merge`, unified patch apply with fuzz and rejects, dump-line rendering for other formats | L | done |
+| v2 | Patience, indent heuristic, zealous refinement, zdiff3, `merge-file` mode, side-by-side, ed/forward-ed/rcs outputs, diff3 non-merge outputs, `-p`/`-F`, context/normal/ed patch input, UTF-16/32, `--eol=auto`, `--color` | M | partly: indent heuristic not started (#133); context/normal/ed patch input not started (#36) |
+| later | ifdef and group/line formats, Git extended patch headers, intra-line word diff, `--from-file`/`--to-file` | M | partly: `--from-file`/`--to-file` done; the rest not started (`patch -D`: #36) |
 
 ## 13. Open questions
 
-- **Q-TEXT-1**: Must Myers output be byte-identical to GNU diff on all inputs? **Provisional:** Identical on the golden corpus is the goal; where tie-breaking differs, equal-cost scripts are accepted and listed as known differences. **Why:** exact equivalence would require studying GPL code, which a clean-room implementation must avoid.
-- **Q-TEXT-2**: Default algorithm for `splinter merge` (native mode)? **Provisional:** histogram, with Myers in `diff3`, RCS `merge`, and `merge-file` modes. **Why:** histogram gives better merges; emulation modes must match their oracles.
-- **Q-TEXT-3**: Enable Git-style zealous conflict refinement in native `splinter merge`? **Provisional:** yes (native and Git driver), no in GNU/RCS modes. **Why:** smaller conflicts are the project's goal, and GNU compatibility is only promised in emulation modes.
-- **Q-TEXT-4**: Should `--eol=auto` be the default in merges? **Provisional:** yes in native and Git merge modes, off in GNU emulation, always reported. **Why:** whole-file EOL conversion is a common Windows/Unix collision and is unambiguous when it covers at least 90% of lines.
-- **Q-TEXT-5**: Emulate `git merge-file`? **Provisional:** yes, as `splinter merge-file`, without `--object-id`. **Why:** small extra cost over the Git driver, and it gives a Git oracle for tests.
-- **Q-TEXT-6**: Regex engine for `-I` and `-F`? **Provisional:** `std::regex` basic grammar; switch to a small own POSIX BRE translator to ECMAScript if compatibility gaps show up. **Why:** no dependency, and patterns used in practice are simple; `std::regex` is slow but runs only on changed lines.
-- **Q-TEXT-7**: Should `-b`/`-w` treat Unicode spaces (NBSP, U+3000) as white space? **Provisional:** no by default, `--unicode-space` extension. **Why:** GNU in C locale does not, and golden tests run in C locale.
-- **Q-TEXT-8**: Side-by-side column width for multibyte characters? **Provisional:** count code points, East Asian Wide as 2, when input is UTF-8; byte columns with `--posix`. **Why:** byte counting breaks layout for non-ASCII text and nobody relies on that.
-- **Q-TEXT-9**: How to annotate structured-format hunks without breaking `patch`? **Provisional:** Address goes in the `@@ ... @@` trailing text (which patch ignores); metric comments only with `--annotate`. **Why:** keeps `-u` output appliable and consistent with textconv.
-- **Q-TEXT-10**: Accept and diff BOM-less UTF-16 automatically? **Provisional:** yes when the NUL-parity heuristic is strong (at least 40% parity NULs and under 2% on the other parity), else binary. **Why:** Windows tools (e.g. `.reg`, some `.rc` files) write UTF-16 and Git users want to see their diffs.
-- **Q-TEXT-11**: Header timestamps in GNU modes? **Provisional:** GNU format from file mtime when inputs are files, omitted for stdin and Git modes. **Why:** tools parse them, and mtimes are input data, not wall-clock time.
+- **Q-TEXT-1**: Must Myers output be byte-identical to GNU diff on all inputs? **Decided:** Identical on the golden corpus is the goal; where tie-breaking differs, equal-cost scripts are accepted and listed as known differences. **Why:** exact equivalence would require studying GPL code, which a clean-room implementation must avoid.
+- **Q-TEXT-2**: Default algorithm for `splinter merge` (native mode)? **Decided:** histogram, with Myers in `diff3`, RCS `merge`, and `merge-file` modes. The code deviates: RCS `merge` is the native mode and uses histogram (§6.4); the Git driver uses Myers. **Why:** histogram gives better merges; emulation modes must match their oracles.
+- **Q-TEXT-3**: Enable Git-style zealous conflict refinement in native `splinter merge`? **Decided:** yes (native and Git driver), no in GNU/RCS modes. The code deviates: RCS `merge` refines too, as it is the native mode. **Why:** smaller conflicts are the project's goal, and GNU compatibility is only promised in emulation modes.
+- **Q-TEXT-4**: Should `--eol=auto` be the default in merges? **Decided:** yes in native and Git merge modes, off in GNU emulation, always reported. The code deviates: on by default only in `splinter merge` (and so in RCS `merge`); the Git driver leaves it off and has no `--eol` option. **Why:** whole-file EOL conversion is a common Windows/Unix collision and is unambiguous when it covers at least 90% of lines.
+- **Q-TEXT-5**: Emulate `git merge-file`? **Decided:** yes, as `splinter merge-file`, without `--object-id`. **Why:** small extra cost over the Git driver, and it gives a Git oracle for tests.
+- **Q-TEXT-6**: Regex engine for `-I` and `-F`? **Decided:** `std::regex` basic grammar; switch to a small own POSIX BRE translator to ECMAScript if compatibility gaps show up. **Why:** no dependency, and patterns used in practice are simple; `std::regex` is slow but runs only on changed lines.
+- **Q-TEXT-7**: Should `-b`/`-w` treat Unicode spaces (NBSP, U+3000) as white space? **Decided:** no by default, `--unicode-space` extension (not implemented yet). **Why:** GNU in C locale does not, and golden tests run in C locale.
+- **Q-TEXT-8**: Side-by-side column width for multibyte characters? **Decided:** count code points, East Asian Wide as 2, when input is UTF-8; byte columns with `--posix`. The code deviates: it counts every code point as 1, and diff has no `--posix`. **Why:** byte counting breaks layout for non-ASCII text and nobody relies on that.
+- **Q-TEXT-9**: How to annotate structured-format hunks without breaking `patch`? **Decided:** Address goes in the `@@ ... @@` trailing text (which patch ignores); metric comments only with `--annotate`. **Why:** keeps `-u` output appliable and consistent with textconv.
+- **Q-TEXT-10**: Accept and diff BOM-less UTF-16 automatically? **Decided:** yes when the NUL-parity heuristic is strong (at least 40% parity NULs and under 2% on the other parity), else binary. **Why:** Windows tools (e.g. `.reg`, some `.rc` files) write UTF-16 and Git users want to see their diffs.
+- **Q-TEXT-11**: Header timestamps in GNU modes? **Decided:** GNU format from file mtime when inputs are files, omitted for stdin and Git modes. **Why:** tools parse them, and mtimes are input data, not wall-clock time.
