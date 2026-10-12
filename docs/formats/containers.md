@@ -4,6 +4,9 @@
 
 **Tier:** T0 · **Module:** `semantic-splinter-zip` (ZIP, JAR/APK/NUPKG, mimetype-first profile) and `semantic-splinter-tar` (TAR family) · **vcpkg feature:** `zip` (deps: `zlib`, `zstd`), `tar` (deps: `zlib`, `zstd`, `liblzma`, `bzip2`); both share the helper `semantic-splinter-container` (member layer and codecs) · **Depends on modules:** core only.
 **Extensions / magic:** ZIP `PK\x03\x04` at 0, or an end-of-central-directory record `PK\x05\x06` found in the last 64 KiB + 22 bytes (covers self-extracting stubs and empty archives `PK\x05\x06` at 0). `.zip .jar .war .ear .apk .aab .nupkg .whl .xpi .vsix .crx` (CRX has a header before the ZIP). TAR: `ustar` at offset 257 (`ustar\0` POSIX or `ustar  \0` GNU), or a valid header checksum in block 0. `.tar .tar.gz .tgz .tar.zst .tzst .tar.xz .txz .tar.bz2`. gzip `1F 8B`, zstd `28 B5 2F FD`, xz `FD 37 7A 58 5A 00`.
+**Status (v1 = MVP + v2 without similarity renames, Phase 6):** done: ZIP and TAR (gzip, zstd, xz, bzip2) diff and
+merge with recursion into members, and patch payloads (§6.5, #44). Details and what is missing (EnvelopeMap,
+`--layout`, some validation options, ZIP prefix and APK Signing Block patches): §12.1.
 
 ## 1. Why it matters
 
@@ -333,7 +336,7 @@ Patch payloads (§6.5) came with #44. Not yet: the EnvelopeMap (churn line, `ins
 `--visual`, and `--layout` (the order is always ours'). Member times are DOS times; 0x5455/0x000A extras follow
 the content side. A value that needs ZIP64 in a record that had none exits 3. The zstd and xz re-encode levels
 are fixed (3, preset 6) instead of inferred; TAR blocking padding is ours' tail verbatim. Fuzz targets, the
-checked-in EPUB/APK/JAR/NuGet fixtures, and the measured hostile corpus are Phase 7+ tracks.
+checked-in EPUB/APK/JAR/NuGet fixtures, and the measured hostile corpus are Phase 8 work (#16, #17).
 
 ## 13. Open questions
 

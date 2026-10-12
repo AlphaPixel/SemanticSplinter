@@ -2,6 +2,9 @@
 
 **Tier:** T1 · **Module:** `semantic-splinter-png` · **vcpkg feature:** `png` · **Depends on modules:** none (core only). Introduces the shared helper module `semantic-splinter-raster` (see 3.4), with no external dependencies.
 **Extensions / magic:** `.png`, `.apng`. Magic `89 50 4E 47 0D 0A 1A 0A`, first chunk must be `IHDR`. APNG is detected by an `acTL` chunk before the first `IDAT` (extension alone is not trusted). Probe confidence: 100 on signature + well-formed 13-byte `IHDR`, 0 otherwise. An `IHDR` CRC mismatch does not fail the probe; it is reported as `integrity-mismatch-input` (SPEC §12.3).
+**Status (v1 = MVP + v1.1, Phases 3–5):** done: diff, merge, dump, inspect, visuals, and patch payloads (§6.7);
+unified diffs carry `@@ ADDRESS` hunk headers and `--annotate` metrics (#33). APNG animation is one unit. Details and
+what is missing (indexed mode, lcms2 ΔE, fuzz targets): §12.1.
 
 ## 1. Why it matters
 
@@ -496,7 +499,7 @@ Phase 4 added the Git drivers and Phase 5 the patch payloads (§6.7).
 
 Not yet: indexed mode (`--png-mode=index` exits 3), the fuzzy patch offset search (v1.1), ΔE through
 lcms2 (`png-icc`), the `iCCP` description tag, `requantized`, `--visual=side-by-side`, `--signatures` handling of
-`caBX`/`dSIG` (kept as opaque chunks), `sbit-mismatch`, and the PngSuite corpus and fuzz targets (Phase 7+ tracks).
+`caBX`/`dSIG` (kept as opaque chunks), `sbit-mismatch`, and the PngSuite corpus and fuzz targets (Phase 8: #16, #17).
 A `cropped-away` conflict resolved to the painting side writes that side's whole image.
 
 Measured (Release, one 4096×4096 RGBA8 ImageMagick pair): diff 1.7 s, decode-dominated; a merge spends most of

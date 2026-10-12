@@ -2,6 +2,11 @@
 
 **Tier:** T0 · **Module:** `semantic-splinter-text` (plus the shared sequence-diff engine in `src/core/diff`) · **vcpkg feature:** none (mandatory, no dependencies) · **Depends on modules:** none
 **Extensions / magic:** any. Selected by `--format=text`, by the fallback rule of SPEC §11 step 4, or by `-a/--text`. Probe confidence is low (10) so that every structured format wins over it.
+**Status (v1 = MVP + v2, Phase 2):** done: GNU `diff` output styles, `diff3`, RCS `merge`, and `git merge-file`,
+byte-identical to GNU diff 3.12, GNU diff3, and Git on the golden corpus (`tests/golden/`); Myers, histogram, and
+patience; zealous refinement, zdiff3, `--eol`, UTF-16/32; unified patch apply with fuzz and rejects, and the
+splinter patch envelope (text or JSON). Not yet: context, normal, and ed patch input, `-D`, and `GIT binary patch`
+hunks (#36), and the `later` row of §12.
 
 ## 1. Why it matters
 

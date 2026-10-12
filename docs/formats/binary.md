@@ -2,6 +2,10 @@
 
 **Tier:** T0 · **Module:** `semantic-splinter-binary` · **vcpkg feature:** none (mandatory, no dependencies beyond core xxHash) · **Depends on modules:** none (uses `src/core/diff` from text.md)
 **Extensions / magic:** none. Chosen when nothing else probes and the text test of SPEC §11 step 4 fails, or with `--format=binary`.
+**Status (v1 = MVP + `--binary-merge`, D-49, Phase 2):** done: GNU "differ" line and exit status, byte-range
+report, chunked hex dump, OpaqueLeaf merge, and opt-in `--binary-merge` with guard band and size rule. Not yet:
+binary patch payloads (`--binary` on unknown binaries exits as unsupported), `--scan-streams` (D-49), and the
+`later` row of §12.
 
 ## 1. Why it matters
 

@@ -1,7 +1,9 @@
 # Semantic Splinter — Core Specification
 
-**Status:** Draft v0.1 (2026-10-07). Nothing here is frozen. Items marked **[D-n]** are recorded in
-[DECISIONS.md](DECISIONS.md) as open decisions with a provisional default.
+**Status (2026-10-12):** implemented for v1 (written as Draft v0.1, 2026-10-07). Where a module does less than this
+document, its format document's status line says so; parts marked post-v1 (the `crypto` feature, re-signing, runtime
+plugins) are not built. Items marked **[D-n]** are recorded in [DECISIONS.md](DECISIONS.md); every v1 decision is
+decided.
 
 Companion documents:
 
