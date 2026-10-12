@@ -42,6 +42,7 @@ struct DiffRequest {
     bool report = false;                 // fill DiffResult::report (--json)
     bool visual = false;                 // fill DiffResult::visual (--visual)
     bool patch = false;                  // fill DiffResult::patch (--binary), except for text (render -u)
+    bool exact = false;                  // --exact: the patch also carries the changed bytes (SPEC §6)
     std::optional<RenderRequest> render; // fill DiffResult::text
 };
 
@@ -120,6 +121,7 @@ struct PatchOutcome {
     std::vector<std::byte> output; // the patched file for -o -
     std::size_t failed = 0;        // failed or ignored hunks: exit status 1
     std::vector<Warning> warnings;
+    std::vector<Report> reports; // one per section (mode "patch"), for --json
 };
 
 // Applies a patch (SPEC §4, §6): unified sections as GNU patch does, envelope sections by base hash, else by

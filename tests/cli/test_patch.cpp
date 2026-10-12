@@ -321,3 +321,146 @@ TEST_CASE("patch: a mixed file of unified and envelope sections") {
                     d.write("y.bin", std::string("\0\2", 2))}) == 2);
     CHECK(bin.err_text.find("patches for format 'binary' are not supported") != std::string::npos);
 }
+
+TEST_CASE("patch: JSON patches round trip, as text and PNG") {
+    Dir d("patch-json");
+    SECTION("text: the unified diff rides in the report") {
+        auto a = d.write("a.txt", "one\ntwo\nthree\n");
+        auto b = d.write("b.txt", "one\n2\nthree\n");
+        CaptureConsole mk;
+        REQUIRE(cli(mk, {"--binary", "--json", a, b}) == 1);
+        auto j = nlohmann::json::parse(mk.out_text);
+        CHECK(j["mode"] == "diff");
+        CHECK(j["unified"].get<std::string>().find("@@ -1,3 +1,3 @@\n one\n-two\n+2\n") != std::string::npos);
+        auto patch = d.write("p.json", mk.out_text);
+        auto t = d.write("t.txt", "one\ntwo\nthree\n");
+        CaptureConsole c;
+        CHECK(cli(c, {"-P", t, patch}) == 0);
+        CHECK(d.read("t.txt") == "one\n2\nthree\n");
+    }
+    SECTION("PNG: payloads in base64, applied to a and to a third file") {
+        auto a = d.write("a.png", semsplinter::png::write(image({})));
+        auto b = d.write("b.png", semsplinter::png::write(image({{17, 0xFFFF}})));
+        CaptureConsole mk;
+        REQUIRE(cli(mk, {"--binary", "--json", a, b}) == 1);
+        auto j = nlohmann::json::parse(mk.out_text);
+        REQUIRE(j["changes"].size() == 1);
+        CHECK(j["changes"][0]["after"]["payload"]["codec"] == "zstd");
+        CHECK(j["changes"][0]["after"]["payload"]["encoding"] == "base64");
+        CHECK_FALSE(j.contains("exact"));
+        auto patch = d.write("p.json", mk.out_text);
+        auto t = d.write("t.png", d.read("a.png"));
+        CaptureConsole c;
+        CHECK(cli(c, {"-P", t, patch}) == 0);
+        CHECK(same_png(t, b));
+        auto u = d.write("u.png", semsplinter::png::write(image({{200, 0x8080}})));
+        CaptureConsole m;
+        CHECK(cli(m, {"-P", u, patch}) == 0);
+        CHECK(
+            same_png(u, d.write("want.png", semsplinter::png::write(image({{17, 0xFFFF}, {200, 0x8080}})))));
+        // A plain report is not a patch.
+        CaptureConsole rep;
+        cli(rep, {"--json", a, b});
+        CaptureConsole bad;
+        CHECK(cli(bad, {"-P", t, d.write("r.json", rep.out_text)}) == 2);
+        CHECK(bad.err_text.find("without payloads") != std::string::npos);
+    }
+}
+
+TEST_CASE("patch: --exact reproduces the target byte for byte on its base") {
+    Dir d("patch-exact");
+    auto a = d.write("a.png", with_text(semsplinter::png::write(image({})), "Author", "Alice"));
+    auto b = d.write("b.png", with_text(semsplinter::png::write(image({{17, 0xFFFF}})), "Author", "Bob"));
+    for (bool json : {false, true}) {
+        CaptureConsole mk;
+        std::vector<std::string> args = {"--binary", "--exact", a, b};
+        if (json)
+            args.insert(args.begin(), "--json");
+        REQUIRE(cli(mk, args) == 1);
+        CHECK((mk.out_text.find(json ? "\"exact\": {" : "\nexact ") != std::string::npos));
+        auto patch = d.write("p", mk.out_text);
+        auto t = d.write("t.png", d.read("a.png"));
+        CaptureConsole c;
+        CHECK(cli(c, {"-P", t, patch}) == 0);
+        CHECK(d.read("t.png") == d.read("b.png"));
+        // -R drops the splice and applies by content.
+        CaptureConsole rev;
+        CHECK(cli(rev, {"-P", "-R", t, patch}) == 0);
+        CHECK(same_png(t, a));
+        // Another base: the splice is ignored, the units apply by identity.
+        auto u =
+            d.write("u.png", with_text(semsplinter::png::write(image({{200, 0x8080}})), "Author", "Alice"));
+        CaptureConsole m;
+        CHECK(cli(m, {"-P", u, patch}) == 0);
+        CHECK(m.out_text.find("base-mismatch: applying by identity") != std::string::npos);
+        CHECK(same_png(
+            u, d.write("want.png", with_text(semsplinter::png::write(image({{17, 0xFFFF}, {200, 0x8080}})),
+                                             "Author", "Bob"))));
+    }
+    // The text serialization keeps the splice.
+    semsplinter::PatchSection s;
+    s.old_name = s.new_name = "x", s.format = "png";
+    s.units.push_back(
+        {semsplinter::Op::erase, {"/chunks/tEXt:A"}, "c-1", {}, {}, std::vector<std::byte>(3), {}});
+    s.exact = semsplinter::ExactBytes{5, 2, std::vector<std::byte>(70, std::byte{9})};
+    auto back = semsplinter::parse_patch(semsplinter::write_section(s), 1 << 20);
+    REQUIRE(back.size() == 1);
+    REQUIRE(back[0].exact);
+    CHECK(back[0].exact->offset == 5);
+    CHECK(back[0].exact->removed == 2);
+    CHECK(back[0].exact->bytes == s.exact->bytes);
+}
+
+TEST_CASE("patch: --json reports what was applied, rejected, and merged by identity") {
+    Dir d("patch-report");
+    auto a = d.write("a.png", semsplinter::png::write(image({})));
+    auto b = d.write("b.png", semsplinter::png::write(image({{17, 0xFFFF}, {18, 0xFFFF}})));
+    CaptureConsole mk;
+    REQUIRE(cli(mk, {"--binary", a, b}) == 1);
+    auto patch = d.write("p.patch", mk.out_text);
+    SECTION("by identity") {
+        auto t = d.write("t.png", semsplinter::png::write(image({{200, 0x8080}})));
+        CaptureConsole c;
+        CHECK(cli(c, {"-P", "--json", t, patch}) == 0);
+        CHECK(c.err_text.find("base-mismatch: applying by identity") != std::string::npos); // messages move
+        auto j = nlohmann::json::parse(c.out_text);
+        CHECK(j["mode"] == "patch");
+        CHECK(j["format"] == "png");
+        CHECK(j["inputs"]["target"]["path"] == t);
+        CHECK(j["changes"].size() == 1);
+        CHECK(j["conflicts"].empty());
+        CHECK(j["validation"]["warnings"][0]["code"] == "base-mismatch");
+        CHECK(j["result"]["status"] == "clean");
+    }
+    SECTION("as Markdown") {
+        auto t = d.write("t.png", semsplinter::png::write(image({{200, 0x8080}})));
+        CaptureConsole c;
+        CHECK(cli(c, {"-P", "--md", t, patch}) == 0);
+        CHECK(c.out_text.starts_with("# splinter patch report"));
+        CHECK(c.err_text.find("base-mismatch") != std::string::npos);
+    }
+    SECTION("rejected, to a file") {
+        auto t = d.write("t.png", semsplinter::png::write(image({{17, 0x1111}})));
+        CaptureConsole c;
+        CHECK(cli(c, {"-P", "--json=" + d.path("r.json"), t, patch}) == 1);
+        CHECK(c.out_text.find("1 out of 1 hunk FAILED") != std::string::npos);
+        auto j = nlohmann::json::parse(d.read("r.json"));
+        CHECK(j["changes"].empty());
+        REQUIRE(j["conflicts"].size() == 1);
+        CHECK(j["conflicts"][0]["reason"] == "both-modified");
+        CHECK(j["result"]["status"] == "conflicts");
+    }
+    SECTION("unified hunks") {
+        auto t = d.write("t.txt", "one\ntwo\n");
+        auto p = d.write("u.patch",
+                         "--- t.txt\n+++ t.txt\n@@ -1,2 +1,2 @@\n one\n-two\n+2\n@@ -9 +9 @@\n-x\n+y\n");
+        CaptureConsole c;
+        CHECK(cli(c, {"-P", "--json", "-r", "-", t, p}) == 1);
+        auto j = nlohmann::json::parse(c.out_text);
+        CHECK(j["format"] == "text");
+        REQUIRE(j["changes"].size() == 1);
+        CHECK(j["changes"][0]["at"] == "/lines#range=0,2");
+        REQUIRE(j["conflicts"].size() == 1);
+        CHECK(j["conflicts"][0]["reason"] == "hunk-failed");
+    }
+}

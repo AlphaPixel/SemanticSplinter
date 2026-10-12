@@ -2,6 +2,7 @@
 
 #include <semsplinter/hash.hpp>
 #include <semsplinter/model.hpp>
+#include <semsplinter/patch.hpp>
 
 #include <nlohmann/json.hpp>
 
@@ -27,7 +28,8 @@ struct ResultInfo {
     std::string status; // "clean" or "conflicts"
 };
 
-// The JSON report (SPEC §7.1). A diff (mode "diff") fills `changes`; a merge fills the rest.
+// The JSON report (SPEC §7.1). A diff (mode "diff") fills `changes`; a merge fills the rest. A patch
+// application (mode "patch") fills `changes` with the hunks applied and `conflicts` with the rejected ones.
 struct Report {
     std::string mode;
     std::string format;
@@ -42,6 +44,7 @@ struct Report {
     bool valid = true;                              // output passed validation
     std::vector<Warning> warnings;
     std::optional<ResultInfo> result;
+    std::optional<PatchSection> patch; // --binary --json: written as a JSON patch (add_patch)
 };
 
 std::string hash_ref(const Hash128&); // "xxh3:<32 hex>"

@@ -6,6 +6,8 @@
 #include <semsplinter/hash.hpp>
 #include <semsplinter/model.hpp>
 
+#include <nlohmann/json.hpp>
+
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -44,6 +46,12 @@ struct TextHunk {
     bool no_eol_old = false, no_eol_new = false;
 };
 
+// The --exact splice (SPEC §6): the target is the base with `removed` bytes at `offset` replaced by `bytes`.
+struct ExactBytes {
+    std::uint64_t offset = 0, removed = 0;
+    std::vector<std::byte> bytes;
+};
+
 struct PatchSection {
     std::string old_name, new_name; // as written, without timestamps or hashes; "/dev/null" for absent
     std::size_t line = 0;           // 1-based line of the "---" header, for messages
@@ -53,19 +61,29 @@ struct PatchSection {
     std::string format; // empty: a unified diff
     std::optional<Hash128> old_hash, new_hash;
     std::vector<UnitHunk> units;
+    std::optional<ExactBytes> exact; // --exact: written as is when the base hash matches
     // Unified diffs only.
     std::vector<TextHunk> hunks;
 
     std::size_t hunk_count() const noexcept { return format.empty() ? hunks.size() : units.size(); }
-    void reverse(); // swaps the sides: names, hashes, and every hunk
+    void reverse(); // swaps the sides: names, hashes, and every hunk; drops `exact`
 };
 
-// Splits a patch into sections. Text that belongs to no section (mail headers, "diff" lines) is skipped, as
+// Splits a patch into sections. A JSON patch (first non-blank byte '{' or '[') is read as add_patch() writes
+// it. Text that belongs to no section (mail headers, "diff" lines) is skipped, as
 // GNU patch does. Throws Error{invalid_input} on a malformed envelope or hunk.
 std::vector<PatchSection> parse_patch(std::string_view, std::uint64_t payload_limit);
 
 // An envelope section ("splinter-patch 1" first), or a unified diff when `format` is empty.
 std::string write_section(const PatchSection&);
+
+// The JSON serialization (SPEC §6, D-6). A payload is {codec: "zstd", encoding: "base64", bytes}; "zlib" is
+// also read.
+nlohmann::ordered_json payload_json(std::span<const std::byte>);
+std::vector<std::byte> payload_from_json(const nlohmann::ordered_json&, std::uint64_t limit);
+// Makes a §7.1 diff report, built from the same changes in the same order, a JSON patch: each change's
+// before/after gets its payload and "exact" the splice. A unified section goes whole under "unified".
+void add_patch(nlohmann::ordered_json& report, const PatchSection&);
 
 // GNU patch's matching and application of unified hunks (patch 2.7 locate_hunk / apply_hunk).
 struct TextApplyOptions {

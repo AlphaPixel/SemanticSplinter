@@ -53,7 +53,7 @@ json to_json(const Conflict& c) {
 }
 
 json to_json(const Report& r) {
-    const bool merge = r.mode != "diff";
+    const bool merge = r.mode == "merge";
     auto list = [](const auto& v) {
         json a = json::array();
         for (auto& x : v)
@@ -87,8 +87,12 @@ json to_json(const Report& r) {
                       {"format", r.format_stats}};
     } else {
         j["changes"] = list(r.changes);
+        if (r.mode == "patch")
+            j["conflicts"] = list(r.conflicts);
         j["stats"] = {{"changes", r.changes.size()}, {"format", r.format_stats}};
     }
+    if (r.patch)
+        add_patch(j, *r.patch);
     if (r.envelope)
         j["envelope"] = *r.envelope;
     json w = json::array();
@@ -145,7 +149,7 @@ constexpr const char* kTableHead = "| Field | Value |\n|---|---|\n";
 
 std::string render_markdown(const Report& r) {
     const json j = to_json(r);
-    const bool merge = r.mode != "diff";
+    const bool merge = r.mode == "merge"; // diff and patch reports list one change set
     std::string o = "# splinter " + md(r.mode) + " report\n\n" + kTableHead;
     row(o, "Format", md(r.format));
     for (auto& i : r.inputs)
@@ -158,6 +162,8 @@ std::string render_markdown(const Report& r) {
         row(o, "Conflicts", mdj(j["stats"]["conflicts"]));
     } else {
         row(o, "Changed units", std::to_string(r.changes.size()));
+        if (!r.conflicts.empty()) // patch mode: rejected hunks
+            row(o, "Conflicts", std::to_string(r.conflicts.size()));
     }
     for (auto& [k, v] : r.format_stats.items())
         row(o, md(k), mdj(v));
@@ -195,9 +201,10 @@ std::string render_markdown(const Report& r) {
         o += "\n## " + std::string(title) + "\n";
         for (auto& c : list) {
             o += "\n### " + mdj(c["id"]) + ": " + mdj(c["op"]) + " " + mdj(c["at"]) + "\n\n" + kTableHead;
-            row(o, "Side", mdj(c["side"]));
-            for (auto [k, label] :
-                 {std::pair{"kind", "Kind"}, {"from", "From"}, {"confidence", "Confidence"}})
+            for (auto [k, label] : {std::pair{"side", "Side"},
+                                    {"kind", "Kind"},
+                                    {"from", "From"},
+                                    {"confidence", "Confidence"}})
                 if (c.contains(k))
                     row(o, label, mdj(c[k]));
             if (c.contains("before"))

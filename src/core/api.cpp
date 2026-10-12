@@ -128,13 +128,32 @@ DiffResult diff(const Registry& reg, const DiffRequest& rq) {
                 u.after = f.payload(*db, c.at);
             s.units.push_back(std::move(u));
         }
+        if (rq.exact) {
+            // ponytail: one splice over the first..last changed byte; per-stream splices if they get large
+            auto a = rq.a.source.bytes(), b = rq.b.source.bytes();
+            std::size_t pre = 0, suf = 0;
+            while (pre < a.size() && pre < b.size() && a[pre] == b[pre])
+                ++pre;
+            while (suf < a.size() - pre && suf < b.size() - pre &&
+                   a[a.size() - 1 - suf] == b[b.size() - 1 - suf])
+                ++suf;
+            s.exact = ExactBytes{
+                pre,
+                a.size() - pre - suf,
+                {b.begin() + static_cast<std::ptrdiff_t>(pre), b.end() - static_cast<std::ptrdiff_t>(suf)}};
+        }
         r.patch = write_section(s);
+        if (r.report)
+            r.report->patch = std::move(s);
     }
     if (rq.render) {
         RenderRequest req = *rq.render;
         req.churn = &churn;
         r.errors = cmp->render(r.text, req);
     }
+    if (rq.patch && r.report && r.format == "text") // the unified rendering, as one section
+        if (auto t = parse_patch(r.text, rq.limits.max_input); !t.empty())
+            r.report->patch = std::move(t[0]);
     return r;
 }
 

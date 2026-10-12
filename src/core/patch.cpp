@@ -9,6 +9,8 @@
 #include <cctype>
 #include <cstring>
 #include <memory>
+#include <sstream>
+#include <tuple>
 
 namespace semsplinter {
 
@@ -188,7 +190,116 @@ std::string_view body(std::string_view line) {
     return line;
 }
 
+constexpr char kB64[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+std::string base64(std::span<const std::byte> in) {
+    std::string out;
+    for (std::size_t i = 0; i < in.size(); i += 3) {
+        std::uint32_t v = 0;
+        for (std::size_t k = 0; k < 3; ++k)
+            v = v << 8 | (i + k < in.size() ? std::to_integer<std::uint32_t>(in[i + k]) : 0u);
+        const std::size_t n = std::min<std::size_t>(3, in.size() - i);
+        for (std::size_t k = 0; k < 4; ++k)
+            out += k <= n ? kB64[(v >> (18 - 6 * k)) & 63] : '=';
+    }
+    return out;
+}
+
+std::vector<std::byte> unbase64(std::string_view s) {
+    std::vector<std::byte> out;
+    std::uint32_t acc = 0;
+    int bits = 0;
+    for (char c : s) {
+        if (c == '=')
+            break;
+        auto p = std::strchr(kB64, c);
+        if (!c || !p)
+            throw bad("bad base64 in payload");
+        acc = acc << 6 | static_cast<std::uint32_t>(p - kB64);
+        if ((bits += 6) >= 8)
+            out.push_back(std::byte((acc >> (bits -= 8)) & 0xFF));
+    }
+    return out;
+}
+
+using json = nlohmann::ordered_json;
+
+// One section of a JSON patch (a §7.1 diff report from --binary --json).
+void json_sections(const json& j, std::uint64_t limit, std::vector<PatchSection>& out) {
+    if (j.contains("unified")) {
+        for (auto& s : parse_patch(j.at("unified").get<std::string>(), limit))
+            out.push_back(std::move(s));
+        return;
+    }
+    PatchSection s;
+    s.format = j.at("format").get<std::string>();
+    for (auto [side, name, hash] :
+         {std::tuple{"a", &s.old_name, &s.old_hash}, std::tuple{"b", &s.new_name, &s.new_hash}}) {
+        auto& in = j.at("inputs").at(side);
+        *name = in.at("path").get<std::string>();
+        *hash = parse_hash(in.value("hash", ""));
+    }
+    s.preamble = {"--- " + s.old_name, "+++ " + s.new_name};
+    bool payloads = false;
+    for (auto& c : j.at("changes")) {
+        UnitHunk u;
+        u.op = parse_op(c.at("op").get<std::string>());
+        u.at = parse_address(c.at("at").get<std::string>());
+        u.id = c.at("id").get<std::string>();
+        for (auto [side, text, value] : {std::tuple{"before", &u.before_text, &u.before},
+                                         std::tuple{"after", &u.after_text, &u.after}}) {
+            if (!c.contains(side))
+                continue;
+            auto& v = c.at(side);
+            if (v.contains("text"))
+                *text = v.at("text").get<std::string>();
+            if (v.contains("payload"))
+                *value = payload_from_json(v.at("payload"), limit), payloads = true;
+        }
+        s.units.push_back(std::move(u));
+    }
+    if (!payloads)
+        throw bad("a JSON report without payloads is not a patch (write one with --binary --json)");
+    if (j.contains("exact")) {
+        auto& e = j.at("exact");
+        s.exact = ExactBytes{e.at("offset").get<std::uint64_t>(), e.at("removed").get<std::uint64_t>(),
+                             payload_from_json(e, limit)};
+    }
+    out.push_back(std::move(s));
+}
+
 } // namespace
+
+json payload_json(std::span<const std::byte> raw) {
+    return {{"codec", "zstd"}, {"encoding", "base64"}, {"bytes", base64(compress(raw))}};
+}
+
+std::vector<std::byte> payload_from_json(const json& p, std::uint64_t limit) {
+    const auto codec = p.at("codec").get<std::string>();
+    if (p.at("encoding").get<std::string>() != "base64" || (codec != "zstd" && codec != "zlib"))
+        throw Error(ErrorCategory::unsupported,
+                    "patch: payload codec '" + codec + "' is not supported (D-7)");
+    auto z = unbase64(p.at("bytes").get<std::string>());
+    return codec == "zstd" ? unzstd(z, limit) : inflate_all(z, limit);
+}
+
+void add_patch(json& report, const PatchSection& s) {
+    if (s.format.empty()) {
+        report["unified"] = write_section(s);
+        return;
+    }
+    auto& changes = report["changes"];
+    for (std::size_t k = 0; k < s.units.size() && k < changes.size(); ++k)
+        for (auto [side, v] :
+             {std::pair{"before", &s.units[k].before}, std::pair{"after", &s.units[k].after}})
+            if (*v)
+                changes[k][side]["payload"] = payload_json(**v);
+    if (s.exact) {
+        json e = {{"offset", s.exact->offset}, {"removed", s.exact->removed}};
+        e.update(payload_json(s.exact->bytes));
+        report["exact"] = std::move(e);
+    }
+}
 
 std::string encode_payload(std::span<const std::byte> raw) {
     auto z = compress(raw);
@@ -251,6 +362,7 @@ std::vector<std::byte> decode_payload(std::string_view lines, std::size_t n, std
 void PatchSection::reverse() {
     std::swap(old_name, new_name);
     std::swap(old_hash, new_hash);
+    exact.reset(); // ponytail: forward only; store the base's removed bytes too if -R must stay byte-exact
     for (auto& u : units) {
         std::swap(u.before, u.after);
         std::swap(u.before_text, u.after_text);
@@ -270,6 +382,18 @@ void PatchSection::reverse() {
 }
 
 std::vector<PatchSection> parse_patch(std::string_view text, std::uint64_t payload_limit) {
+    if (auto first = text.find_first_not_of(" \t\r\n");
+        first != std::string_view::npos && (text[first] == '{' || text[first] == '[')) {
+        std::vector<PatchSection> out;
+        try {
+            auto j = json::parse(text);
+            for (auto& r : j.is_array() ? j : json::array({j}))
+                json_sections(r, payload_limit, out);
+        } catch (const json::exception& e) {
+            throw bad(std::string("bad JSON patch: ") + e.what());
+        }
+        return out;
+    }
     std::vector<std::string> lines;
     for (std::size_t at = 0; at < text.size();) {
         auto nl = text.find('\n', at);
@@ -306,6 +430,19 @@ std::vector<PatchSection> parse_patch(std::string_view text, std::uint64_t paylo
         if (envelope) {
             s.old_hash = parse_hash(ot), s.new_hash = parse_hash(nt);
             s.format = trim_cr(lines[i++]).substr(7);
+            if (starts(i, "exact ")) {
+                // exact OFFSET REMOVED CODEC N
+                std::istringstream f(trim_cr(lines[i]).substr(6));
+                std::string off, removed, codec, n;
+                if (!(f >> off >> removed >> codec >> n))
+                    throw bad("line " + std::to_string(i + 1) + ": bad exact line");
+                auto size = static_cast<std::size_t>(to_u64(n));
+                std::string b85;
+                for (++i; b85.size() < (size + 3) / 4 * 5 && i < lines.size();)
+                    b85 += trim_cr(lines[i++]);
+                s.exact =
+                    ExactBytes{to_u64(off), to_u64(removed), decode_payload(b85, size, payload_limit, codec)};
+            }
             while (starts(i, "@@ ")) {
                 auto hdr = trim_cr(lines[i]);
                 if (!hdr.ends_with(" @@"))
@@ -408,6 +545,9 @@ std::string write_section(const PatchSection& s) {
         o += "--- " + s.old_name + (s.old_hash ? "\txxh3:" + s.old_hash->hex() : "") + "\n";
         o += "+++ " + s.new_name + (s.new_hash ? "\txxh3:" + s.new_hash->hex() : "") + "\n";
         o += "format " + s.format + "\n";
+        if (s.exact)
+            o += "exact " + std::to_string(s.exact->offset) + " " + std::to_string(s.exact->removed) + " " +
+                 std::string(payload_codec()) + " " + encode_payload(s.exact->bytes);
         for (auto& u : s.units) {
             o += "@@ " + std::string(to_string(u.op)) + " " + u.at.to_string() + " " + u.id + " @@\n";
             if (u.before_text)

@@ -292,7 +292,10 @@ Behaviour as implemented (Phase 5):
   envelope whose units all hold their after values, is skipped with GNU's
   `Reversed (or previously applied) patch detected!  Skipping patch.` (the `-N` behaviour, also the default);
   `-t` applies it reversed, `-f` turns the check off.
-- **Not yet:** context, normal, and ed diffs (`-c`, `-n`, `-e`), `-D`, `--merge` on unified sections, `--json`, `--md`,
+- **JSON:** a JSON patch (`splinter --binary --json`) applies like its text form. `--json[=FILE]` writes the
+  patch-mode report (SPEC §6): per section, what was applied, rejected, or merged by identity; `--md[=FILE]` writes
+  the same as Markdown. With either report on standard output, GNU's messages go to standard error.
+- **Not yet:** context, normal, and ed diffs (`-c`, `-n`, `-e`), `-D`, `--merge` on unified sections,
   `GIT binary patch` hunks (Q-BIN-6), and patches of binary files. `-T`, `-Z`, and the other misc options are
   accepted without effect.
 
