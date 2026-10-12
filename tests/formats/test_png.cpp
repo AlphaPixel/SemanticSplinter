@@ -373,6 +373,34 @@ TEST_CASE("png: dump is stable and line-oriented") {
     CHECK(std::count(d.begin(), d.end(), '\n') == 3 + 6);
 }
 
+TEST_CASE("png: unified hunks name their tiles; --annotate adds region metrics") {
+    Fx fx;
+    auto a = pattern(192, 64), b = a; // three 64x64 tiles
+    paint(b, 70, 5, 2, 2, rgba(255, 0, 0));
+    paint(b, 130, 5, 1, 1, rgba(0, 0, 0));
+    auto da = fx.load(png::write(a)), db = fx.load(png::write(b));
+    DiffOptions o{fx.ctx, {}};
+    auto cmp = fx.png.compare(*da, *db, o);
+    RenderRequest r{OutputStyle::unified, {}, {"a", "b"}, {"a", "b"}, {"a", "b"}};
+    std::string out;
+    cmp->render(out, r);
+    CHECK(out.find("\n@@ -1,5 +1,5 @@ /pixels#rect=64,0,128,64\n png width=") != std::string::npos);
+    CHECK(out.find("\n#") == std::string::npos);
+
+    r.options.annotate = true;
+    out.clear();
+    cmp->render(out, r);
+    // Changes come in canonical (address) order.
+    CHECK(out.find("@@ /pixels#rect=64,0,128,64\n# 1 px changed, bbox 130,5 1x1, max \xCE\x94"
+                   "E00 31.1\n# 4 px changed, bbox 70,5 2x2, max \xCE\x94"
+                   "E00 52.8\n png width=") != std::string::npos);
+
+    r.style = OutputStyle::context;
+    out.clear();
+    cmp->render(out, r);
+    CHECK(out.find("\n*************** /pixels#rect=64,0,128,64\n# 1 px changed") != std::string::npos);
+}
+
 TEST_CASE("png: APNG animation chunks are one opaque unit") {
     Fx fx;
     auto base = png::write(pattern());

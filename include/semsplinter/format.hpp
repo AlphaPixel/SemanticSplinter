@@ -78,6 +78,9 @@ struct SaveOptions {
 };
 struct DumpOptions {
     Context& ctx;
+    // When set, dump() may push one address per line it writes (an empty path for a line with none),
+    // which names the hunks of unified and context output. Ignored unless it matches the line count.
+    std::vector<Address>* line_at = nullptr;
 };
 
 // How a comparison is shown (SPEC §7.2).

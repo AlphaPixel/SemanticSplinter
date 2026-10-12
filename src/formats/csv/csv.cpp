@@ -1196,13 +1196,21 @@ public:
         const Doc& d = cast(doc);
         const Table t = view(d, d.header);
         const Key key = pick_key(o.ctx.format_options, {&t});
-        os << "#columns ";
+        // One dump line, which spans several when a quoted value holds line breaks.
+        auto line = [&](const std::string& s, std::string at) {
+            os << s << '\n';
+            if (o.line_at)
+                o.line_at->insert(o.line_at->end(),
+                                  static_cast<std::size_t>(std::count(s.begin(), s.end(), '\n')) + 1,
+                                  Address{std::move(at)});
+        };
+        std::string cols = "#columns ";
         for (std::size_t c = 0; c < t.cols.size(); ++c)
-            os << (c ? "," : "") << quote(t.cols[c], ',');
-        os << '\n';
+            cols += (c ? "," : "") + quote(t.cols[c], ',');
+        line(cols, "/columns");
         if (key.empty()) {
             for (std::size_t i = 0; i < t.rows(); ++i)
-                os << canonical(t, i) << '\n';
+                line(canonical(t, i), "/rows/" + std::to_string(i));
             return;
         }
         const auto ks = *row_keys(t, key);
@@ -1211,7 +1219,8 @@ public:
                 const std::string* v = t.cell(i, c);
                 if (!v || std::find(key.begin(), key.end(), c) != key.end())
                     continue;
-                os << '[' << segment(key, ks[i]) << "] " << c << " = " << shown(*v) << '\n';
+                line('[' + segment(key, ks[i]) + "] " + c + " = " + shown(*v),
+                     "/rows/" + segment(key, ks[i]) + "/" + pointer_escape(c));
             }
     }
 

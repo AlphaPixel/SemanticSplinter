@@ -535,9 +535,11 @@ int run_diff(const std::vector<std::string>& args, Console& c, const Registry& r
                 break;
             case o_scan_streams:
                 throw Error(ErrorCategory::unsupported, "--scan-streams is post-v1 (D-49)");
+            case o_annotate:
+                cfg.render.annotate = true;
+                break;
             case o_semantic:
             case o_raw:
-            case o_annotate:
             case o_ignore:
             case o_verbose:
             case o_quiet:

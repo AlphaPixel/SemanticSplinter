@@ -40,7 +40,12 @@ struct RenderOptions {
     bool suppress_common_lines = false; // --suppress-common-lines
     const Palette* color = nullptr;     // --color: null when off
     // Optional text appended to hunk headers ("@@ ... @@ ADDRESS" for structured formats).
+    // Empty text adds nothing. `first` and `last` are elements of the edit array: the hunk's edits are
+    // [&first, &last].
     std::function<std::string(const Edit& first, const Edit& last)> hunk_address;
+    // Optional lines, each newline-terminated, printed after unified and context hunk headers.
+    std::function<std::string(const Edit& first, const Edit& last)> hunk_note;
+    bool annotate = false; // --annotate: structured formats set hunk_note from their changes' metrics
 };
 
 // `ignorable` (same length as `edits`, or empty) marks changes dropped by -B / -I: they never start a

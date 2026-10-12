@@ -41,6 +41,7 @@ public:
                           std::size_t be) {
             std::string head = "@@ -" + range_unified(as, ae) + " +" + range_unified(bs, be) + " @@";
             colored(o_.color ? &o_.color->ln : nullptr, head + suffix(first, last, as));
+            note(first, last);
             std::size_t i = as;
             for (std::size_t k = first; k <= last; ++k) {
                 const Edit& e = edits_[k];
@@ -63,6 +64,7 @@ public:
         for_each_hunk([&](std::size_t first, std::size_t last, std::size_t as, std::size_t ae, std::size_t bs,
                           std::size_t be) {
             out_ += "***************" + suffix(first, last, as) + "\n";
+            note(first, last);
             bool del = false, ins = false;
             for (std::size_t k = first; k <= last; ++k)
                 del |= edits_[k].a0 < edits_[k].a1, ins |= edits_[k].b0 < edits_[k].b1;
@@ -290,8 +292,10 @@ private:
 
     // " FUNCTION" for -p/-F: the last matching line before the hunk, cut to 40 bytes, trailing space trimmed.
     std::string suffix(std::size_t first, std::size_t last, std::size_t as) {
-        if (o_.hunk_address)
-            return " " + o_.hunk_address(edits_[first], edits_[last]);
+        if (o_.hunk_address) {
+            auto s = o_.hunk_address(edits_[first], edits_[last]);
+            return s.empty() ? s : " " + s;
+        }
         if (!o_.is_function)
             return {};
         for (std::size_t i = as; i-- > 0;) {
@@ -304,6 +308,11 @@ private:
             return " " + s;
         }
         return {};
+    }
+
+    void note(std::size_t first, std::size_t last) {
+        if (o_.hunk_note)
+            out_ += o_.hunk_note(edits_[first], edits_[last]);
     }
 
     void side_block(std::size_t first, std::size_t last, std::size_t s, std::size_t e, bool old) {

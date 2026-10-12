@@ -93,6 +93,8 @@ window) is ignored, deleting what the other side newly references conflicts, and
 only when the content changed. BMP, TGA, QOI, GIF, TIFF, and WebP merge pixels region by region and their metadata
 per key; animated GIF/WebP and multi-page TIFF merge frame by frame, unchanged frames and TIFF strips keep their
 bytes, and lossy WebP frames merge only whole. Patches (`--binary`) cover text and PNG so far.
+Unified and context diffs of PNG, JSON, CSV, XML, and SVG name each hunk's unit
+(`@@ -1,5 +1,5 @@ /pixels#rect=64,0,128,64`); `--annotate` adds per-hunk metric comments for PNG, JSON, and CSV.
 
 `--md[=FILE]` renders the report as Markdown. Planned: JSON patches (`--binary --json`).
 

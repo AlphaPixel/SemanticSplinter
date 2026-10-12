@@ -1102,8 +1102,10 @@ public:
         sink.write(doc(d).src.bytes());
     }
 
-    void dump(const Document& d, std::ostream& os, const DumpOptions&) const override {
+    void dump(const Document& d, std::ostream& os, const DumpOptions& o) const override {
         auto& p = doc(d);
+        if (o.line_at)
+            o.line_at->push_back({"/shape"});
         os << "png width=" << p.width << " height=" << p.height << " encoding=" << p.enc.name()
            << " interlace=" << (p.enc.interlace ? "adam7" : "none") << "\n";
         std::vector<const Entry*> es;
@@ -1116,6 +1118,8 @@ public:
             return std::pair(group(x), x->key) < std::pair(group(y), y->key);
         });
         for (auto* e : es) {
+            if (o.line_at)
+                o.line_at->push_back({e->key});
             if (group(e) == 0)
                 os << "color " << e->key.substr(7) << " " << e->text << "\n";
             else if (group(e) == 1)
@@ -1123,7 +1127,7 @@ public:
             else
                 os << "animation " << e->text << " xxh3=" << hex16(e->value) << "\n";
         }
-        raster::dump_tiles(p.pixels, os);
+        raster::dump_tiles(p.pixels, os, o.line_at);
     }
 
     const EnvelopeMap* envelope(const Document& d) const override { return &doc(d).map; }
