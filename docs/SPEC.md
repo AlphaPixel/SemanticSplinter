@@ -501,12 +501,22 @@ payload after zstd+base85 19
 - Compression is zstd (`zstd+base85`, level 19). zstd and zlib are core dependencies, so every build writes
   `zstd+base85` and reads both `zstd+base85` and `zlib+base85` (Phase 5 patches) **[D-7]**.
 - `--binary --json` writes the same patch as JSON: the §7.1 report with each change carrying its payload
-  (`payload: {codec, encoding: "base64", bytes}`). `patch` mode accepts both serializations **[D-6]**.
+  (`payload: {codec, encoding: "base64", bytes}`) under its `before` and `after` values; `codec` is `zstd`
+  (`zlib` is also read). A text file's patch is its unified diff, carried whole as `"unified"`. `patch` mode
+  accepts both serializations, telling JSON by its first non-blank byte (`{` or `[`) **[D-6]**. A report without
+  payloads is not a patch and is refused.
+- `patch --json[=FILE]` writes one §7.1 report per section, mode `patch`: `inputs.target`, the hunks applied as
+  `changes`, the hunks rejected (or marked under `--merge`) as `conflicts`, `base-mismatch` and ignored-hunk
+  warnings, and `result` (`clean` or `conflicts`). Unified hunks get `/lines` addresses from their headers.
 - Payloads are expressed at the **content layer** (decoded pixels, samples, text), not as encoded bytes, so a
   patch survives different compression of the target. Applying such a patch re-encodes per §12.2, so the result
   equals the intended target *semantically*, and byte equality is reported, not promised (`reencode-nonidentical`).
   `--exact` additionally stores the target's encoded bytes for each changed stream. When the target's base hash
-  matches, application then reproduces the target byte for byte. Envelope fields are never stored in a patch,
+  matches, application then reproduces the target byte for byte. As implemented, this is one splice per file,
+  from the first to the last byte that differs: an `exact OFFSET REMOVED CODEC N` line after `format`, followed
+  by base85 lines like a payload (JSON: `"exact": {offset, removed, codec, encoding, bytes}`). It is used only
+  when the base hash matches and the result hashes to the `+++` hash; otherwise, and under `-R`, the units apply
+  as usual. Envelope fields are never stored in a patch,
   because they are regenerated.
 
 ---

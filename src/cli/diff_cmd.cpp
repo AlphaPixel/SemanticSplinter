@@ -18,7 +18,8 @@ namespace {
 struct Config {
     OutputStyle style = OutputStyle::normal;
     bool style_set = false;
-    bool brief = false, report_identical = false, force_text = false, dump = false, patch = false;
+    bool brief = false, report_identical = false, force_text = false, dump = false, patch = false,
+         exact = false;
     RenderOptions render;
     Palette palette;
     std::string color = "never";
@@ -174,6 +175,7 @@ private:
         rq.report = cfg_.common.json || cfg_.common.md;
         rq.visual = cfg_.visual.has_value();
         rq.patch = cfg_.patch;
+        rq.exact = cfg_.exact;
         if (!cfg_.brief)
             rq.render = RenderRequest{cfg_.style,
                                       cfg_.render,
@@ -544,8 +546,10 @@ int run_diff(const std::vector<std::string>& args, Console& c, const Registry& r
             case o_verbose:
             case o_quiet:
             case o_verify_key:
-            case o_exact:
                 break; // no effect on text and binary
+            case o_exact:
+                cfg.exact = true; // with --binary (SPEC §6)
+                break;
             default:
                 if (!cfg.common.apply(o, reg))
                     throw UsageError("unhandled option " + o.spelling);
@@ -556,14 +560,8 @@ int run_diff(const std::vector<std::string>& args, Console& c, const Registry& r
         diag(c, e.what());
         return exit_code(e.category(), cfg.common.extended_exit);
     }
-    if (cfg.patch) {
-        if (cfg.common.json) {
-            diag(c, "--binary --json (a JSON patch) is not implemented yet");
-            return exit_code(ErrorCategory::unsupported, cfg.common.extended_exit);
-        }
-        if (!cfg.style_set)
-            cfg.style = OutputStyle::unified;
-    }
+    if (cfg.patch && !cfg.style_set)
+        cfg.style = OutputStyle::unified;
     if (context)
         cfg.render.context = (cfg.style == OutputStyle::context || cfg.style == OutputStyle::unified) &&
                                      (context_flag_c || context_flag_u)

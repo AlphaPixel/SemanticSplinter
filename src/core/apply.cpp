@@ -65,6 +65,26 @@ std::string hunks(std::size_t n) {
     return n == 1 ? " hunk" : " hunks";
 }
 
+// Report entries for the patch-mode report (SPEC §7.1, mode "patch").
+Change unit_change(const UnitHunk& u) {
+    Change c;
+    c.id = u.id, c.op = u.op, c.at = u.at;
+    c.before.text = u.before_text, c.after.text = u.after_text;
+    if (u.before)
+        c.before.hash = hash128(*u.before);
+    if (u.after)
+        c.after.hash = hash128(*u.after);
+    return c;
+}
+
+Change hunk_change(const TextHunk& h) {
+    const Op op = !h.old_len ? Op::insert : !h.new_len ? Op::erase : Op::update;
+    // ponytail: the range the header names, not where an offset placed the hunk
+    const Range r = op == Op::erase ? Range{h.old_start ? h.old_start - 1 : 0, h.old_len}
+                                    : Range{h.new_start ? h.new_start - 1 : 0, h.new_len};
+    return make_change(Side::theirs, op, {"/lines", r}, "lines");
+}
+
 class Applier {
 public:
     Applier(const Registry& reg, const PatchRequest& rq) : reg_(reg), rq_(rq) {}
@@ -125,6 +145,18 @@ private:
             out_.messages += " -- saving rejects to file " + *rej;
         out_.messages += "\n";
         out_.failed += failed;
+        if (ignored)
+            rep().warnings.push_back(
+                {"hunks-ignored", "", std::to_string(total) + hunks(total) + " ignored"});
+        else if (rep().result)
+            rep().result->status = "conflicts";
+    }
+
+    Report& rep() { return out_.reports.back(); }
+
+    void warn(const Warning& w) {
+        rep().warnings.push_back(w);
+        out_.warnings.push_back(w);
     }
 
     // Where rejects of `name` go: -r FILE, or OUTPUT.rej / NAME.rej; nullopt for -r - and --dry-run.
@@ -210,6 +242,7 @@ private:
 
     void commit(const std::string& name, std::span<const std::byte> bytes, bool existed, bool mismatch,
                 bool remove) {
+        rep().result = ResultInfo{rq_.output.value_or(name), hash128(bytes), "clean"};
         if (rq_.dry_run)
             return;
         if (rq_.output) {
@@ -231,6 +264,9 @@ private:
     }
 
     void section(PatchSection& s) {
+        auto& r = out_.reports.emplace_back();
+        r.mode = "patch";
+        r.format = s.format.empty() ? "text" : s.format;
         const std::size_t total = s.hunk_count();
         auto name = target(s);
         if (!name) {
@@ -259,6 +295,7 @@ private:
         if (existed) {
             auto src = ByteSource::from_file(resolve(name), rq_.limits);
             content.assign(reinterpret_cast<const char*>(src.bytes().data()), src.size());
+            rep().inputs = {{"target", name, hash128(src.bytes()), src.size()}};
         }
         if (s.old_name == "/dev/null" && !content.empty() &&
             rq_.text.reversed != TextApplyOptions::Reversed::ignore) {
@@ -276,6 +313,13 @@ private:
             reject(name, s, r.failed);
             summary(total, total, true, reject_path(name));
             return;
+        }
+        for (std::size_t k = 0; k < total; ++k) {
+            auto c = hunk_change(s.hunks[k]);
+            if (std::find(r.failed.begin(), r.failed.end(), k) == r.failed.end())
+                rep().changes.push_back(std::move(c));
+            else
+                rep().conflicts.push_back(make_conflict(c.at, {c.id}, "hunk-failed"));
         }
         std::string result;
         for (auto& l : r.lines)
@@ -301,6 +345,23 @@ private:
         auto src = ByteSource::from_file(resolve(name), rq_.limits);
         const Hash128 h = hash128(src.bytes());
         header(name);
+        rep().inputs = {{"target", name, h, src.size()}};
+        if (s.exact && s.old_hash == h) { // --exact on its own base: the target's bytes, unchanged
+            auto in = src.bytes();
+            const auto& e = *s.exact;
+            if (e.offset <= in.size() && e.removed <= in.size() - e.offset) {
+                std::vector<std::byte> out(in.begin(), in.begin() + static_cast<std::ptrdiff_t>(e.offset));
+                out.insert(out.end(), e.bytes.begin(), e.bytes.end());
+                out.insert(out.end(), in.begin() + static_cast<std::ptrdiff_t>(e.offset + e.removed),
+                           in.end());
+                if (hash128(out) == s.new_hash) {
+                    for (auto& u : s.units)
+                        rep().changes.push_back(unit_change(u));
+                    commit(name, out, true, false, false);
+                    return;
+                }
+            }
+        }
         Limits target_budget = rq_.limits.fresh(); // per document (SPEC §9, #51)
         Context target_ctx{reg_, target_budget, 0, rq_.format_options};
         auto td = f->load(src, {target_ctx, {}});
@@ -336,7 +397,7 @@ private:
             result = f->implant(*td, after, lo);
         } else {
             out_.messages += "base-mismatch: applying by identity\n";
-            out_.warnings.push_back({"base-mismatch", "", name + ": applied by identity"});
+            warn({"base-mismatch", "", name + ": applied by identity"});
             auto bv = f->implant(*td, before, lo), av = f->implant(*td, after, lo);
             ConflictOptions co;
             co.policy = rq_.mark ? Policy::mark : Policy::ours;
@@ -351,13 +412,18 @@ private:
                 if (!hit)
                     continue;
                 failed.push_back(k);
+                rep().conflicts.push_back(*hit);
                 out_.messages += "Hunk #" + std::to_string(k + 1) +
                                  (rq_.mark ? " NOT MERGED at " : " FAILED at ") + s.units[k].at.to_string() +
                                  " (" + hit->reason + ").\n";
             }
-            out_.warnings.insert(out_.warnings.end(), mr.warnings.begin(), mr.warnings.end());
+            for (auto& w : mr.warnings)
+                warn(w);
             result = std::move(mr.document);
         }
+        for (std::size_t k = 0; k < total; ++k)
+            if (std::find(failed.begin(), failed.end(), k) == failed.end())
+                rep().changes.push_back(unit_change(s.units[k]));
         VectorSink sink;
         f->save(*result, sink, {ctx});
         commit(name, sink.data, true, !exact, false);

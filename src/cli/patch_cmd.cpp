@@ -122,10 +122,6 @@ int run_patch(const std::vector<std::string>& args, Console& c, const Registry& 
                     throw UsageError("unhandled option " + o.spelling);
             }
         }
-        if (common.json)
-            throw Error(ErrorCategory::unsupported, "--json is not implemented for patch mode yet");
-        if (common.md)
-            throw Error(ErrorCategory::unsupported, "--md is not implemented for patch mode yet");
         auto& ops = p.operands;
         if (ops.size() > 2)
             throw UsageError("extra operand '" + ops[2] + "'");
@@ -141,10 +137,23 @@ int run_patch(const std::vector<std::string>& args, Console& c, const Registry& 
         auto src = read_input(input.value_or("-"), rq.limits, c);
         rq.patch.assign(reinterpret_cast<const char*>(src.bytes().data()), src.size());
         auto r = apply_patch(reg, rq);
-        if (!silent) // with -o -, the patched file owns standard output
-            rq.output == "-" ? c.err(r.messages) : c.out(r.messages);
+        const bool report_out = (common.json && common.json->empty()) || (common.md && common.md->empty());
+        if (!silent) // with -o -, --json or --md, the patched file or the report owns standard output
+            rq.output == "-" || report_out ? c.err(r.messages) : c.out(r.messages);
         if (!r.output.empty())
             c.out({reinterpret_cast<const char*>(r.output.data()), r.output.size()});
+        if (common.json) {
+            nlohmann::ordered_json all = nlohmann::ordered_json::array();
+            for (auto& rep : r.reports)
+                all.push_back(to_json(rep));
+            write_json(c, common.json, (all.size() == 1 ? all[0] : all).dump(2));
+        }
+        if (common.md) {
+            std::string md;
+            for (auto& rep : r.reports)
+                md += render_markdown(rep);
+            write_json(c, common.md, md);
+        }
         return r.failed ? 1 : 0;
     } catch (const Error& e) {
         diag(c, e.what());
