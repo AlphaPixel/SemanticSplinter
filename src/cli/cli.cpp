@@ -119,7 +119,8 @@ bool CommonOptions::apply(const ParsedOpt& o, const Registry& reg) {
         json = v;
         return true;
     case o_md:
-        throw Error(ErrorCategory::unsupported, "--md is not implemented yet");
+        md = v;
+        return true;
     case o_tolerance:
     case o_integrity:
     case o_show:
@@ -168,12 +169,11 @@ ByteSource read_input(const std::string& path, const Limits& limits, Console& c)
 void write_json(Console& c, const std::optional<std::string>& target, const std::string& json) {
     if (!target)
         return;
+    std::string body = json.ends_with('\n') ? json : json + "\n";
     if (target->empty() || *target == "-") {
-        c.out(json);
-        c.out("\n");
+        c.out(body);
         return;
     }
-    std::string body = json + "\n";
     atomic_write(to_path(*target), as_bytes(body));
 }
 
@@ -339,6 +339,8 @@ int inspect(const std::vector<std::string>& args, Console& c, const Registry& re
         throw UsageError(files.empty() ? "missing operand after 'inspect'"
                                        : "extra operand '" + files[1] + "'");
     try {
+        if (common.md)
+            throw Error(ErrorCategory::unsupported, "--md is not supported by inspect");
         auto j = semsplinter::inspect(reg, {read_input(files[0], common.limits, c), files[0]}, common.format,
                                       layout, common.limits, common.format_options);
         if (common.json)

@@ -213,6 +213,8 @@ std::size_t do_merge(Config& c, const std::vector<std::string>& ops, Console& co
     }
     if (c.common.json)
         write_json(con, c.common.json, to_json(m.report).dump(2));
+    if (c.common.md)
+        write_json(con, c.common.md, render_markdown(m.report));
     return m.conflicts;
 }
 

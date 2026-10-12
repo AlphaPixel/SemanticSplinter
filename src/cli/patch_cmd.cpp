@@ -124,6 +124,8 @@ int run_patch(const std::vector<std::string>& args, Console& c, const Registry& 
         }
         if (common.json)
             throw Error(ErrorCategory::unsupported, "--json is not implemented for patch mode yet");
+        if (common.md)
+            throw Error(ErrorCategory::unsupported, "--md is not implemented for patch mode yet");
         auto& ops = p.operands;
         if (ops.size() > 2)
             throw UsageError("extra operand '" + ops[2] + "'");

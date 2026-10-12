@@ -60,6 +60,7 @@ struct CommonOptions {
     bool extended_exit = false;
     std::string format;              // --format
     std::optional<std::string> json; // --json[=FILE]: "" means stdout
+    std::optional<std::string> md;   // --md[=FILE]: "" means stdout
     semsplinter::OptionValues format_options;
     bool apply(const ParsedOpt&, const semsplinter::Registry&);
 };
@@ -67,7 +68,7 @@ struct CommonOptions {
 // Reads FILE ("-" = stdin) within the input limit.
 semsplinter::ByteSource read_input(const std::string& path, const semsplinter::Limits&, Console&);
 
-// Writes the JSON report to stdout ("") or a file (atomic).
+// Writes a report (JSON or Markdown) to stdout ("") or a file (atomic), ending it with a newline.
 void write_json(Console&, const std::optional<std::string>& target, const std::string& json);
 
 // File timestamps for unified/context headers (text.md §5.2, Q-TEXT-11).

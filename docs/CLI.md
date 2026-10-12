@@ -122,7 +122,7 @@ FILES: FILE1 FILE2 | DIR1 DIR2 | DIR FILE | FILE DIR | --from-file=F FILE... | -
 |---|---|
 | `--format=NAME` | force the format plugin (`splinter formats` lists names) |
 | `--json[=FILE]` | write the JSON report (stdout if no FILE, which replaces the text output). With `--binary`, the patch is written as JSON instead (SPEC §6) |
-| `--md[=FILE]` | write the report as Markdown (stdout if no FILE, which replaces the text output) **[D-22]** |
+| `--md[=FILE]` | write the report as Markdown (stdout if no FILE, which replaces the text output) **[D-22]**: a summary table (inputs, format, changed units, conflicts, format statistics, churn), then one section per conflict and changed unit with its address, values, and metrics. Combines with `--json`; when both go to stdout the JSON comes first |
 | `--visual=FILE` | write the format's visual diff (heatmap PNG, waveform PNG, contact sheet, …) |
 | `--dump` | print the canonical dump of a single file (textconv) |
 | `--semantic` / `--raw` | `--raw` diffs the format's raw structure (chunks, parts, XML) instead of the semantic model |
@@ -292,7 +292,7 @@ Behaviour as implemented (Phase 5):
   envelope whose units all hold their after values, is skipped with GNU's
   `Reversed (or previously applied) patch detected!  Skipping patch.` (the `-N` behaviour, also the default);
   `-t` applies it reversed, `-f` turns the check off.
-- **Not yet:** context, normal, and ed diffs (`-c`, `-n`, `-e`), `-D`, `--merge` on unified sections, `--json`,
+- **Not yet:** context, normal, and ed diffs (`-c`, `-n`, `-e`), `-D`, `--merge` on unified sections, `--json`, `--md`,
   `GIT binary patch` hunks (Q-BIN-6), and patches of binary files. `-T`, `-Z`, and the other misc options are
   accepted without effect.
 

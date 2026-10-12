@@ -56,3 +56,30 @@ TEST_CASE("the report JSON Schema is valid JSON") {
     auto schema = json::parse(s.str());
     REQUIRE(schema["title"] == "splinter-report/1");
 }
+
+TEST_CASE("markdown report: summary table, sections, escaping") {
+    Report r;
+    r.mode = "merge";
+    r.format = "png";
+    r.inputs = {{"base", "a|b.png", hash128("b"), 10}};
+    auto c = make_change(Side::ours, Op::update, {"/pixels", Rect{1, 2, 3, 4}}, "pixels");
+    c.before.text = "x|y\nz";
+    c.metrics["pixels"] = 12;
+    r.changes_ours = {c};
+    r.auto_merged = {{c.id, "independent"}};
+    r.conflicts = {make_conflict({"/chunks/tEXt:Author"}, {c.id}, "both-modified")};
+    r.envelope = json{{"churn", {{"bytes_changed", 7}, {"content", 5}}}};
+    auto m = render_markdown(r);
+    REQUIRE(m.starts_with("# splinter merge report\n\n| Field | Value |\n|---|---|\n| Format | png |\n"));
+    REQUIRE(m.find("| Input base | a\\|b.png (10 bytes, xxh3:") != std::string::npos);
+    REQUIRE(m.find("| Conflicts | 1 |\n") != std::string::npos);
+    REQUIRE(m.find("| Churn | bytes\\_changed 7, content 5 |\n") != std::string::npos);
+    REQUIRE(m.find("\n## Conflicts\n\n### " + r.conflicts[0].id + ": /chunks/tEXt:Author\n") !=
+            std::string::npos);
+    REQUIRE(m.find("| Resolved as | ours (unresolved) |\n") != std::string::npos);
+    REQUIRE(m.find("\n## Changes (ours)\n\n### " + c.id + ": update /pixels\\#rect=1,2,3,4\n") !=
+            std::string::npos);
+    REQUIRE(m.find("| Before | x\\|y<br>z |\n") != std::string::npos);
+    REQUIRE(m.find("| Auto-merged | independent |\n| pixels | 12 |\n") != std::string::npos);
+    REQUIRE(render_markdown(r) == m); // deterministic
+}
