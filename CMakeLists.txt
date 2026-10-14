@@ -1,9 +1,32 @@
 cmake_minimum_required(VERSION 3.25)
 
-option(SEMSPLINTER_SYSTEM_DEPS "Use installed (distro) packages instead of vcpkg; see BUILDING.md" OFF)
+# Without an explicit choice, and with no vcpkg toolchain or VCPKG_ROOT in reach, default to distro packages
+# so a plain `cmake ..` works out of the box on Linux; otherwise default to vcpkg as before (BUILDING.md).
+if(NOT DEFINED CACHE{SEMSPLINTER_SYSTEM_DEPS}
+   AND NOT CMAKE_TOOLCHAIN_FILE
+   AND NOT DEFINED ENV{VCPKG_ROOT}
+   AND NOT CMAKE_PREFIX_PATH
+   AND NOT DEFINED ENV{CMAKE_PREFIX_PATH})
+    set(_semsplinter_system_deps_default ON)
+    set(_semsplinter_system_deps_autodetected TRUE)
+else()
+    set(_semsplinter_system_deps_default OFF)
+endif()
 
-# Dependencies come from vcpkg in manifest mode (BUILDING.md). Without its toolchain, find_package() fails with
-# errors that never mention vcpkg, so check here: a plain `cmake ..` uses $VCPKG_ROOT when it is set.
+option(SEMSPLINTER_SYSTEM_DEPS "Use installed (distro) packages instead of vcpkg; see BUILDING.md"
+       ${_semsplinter_system_deps_default})
+
+if(_semsplinter_system_deps_autodetected AND SEMSPLINTER_SYSTEM_DEPS)
+    message(STATUS "No vcpkg toolchain found (VCPKG_ROOT unset): defaulting to distro packages "
+                    "(SEMSPLINTER_SYSTEM_DEPS=ON). Pass -DSEMSPLINTER_SYSTEM_DEPS=OFF and set VCPKG_ROOT "
+                    "for the pinned, tested dependency versions (see BUILDING.md).")
+endif()
+unset(_semsplinter_system_deps_default)
+unset(_semsplinter_system_deps_autodetected)
+
+# Dependencies come from vcpkg in manifest mode (BUILDING.md) unless SEMSPLINTER_SYSTEM_DEPS is set. Without
+# vcpkg's toolchain, find_package() fails with errors that never mention vcpkg, so check here: a plain
+# `cmake ..` uses $VCPKG_ROOT when it is set.
 if(NOT SEMSPLINTER_SYSTEM_DEPS)
     if(NOT CMAKE_TOOLCHAIN_FILE AND DEFINED ENV{VCPKG_ROOT})
         file(TO_CMAKE_PATH "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" _vcpkg_toolchain)
