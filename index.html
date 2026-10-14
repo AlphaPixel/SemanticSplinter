@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Semantic Splinter — diff and merge beyond text</title>
+<meta name="description" content="Format-aware diff, three-way merge, and patch for images, archives, structured data, PDFs, databases, and 3-D meshes. A C++ tool that works standalone and as a Git driver.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230f1115'/%3E%3Cpath d='M9 6 L17 16 L9 26 M15 6 L23 16 L15 26' stroke='%23d9a441' stroke-width='2.4' fill='none' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --bg:#0f1115; --panel:#151821; --ink:#e7e4dd; --muted:#9aa0ab;
+    --line:#262b36; --accent:#d9a441; --accent-soft:#e8c687; --link:#8fc7d8;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+    --serif:Georgia,"Times New Roman",serif;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+       font-size:17px;line-height:1.65;-webkit-font-smoothing:antialiased}
+  a{color:var(--link);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{max-width:860px;margin:0 auto;padding:0 20px}
+  code,kbd,pre{font-family:var(--mono)}
+
+  header{border-bottom:1px solid var(--line);padding:16px 0}
+  .bar{display:flex;align-items:center;justify-content:space-between;gap:16px}
+  .mark{display:flex;align-items:center;gap:11px;font-family:var(--serif);font-size:19px;color:var(--ink)}
+  .mark svg{display:block}
+  .navlinks{display:flex;gap:20px;font-size:15px}
+  .navlinks a{color:var(--muted)}
+  .navlinks a:hover{color:var(--ink);text-decoration:none}
+
+  .hero{padding:68px 0 48px}
+  h1{font-family:var(--serif);font-weight:normal;font-size:48px;line-height:1.08;margin:0 0 18px;letter-spacing:-.01em}
+  .lede{font-size:21px;line-height:1.5;color:var(--ink);max-width:40ch;margin:0 0 10px}
+  .sub{color:var(--muted);max-width:62ch;margin:0 0 30px}
+  .status{display:inline-block;font-family:var(--mono);font-size:13px;color:var(--accent-soft);
+          border:1px solid var(--line);border-radius:3px;padding:3px 9px;margin-bottom:30px}
+
+  .cta{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+  .btn{display:inline-block;padding:11px 20px;border-radius:5px;font-size:15px;font-weight:600;border:1px solid var(--line)}
+  .btn.primary{background:var(--accent);color:#1a1200;border-color:var(--accent)}
+  .btn.primary:hover{background:var(--accent-soft);text-decoration:none}
+  .btn.ghost{color:var(--ink);background:transparent}
+  .btn.ghost:hover{border-color:var(--muted);text-decoration:none}
+
+  section{padding:40px 0;border-top:1px solid var(--line)}
+  h2{font-family:var(--serif);font-weight:normal;font-size:28px;margin:0 0 16px}
+  p{margin:0 0 16px}
+  .muted{color:var(--muted)}
+  ul{margin:0 0 16px;padding-left:22px}
+  li{margin:6px 0}
+
+  pre{background:var(--panel);border:1px solid var(--line);border-radius:6px;
+      padding:16px 18px;overflow-x:auto;font-size:14.5px;line-height:1.7;margin:0 0 16px}
+  pre .c{color:var(--muted)}
+  p code{background:var(--panel);border:1px solid var(--line);border-radius:3px;padding:1px 5px;font-size:14px}
+
+  .tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:6px}
+  table{border-collapse:collapse;width:100%;font-size:14.5px;min-width:560px}
+  th,td{text-align:left;padding:9px 13px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--accent-soft);font-weight:600;white-space:nowrap}
+  tr:last-child td{border-bottom:0}
+  td.y{color:var(--accent);text-align:center;width:1%}
+  td.n{color:var(--muted);text-align:center;width:1%}
+  td:first-child{white-space:nowrap;font-weight:600}
+
+  .doclist{columns:2;column-gap:36px}
+  .doclist li{break-inside:avoid}
+
+  footer{border-top:1px solid var(--line);padding:30px 0 60px;color:var(--muted);font-size:14.5px}
+  footer a{color:var(--muted)}
+  footer a:hover{color:var(--ink)}
+
+  @media (max-width:620px){
+    h1{font-size:36px}
+    .lede{font-size:19px}
+    .navlinks{display:none}
+    .doclist{columns:1}
+    .hero{padding:48px 0 36px}
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap bar">
+    <span class="mark">
+      <svg width="26" height="26" viewBox="0 0 32 32" aria-hidden="true">
+        <path d="M9 5 L18 16 L9 27 M15 5 L24 16 L15 27" stroke="#d9a441" stroke-width="2.4" fill="none" stroke-linejoin="round"/>
+      </svg>
+      Semantic Splinter
+    </span>
+    <nav class="navlinks">
+      <a href="#formats">Formats</a>
+      <a href="#build">Build</a>
+      <a href="#docs">Docs</a>
+      <a href="https://github.com/AlphaPixel/SemanticSplinter">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="hero">
+    <h1>Diff and merge<br>beyond text.</h1>
+    <p class="lede">Format-aware diff, three-way merge, and patch for files that line-based tools handle badly.</p>
+    <p class="sub">Images, archives, structured data, PDFs, databases, and 3-D meshes — parsed into their semantic
+      units and merged unit by unit, then written back as a valid file. One C++ tool, <code>splinter</code>, that
+      runs standalone and as a Git textconv, diff driver, and merge driver.</p>
+    <div class="status">pre-release · feature-complete for v1 formats · in testing</div>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/AlphaPixel/SemanticSplinter">View on GitHub</a>
+      <a class="btn ghost" href="https://github.com/AlphaPixel/SemanticSplinter/tree/main">Browse the code</a>
+      <a class="btn ghost" href="https://github.com/AlphaPixel/SemanticSplinter/blob/main/BUILDING.md">Build from source</a>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+  <section id="clone">
+    <h2>Get a copy</h2>
+    <p>There are no binary releases yet, so you build from source. Clone the repository and follow
+      <a href="https://github.com/AlphaPixel/SemanticSplinter/blob/main/BUILDING.md">BUILDING.md</a> — it's C++20 with
+      CMake and vcpkg.</p>
+<pre><span class="c"># over HTTPS</span>
+git clone https://github.com/AlphaPixel/SemanticSplinter.git
+
+<span class="c"># or with the GitHub CLI</span>
+gh repo clone AlphaPixel/SemanticSplinter</pre>
+    <p class="muted">The tool lands at <code>build/&lt;preset&gt;/src/cli/Release/splinter</code>
+      (<code>splinter.exe</code> on Windows). <code>splinter --version</code> prints the version for bug reports.</p>
+  </section>
+
+  <section id="why">
+    <h2>Why it exists</h2>
+    <p>A one-pixel edit to a PNG changes most of its compressed bytes. Git shows "Binary files differ" and cannot
+      merge two artists' edits to different parts of the same image. Splinter parses each format into its semantic
+      units — pixels, chunks, archive members, XML elements, JSON keys, table rows, PDF objects — diffs and merges
+      those, and writes a valid file back.</p>
+    <ul>
+      <li><strong>Untouched data is copied byte for byte.</strong> Only changed units are re-encoded, so Git deltas stay small.</li>
+      <li><strong>Plumbing is handled for you.</strong> Sizes, offsets, CRCs, and checksums are recomputed; compressed streams are compared by content, so recompression noise is never a change.</li>
+      <li><strong>No silent best effort.</strong> When two sides edit the same unit it reports a conflict with a deterministic ID — it never averages or guesses.</li>
+      <li><strong>Familiar interface.</strong> <code>splinter a.png b.png</code> behaves like <code>diff</code>, <code>-m</code> like <code>diff3 -m</code>, <code>-P</code> like <code>patch</code>; exit codes follow the tool being emulated.</li>
+    </ul>
+  </section>
+
+  <section id="usage">
+    <h2>What it looks like</h2>
+<pre>splinter old.png new.png                  <span class="c"># changed regions, metrics, metadata</span>
+splinter -u old.png new.png               <span class="c"># unified diff over canonical dump lines</span>
+splinter --json=report.json a.png b.png   <span class="c"># machine-readable report</span>
+splinter -m mine.png base.png theirs.png  <span class="c"># three-way merge, as diff3 -m</span>
+splinter -m mine.zip base.zip theirs.zip  <span class="c"># members merged by path, each by its format</span>
+splinter -m mine.db  base.db  theirs.db   <span class="c"># SQLite: rows by key, cells merged</span>
+splinter --binary a.png b.png &gt; logo.patch  <span class="c"># an applicable semantic patch</span>
+splinter -P &lt; logo.patch                  <span class="c"># apply it, as patch</span>
+splinter git-setup                        <span class="c"># wire up as Git diff + merge driver</span></pre>
+  </section>
+
+  <section id="formats">
+    <h2>v1 formats</h2>
+    <p class="muted">Every format below diffs and merges today. Patch output and per-format limits are tracked in the
+      <a href="https://github.com/AlphaPixel/SemanticSplinter/tree/main/docs/formats">format documents</a>.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Format</th><th>Diff</th><th>Merge</th><th>Patch</th><th>Document</th></tr></thead>
+        <tbody>
+          <tr><td>Text</td><td class="y">✔</td><td class="y">✔</td><td class="y">✔</td><td><a href="https://github.com/AlphaPixel/SemanticSplinter/blob/main/docs/formats/text.md">text</a></td></tr>
+          <tr><td>Unknown binary</td><td class="y">✔</td><td class="muted">opt-in</td><td class="n">—</td><td><a href="https://github.com/AlphaPixel/SemanticSplinter/blob/main/docs/formats/binary.md">binary</a></td></tr>
+          <tr><td>ZIP, TAR (gz/zst/xz/bz2)</td><td class="y">✔</td><td class="y">✔</td><td class="y">✔</td><td><a href="https://github.com/AlphaPixel/SemanticSplinter/blob/main/docs/formats/containers.md">containers</a></td></tr>
+          <tr><td>XML</td><td class="y">✔</td><td class="y">✔</td><td class="y">✔</td><td><a href="https://github.com/AlphaPixel/SemanticSplinter/blob/main/docs/formats/xml.md">xml</a></td></tr>
+          <tr><td>JSON, JSONC</td><td class="y">✔</td><td class="y">✔</td><td class="y">✔</td><td><a href="https://github.com/AlphaPixel/SemanticSplinter/blob/main/docs/formats/json.md">json</a></td></tr>
+          <tr><td>CSV, TSV</td><td class="y">✔</td><td class="y">✔</td><td class="n">—</td><td><a href="https://github.com/AlphaPixel/SemanticSplinter/blob/main/docs/formats/csv.md">csv</a></td></tr>
+          <tr><td>SVG, SVGZ</td><td class="y">✔</td><td class="y">✔</td><td class="n">—</td><td><a href="https://github.com/AlphaPixel/SemanticSplinter/blob/main/docs/formats/svg.md">svg</a></td></tr>
+          <tr><td>PNG</td><td class="y">✔</td><td class="y">✔</td><td class="y">✔</td><td><a href="https://github.com/AlphaPixel/SemanticSplinter/blob/main/docs/formats/png.md">png</a></td></tr>
+          <tr><td>JPEG</td><td class="y">✔</td><td class="y">✔</td><td class="n">—</td><td><a href="https://github.com/AlphaPixel/SemanticSplinter/blob/main/docs/formats/jpeg.md">jpeg</a></td></tr>
+          <tr><td>TIFF, GIF, WebP, BMP, TGA, QOI</td><td class="y">✔</td><td class="y">✔</td><td class="n">—</td><td><a href="https://github.com/AlphaPixel/SemanticSplinter/blob/main/docs/formats/raster-misc.md">raster-misc</a></td></tr>
+          <tr><td>SQLite</td><td class="y">✔</td><td class="y">✔</td><td class="n">—</td><td><a href="https://github.com/AlphaPixel/SemanticSplinter/blob/main/docs/formats/sqlite.md">sqlite</a></td></tr>
+          <tr><td>PDF</td><td class="y">✔</td><td class="muted">partial</td><td class="n">—</td><td><a href="https://github.com/AlphaPixel/SemanticSplinter/blob/main/docs/formats/pdf.md">pdf</a></td></tr>
+          <tr><td>OBJ/MTL, PLY, STL</td><td class="y">✔</td><td class="y">✔</td><td class="n">—</td><td><a href="https://github.com/AlphaPixel/SemanticSplinter/blob/main/docs/formats/mesh-simple.md">mesh</a></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="docs">
+    <h2>Documentation</h2>
+    <ul class="doclist">
+      <li><a href="https://github.com/AlphaPixel/SemanticSplinter#readme">README</a> — overview and tester guide</li>
+      <li><a href="https://github.com/AlphaPixel/SemanticSplinter/blob/main/BUILDING.md">Building</a> — toolchain and presets</li>
+      <li><a href="https://github.com/AlphaPixel/SemanticSplinter/blob/main/docs/PLAN.md">Plan</a> — phases and roadmap</li>
+      <li><a href="https://github.com/AlphaPixel/SemanticSplinter/blob/main/docs/SPEC.md">Spec</a> — the file and report model</li>
+      <li><a href="https://github.com/AlphaPixel/SemanticSplinter/blob/main/docs/CLI.md">CLI</a> — options and personalities</li>
+      <li><a href="https://github.com/AlphaPixel/SemanticSplinter/blob/main/docs/formats/README.md">Formats</a> — per-format status and limits</li>
+      <li><a href="https://github.com/AlphaPixel/SemanticSplinter/issues">Issues</a> — known gaps and reports</li>
+      <li><a href="https://github.com/AlphaPixel/SemanticSplinter/blob/main/LICENSE">License</a> — MIT</li>
+    </ul>
+  </section>
+</div>
+
+<footer>
+  <div class="wrap">
+    <p><code>semantic-splinter</code> library and <code>splinter</code> tool · MIT licensed · pre-release, build from source.
+      Not related to the <code>libsplinter</code> library.</p>
+    <p><a href="https://github.com/AlphaPixel/SemanticSplinter">github.com/AlphaPixel/SemanticSplinter</a> · an <a href="https://www.alphapixel.com/">AlphaPixel</a> project</p>
+  </div>
+</footer>
+</body>
+</html>
