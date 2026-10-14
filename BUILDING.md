@@ -3,13 +3,14 @@
 All third-party dependencies (zlib, zstd, xxHash, nlohmann-json, libpng, expat, qpdf, ...) come from
 **[vcpkg](https://vcpkg.io) in manifest mode**. `vcpkg.json` lists them, pinned to one vcpkg commit
 (`builtin-baseline`, D-52), and CMake finds them with `find_package(... CONFIG)` through vcpkg's toolchain file.
-On Linux you can instead build from distro packages ([section 5](#5-without-vcpkg-distro-packages)); vcpkg remains
-the tested and release configuration.
+vcpkg remains the tested and release configuration, and it's the only supported path on Windows and macOS.
 
-So every build needs a bootstrapped vcpkg checkout and the environment variable `VCPKG_ROOT` pointing at it.
-The CMake presets pass `$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake` as the toolchain, and the first configure
-builds the dependencies into `build/<preset>/vcpkg_installed/` (this takes 10–30 minutes once; later builds reuse
-vcpkg's binary cache).
+On Linux, you don't need it: without `VCPKG_ROOT` set, both a plain `cmake ..` and the `linux-gcc`/`linux-clang`
+presets fall back automatically to distro packages ([section 5](#5-without-vcpkg-distro-packages)), so a fresh
+clone builds with nothing but the system's `-dev` packages. Set `VCPKG_ROOT` (step 2 below) to build the
+vcpkg/pinned configuration instead: the CMake presets then pass `$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake`
+as the toolchain, and the first configure builds the dependencies into `build/<preset>/vcpkg_installed/` (this
+takes 10–30 minutes once; later builds reuse vcpkg's binary cache). Windows and macOS always require it.
 
 ## 1. Tools
 
@@ -62,16 +63,20 @@ more predictable, so set `VCPKG_ROOT` explicitly.
 The configure preset has no `-release` suffix (the build directories are multi-config); build and test presets do:
 
 ```bash
-cmake --preset linux-gcc                    # configure: builds the vcpkg dependencies the first time
+cmake --preset linux-gcc                    # configure: vcpkg if VCPKG_ROOT is set, distro packages otherwise
 cmake --build --preset linux-gcc-release    # or linux-gcc for Debug
 ctest --preset linux-gcc-release
 ```
 
+On Linux this works with nothing beyond [section 1](#1-tools)'s packages installed — no vcpkg checkout required.
+`windows-msvc` and `macos` always need `VCPKG_ROOT` (step 2 below); there's no distro-package fallback for them.
+
 The tool lands in `build/<preset>/src/cli/<Debug|Release>/splinter` (`splinter.exe` on Windows). Visual Studio
 2022 can open the folder directly and uses the same presets.
 
-**Without a preset**, a plain configure works too when `VCPKG_ROOT` is set (the vcpkg toolchain is picked up
-automatically): `cmake -S . -B build -G Ninja && cmake --build build`.
+**Without a preset**, a plain configure works too and follows the same rule: `cmake -S . -B build -G Ninja &&
+cmake --build build`, using vcpkg if `VCPKG_ROOT` is set and distro packages otherwise — the same as passing
+`-DSEMSPLINTER_SYSTEM_DEPS=ON` explicitly (section 5).
 
 **Versioned compilers.** The `linux-clang` preset calls `clang++`. If only a versioned binary exists (for
 example `clang++-19`), override it: `cmake --preset linux-clang -DCMAKE_CXX_COMPILER=clang++-19`. Don't set
